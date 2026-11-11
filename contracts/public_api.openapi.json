@@ -1,0 +1,1005 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/2024-11-10",
+  "info": {
+    "title": "Afisha Curator Session and Public Occurrence API",
+    "version": "0.1.0-research",
+    "description": "Research contract for Issue #13. No live server, real event or production behavior is asserted. Every accepted SessionPatch increments session_revision. Search, plan and replacement previews have separate allowlists. Saved plans are immutable; reject retains attention. All POST operations require the project Idempotency-Key convention. WidgetCapability is read-only and is accepted only for public occurrence details; it never authorizes session previews, patches, accepts or rejections. Cookie-based deployments must add CSRF protection."
+  },
+  "paths": {
+    "/v1/sessions": {
+      "post": {
+        "operationId": "createSession",
+        "summary": "Create an independent Web or Telegram session",
+        "responses": {
+          "201": {
+            "description": "Successful contract result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSnapshot"
+                },
+                "example": {
+                  "session_id": "session_fixture_001",
+                  "channel": "web",
+                  "session_revision": 0,
+                  "hard_constraints": {
+                    "city": "{city}",
+                    "date_local": "2026-01-01",
+                    "max_budget_minor": null,
+                    "participants_age": null
+                  },
+                  "soft_preferences": {
+                    "preferred_categories": [],
+                    "preferred_genres": [],
+                    "ranking_note": null
+                  },
+                  "constraint_sources": {
+                    "city": "user",
+                    "date_local": "user"
+                  },
+                  "result_revision": null,
+                  "result_occurrence_ids": [],
+                  "plan_revision": null,
+                  "plan_state": "none",
+                  "attention_reasons": [],
+                  "data_state": "current"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:malformed_request",
+                  "title": "Malformed request",
+                  "status": 400,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "malformed_request",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:authentication_required",
+                  "title": "Authentication required",
+                  "status": 401,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "authentication_required",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "forbidden",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with current resource state",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:revision_conflict",
+                  "title": "Conflict with current resource state",
+                  "status": 409,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "revision_conflict",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:unprocessable_content",
+                  "title": "Unprocessable Content",
+                  "status": 422,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "unprocessable_content",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:rate_limited",
+                  "title": "Rate limited",
+                  "status": 429,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "rate_limited",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "description": "Delay before retry; delta seconds in this contract.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:internal_error",
+                  "title": "Internal error",
+                  "status": 500,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "internal_error",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:dependency_unavailable",
+                  "title": "Dependency unavailable",
+                  "status": 503,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "dependency_unavailable",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "ChannelAdapterBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              },
+              "example": {
+                "channel": "web",
+                "hard_constraints": {
+                  "city": "{city}",
+                  "date_local": "2026-01-01",
+                  "max_budget_minor": null,
+                  "participants_age": null
+                },
+                "soft_preferences": {
+                  "preferred_categories": [],
+                  "preferred_genres": [],
+                  "ranking_note": null
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}": {
+      "get": {
+        "operationId": "getSession",
+        "summary": "Read the caller-owned durable session snapshot",
+        "responses": {
+          "200": {
+            "description": "Successful contract result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSnapshot"
+                },
+                "example": {
+                  "session_id": "session_fixture_001",
+                  "channel": "web",
+                  "session_revision": 4,
+                  "hard_constraints": {
+                    "city": "{city}",
+                    "date_local": "2026-01-01",
+                    "max_budget_minor": null,
+                    "participants_age": null
+                  },
+                  "soft_preferences": {
+                    "preferred_categories": [],
+                    "preferred_genres": [],
+                    "ranking_note": null
+                  },
+                  "constraint_sources": {
+                    "city": "user",
+                    "date_local": "user"
+                  },
+                  "result_revision": 2,
+                  "result_occurrence_ids": [
+                    "occ_fixture_001"
+                  ],
+                  "plan_revision": null,
+                  "plan_state": "none",
+                  "attention_reasons": [],
+                  "data_state": "current"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:malformed_request",
+                  "title": "Malformed request",
+                  "status": 400,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "malformed_request",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:authentication_required",
+                  "title": "Authentication required",
+                  "status": 401,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "authentication_required",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "forbidden",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:session_not_found",
+                  "title": "Resource not found",
+                  "status": 404,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "session_not_found",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:rate_limited",
+                  "title": "Rate limited",
+                  "status": 429,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "rate_limited",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "description": "Delay before retry; delta seconds in this contract.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:internal_error",
+                  "title": "Internal error",
+                  "status": 500,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "internal_error",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "ChannelAdapterBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/patches": {
+      "post": {
+        "operationId": "patchSession",
+        "summary": "Apply a partial SessionPatch and increment session_revision once",
+        "responses": {
+          "200": {
+            "description": "Successful contract result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSnapshot"
+                },
+                "example": {
+                  "session_id": "session_fixture_001",
+                  "channel": "web",
+                  "session_revision": 5,
+                  "hard_constraints": {
+                    "city": "{city}",
+                    "date_local": "2026-01-01",
+                    "max_budget_minor": null,
+                    "participants_age": null
+                  },
+                  "soft_preferences": {
+                    "preferred_categories": [],
+                    "preferred_genres": [],
+                    "ranking_note": null
+                  },
+                  "constraint_sources": {
+                    "city": "user",
+                    "date_local": "user"
+                  },
+                  "result_revision": 2,
+                  "result_occurrence_ids": [
+                    "occ_fixture_001"
+                  ],
+                  "plan_revision": null,
+                  "plan_state": "none",
+                  "attention_reasons": [],
+                  "data_state": "current"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:malformed_request",
+                  "title": "Malformed request",
+                  "status": 400,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "malformed_request",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:authentication_required",
+                  "title": "Authentication required",
+                  "status": 401,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "authentication_required",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "forbidden",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:session_not_found",
+                  "title": "Resource not found",
+                  "status": 404,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "session_not_found",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with current resource state",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:revision_conflict",
+                  "title": "Conflict with current resource state",
+                  "status": 409,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "revision_conflict",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:unprocessable_content",
+                  "title": "Unprocessable Content",
+                  "status": 422,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "unprocessable_content",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:rate_limited",
+                  "title": "Rate limited",
+                  "status": 429,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "rate_limited",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "description": "Delay before retry; delta seconds in this contract.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:internal_error",
+                  "title": "Internal error",
+                  "status": 500,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "internal_error",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:dependency_unavailable",
+                  "title": "Dependency unavailable",
+                  "status": 503,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "dependency_unavailable",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "ChannelAdapterBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPatch"
+              },
+              "example": {
+                "expected_session_revision": 4,
+                "set": {
+                  "max_budget_minor": 100000
+                },
+                "clear": [],
+                "keep": [
+                  "city",
+                  "date_local"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/search-previews": {
+      "post": {
+        "operationId": "createSearchPreview",
+        "summary": "Compute a revision-bound structured search preview",
+        "responses": {
+          "200": {
+            "description": "Successful contract result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultPreview"
+                },
+                "example": {
+                  "preview_id": "search_fixture_001",
+                  "preview_revision": 1,
+                  "session_revision": 4,
+                  "result_revision": 2,
+                  "query_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "occurrence_ids": [
+                    "occ_fixture_001"
+                  ],
+                  "occurrences": [
+                    {
+                      "occurrence_id": "occ_fixture_001",
+                      "event_id": "event_fixture_001",
+                      "title": "{synthetic_title}",
+                      "start": {
+                        "utc": "2026-01-01T12:00:00Z",
+                        "local_raw": null,
+                        "timezone": "Etc/UTC",
+                        "offset_raw": "Z",
+                        "precision": "minute"
+                      },
+                      "end": null,
+                      "venue_name": null,
+                      "status": "unknown",
+                      "status_is_verified": false,
+                      "age_rating": null,
+                      "offer": {
+                        "offer_id": "offer_fixture_001",
+                        "amount_minor": null,
+                        "currency": null,
+                        "fees_included": null,
+                        "availability": "unknown",
+                        "observed_at": "2026-01-01T00:00:00Z",
+                        "source_assertion_ids": []
+                      },
+                      "source_label": null,
+                      "observed_at": null,
+                      "freshness_state": "unknown"
+                    }
+                  ],
+                  "expires_at": "2026-01-01T01:00:00Z",
+                  "data_state": "current"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:malformed_request",
+                  "title": "Malformed request",
+                  "status": 400,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "malformed_request",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:authentication_required",
+                  "title": "Authentication required",
+                  "status": 401,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "authentication_required",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "forbidden",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:session_not_found",
+                  "title": "Resource not found",
+                  "status": 404,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "session_not_found",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with current resource state",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:revision_conflict",
+                  "title": "Conflict with current resource state",
+                  "status": 409,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "revision_conflict",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:unprocessable_content",
+                  "title": "Unprocessable Content",
+                  "status": 422,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "unprocessable_content",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:rate_limited",
+                  "title": "Rate limited",
+                  "status": 429,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "rate_limited",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "description": "Delay before retry; delta seconds in this contract.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:internal_error",
+                  "title": "Internal error",
+                  "status": 500,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "internal_error",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:dependency_unavailable",
+                  "title": "Dependency unavailable",
+                  "status": 503,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "dependency_unavailable",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "ChannelAdapterBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchPreviewRequest"
+              },
+              "example": {
+                "expected_session_revision": 4
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/occurrences/{occurrence_id}": {
+      "get": {
+        "operationId": "getOccurrence",
+        "summary": "Read public canonical Occurrence details",
+        "responses": {
+          "200": {
+            "description": "Successful contract result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceSummary"
+                },
+                "example": {
+                  "occurrence_id": "occ_fixture_001",
+                  "event_id": "event_fixture_001",
+                  "title": "{synthetic_title}",
+                  "start": {
+                    "utc": "2026-01-01T12:00:00Z",
+                    "local_raw": null,
+                    "timezone": "Etc/UTC",
+                    "offset_raw": "Z",
+                    "precision": "minute"
+                  },
+                  "end": null,
+                  "venue_name": null,
+                  "status": "unknown",
+                  "status_is_verified": false,
+                  "age_rating": null,
+                  "offer": {
+                    "offer_id": "offer_fixture_001",
+                    "amount_minor": null,
+                    "currency": null,
+                    "fees_included": null,
+                    "availability": "unknown",
+                    "observed_at": "2026-01-01T00:00:00Z",
+                    "source_assertion_ids": []
+                  },
+                  "source_label": null,
+                  "observed_at": null,
+                  "freshness_state": "unknown"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:malformed_request",
+                  "title": "Malformed request",
+                  "status": 400,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "malformed_request",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

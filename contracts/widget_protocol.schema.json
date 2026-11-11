@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:afisha:widget-protocol:v1",
+  "title": "Afisha read-only widget postMessage protocol",
+  "description": "Research contract. event.origin must exactly match an allowlisted origin and event.source must be the expected window; senders use an exact targetOrigin, never '*'. These transport checks and occurrence_ids membership checks happen outside JSON Schema. No secrets, credentials, arbitrary URLs, navigation commands or write verbs are permitted. Direction is normative and must be checked by the receiver in addition to schema: parent→widget only init/ping; widget→parent only ready/request_resize/open_occurrence/error. A schema-valid message from the wrong direction is rejected without mutation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "version",
+    "type",
+    "message_id",
+    "widget_instance_id",
+    "payload"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "afisha-curator-widget"
+    },
+    "version": {
+      "const": 1
+    },
+    "type": {
+      "enum": [
+        "init",
+        "ping",
+        "ready",
+        "request_resize",
+        "open_occurrence",
+        "error"
+      ]
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"
+    },
+    "widget_instance_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "init": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "theme",
+        "locale"
+      ],
+      "properties": {
+        "theme": {
+          "enum": [
+            "light",
+            "dark",
+            "system"
+          ]
+        },
+        "locale": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"
+        }
+      }
+    },
+    "empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "occurrence_ids"
+      ],
+      "properties": {
+        "occurrence_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"
+          },
+          "description": "Public occurrence IDs actually rendered by the widget BFF. After origin/source/schema validation the parent uses this list as the open_occurrence allowlist."
+        }
+      }
+    },
+    "resize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "height"
+      ],
+      "properties": {
+        "height": {
+          "type": "number",
+          "minimum": 120,
+          "maximum": 2000,
+          "description": "Requested CSS pixel height; the parent additionally applies its layout bounds."
+        }
+      }
+    },
+    "open": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "occurrence_id"
+      ],
+      "properties": {
+        "occurrence_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "protocol_error",
+            "unavailable",
+            "invalid_state"
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "init"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/init"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ping"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/empty"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ready"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/ready"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "request_resize"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/resize"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "open_occurrence"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/open"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "error"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/error"
+          }
+        }
+      }
+    }
+  ]
+}
