@@ -1,0 +1,1241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:afisha:event-identity-snapshot:v1",
+  "title": "Afisha canonical event identity snapshot",
+  "description": "Research contract. It does not assert that any real source has been imported or evaluated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "created_at",
+    "synthetic",
+    "works",
+    "productions",
+    "event_series",
+    "events",
+    "occurrences",
+    "recurrence_sets",
+    "venues",
+    "offers",
+    "event_relations",
+    "source_records",
+    "raw_observations",
+    "field_assertions",
+    "identity_decisions",
+    "identity_operations",
+    "id_redirects",
+    "moderation_tasks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "snapshot_id": {
+      "$ref": "#/$defs/id"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "synthetic": {
+      "type": "boolean"
+    },
+    "works": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/work"
+      }
+    },
+    "productions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/production"
+      }
+    },
+    "event_series": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/eventSeries"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "occurrences": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/occurrence"
+      }
+    },
+    "recurrence_sets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/recurrenceSet"
+      }
+    },
+    "venues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/venue"
+      }
+    },
+    "offers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/offer"
+      }
+    },
+    "event_relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/eventRelation"
+      }
+    },
+    "source_records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRecord"
+      }
+    },
+    "raw_observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rawObservation"
+      }
+    },
+    "field_assertions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fieldAssertion"
+      }
+    },
+    "identity_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identityDecision"
+      }
+    },
+    "identity_operations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identityOperation"
+      }
+    },
+    "id_redirects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/idRedirect"
+      }
+    },
+    "moderation_tasks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/moderationTask"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"
+    },
+    "nullableId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/id"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableString": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableDateTime": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "utc",
+        "local_raw",
+        "timezone",
+        "offset_raw",
+        "precision"
+      ],
+      "properties": {
+        "utc": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "local_raw": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "timezone": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "offset_raw": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(Z|[+-](0[0-9]|1[0-4]):[0-5][0-9]|-00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "precision": {
+          "enum": [
+            "second",
+            "minute",
+            "date",
+            "month",
+            "naive_datetime",
+            "unknown"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "enum": [
+                  "date",
+                  "month",
+                  "naive_datetime"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "utc": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "work_id",
+        "title",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "work_id": {
+          "$ref": "#/$defs/id"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "production_id",
+        "work_id",
+        "title",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "production_id": {
+          "$ref": "#/$defs/id"
+        },
+        "work_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "eventSeries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "series_id",
+        "title",
+        "parent_series_id",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "series_id": {
+          "$ref": "#/$defs/id"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent_series_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "production_id",
+        "series_id",
+        "parent_event_id",
+        "kind",
+        "title",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "production_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "series_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "parent_event_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "kind": {
+          "enum": [
+            "standalone",
+            "performance_run",
+            "exhibition",
+            "festival",
+            "series_member",
+            "online_run"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "occurrence_id",
+        "event_id",
+        "start",
+        "end",
+        "venue_id",
+        "status",
+        "status_is_verified",
+        "original_start",
+        "previous_starts",
+        "recurrence_set_id",
+        "recurrence_id",
+        "sequence",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "occurrence_id": {
+          "$ref": "#/$defs/id"
+        },
+        "event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "$ref": "#/$defs/timeValue"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/timeValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "venue_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "status": {
+          "enum": [
+            "unknown",
+            "tentative",
+            "scheduled",
+            "postponed",
+            "rescheduled",
+            "cancelled",
+            "moved_online"
+          ]
+        },
+        "status_is_verified": {
+          "type": "boolean"
+        },
+        "original_start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/timeValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous_starts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/timeValue"
+          }
+        },
+        "recurrence_set_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "recurrence_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status_is_verified": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "recurrenceSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recurrence_set_id",
+        "event_id",
+        "dtstart_local",
+        "timezone",
+        "rrule",
+        "rdates",
+        "exdates",
+        "override_occurrence_ids"
+      ],
+      "properties": {
+        "recurrence_set_id": {
+          "$ref": "#/$defs/id"
+        },
+        "event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "dtstart_local": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rrule": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "rdates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exdates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "override_occurrence_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "Occurrence IDs, которые переопределяют экземпляры recurrence set по UID + RECURRENCE-ID."
+        }
+      }
+    },
+    "venue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "venue_id",
+        "name",
+        "city",
+        "address",
+        "latitude",
+        "longitude",
+        "timezone",
+        "parent_venue_id",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "venue_id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "city": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "address": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timezone": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "parent_venue_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offer_id",
+        "subject_type",
+        "subject_id",
+        "seller",
+        "amount_minor",
+        "currency",
+        "audience",
+        "fees_included",
+        "availability",
+        "observed_at",
+        "valid_from",
+        "valid_to",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "offer_id": {
+          "$ref": "#/$defs/id"
+        },
+        "subject_type": {
+          "enum": [
+            "event",
+            "occurrence",
+            "event_series"
+          ]
+        },
+        "subject_id": {
+          "$ref": "#/$defs/id"
+        },
+        "seller": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "amount_minor": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audience": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "fees_included": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "availability": {
+          "enum": [
+            "unknown",
+            "available",
+            "sold_out",
+            "unavailable"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_from": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "valid_to": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "eventRelation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation_id",
+        "type",
+        "from_event_id",
+        "to_event_id",
+        "source_assertion_ids"
+      ],
+      "properties": {
+        "relation_id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "enum": [
+            "part_of",
+            "same_work",
+            "same_production",
+            "series_member",
+            "related"
+          ]
+        },
+        "from_event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "to_event_id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_assertion_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "sourceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_record_id",
+        "source_id",
+        "namespace",
+        "external_event_id",
+        "external_occurrence_id",
+        "raw_observation_ids",
+        "last_seen_at"
+      ],
+      "properties": {
+        "source_record_id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "external_event_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "external_occurrence_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "raw_observation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "last_seen_at": {
+          "$ref": "#/$defs/nullableDateTime"
+        }
+      }
+    },
+    "rawObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_observation_id",
+        "source_record_id",
+        "import_run_id",
+        "observed_at",
+        "content_hash_sha256",
+        "raw_payload",
+        "parser_version",
+        "run_completeness",
+        "presence"
+      ],
+      "properties": {
+        "raw_observation_id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_record_id": {
+          "$ref": "#/$defs/id"
+        },
+        "import_run_id": {
+          "$ref": "#/$defs/id"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "content_hash_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_payload": true,
+        "parser_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_completeness": {
+          "enum": [
+            "complete",
+            "partial",
+            "failed"
+          ]
+        },
+        "presence": {
+          "enum": [
+            "present",
+            "explicit_tombstone",
+            "not_observed"
+          ]
+        }
+      }
+    },
+    "fieldAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assertion_id",
+        "subject_type",
+        "subject_id",
+        "field_path",
+        "value",
+        "raw_observation_id",
+        "observed_at",
+        "valid_from",
+        "valid_to",
+        "mapping_version",
+        "conflict_group_id"
+      ],
+      "properties": {
+        "assertion_id": {
+          "$ref": "#/$defs/id"
+        },
+        "subject_type": {
+          "enum": [
+            "work",
+            "production",
+            "event_series",
+            "event",
+            "occurrence",
+            "venue",
+            "offer",
+            "event_relation"
+          ]
+        },
+        "subject_id": {
+          "$ref": "#/$defs/id"
+        },
+        "field_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": true,
+        "raw_observation_id": {
+          "$ref": "#/$defs/id"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_from": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "valid_to": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "mapping_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conflict_group_id": {
+          "$ref": "#/$defs/nullableId"
+        }
+      }
+    },
+    "identityDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_id",
+        "level",
+        "left_source_record_id",
+        "right_source_record_id",
+        "action",
+        "evidence",
+        "vetoes",
+        "actor",
+        "created_at",
+        "rule_version"
+      ],
+      "properties": {
+        "decision_id": {
+          "$ref": "#/$defs/id"
+        },
+        "level": {
+          "enum": [
+            "event",
+            "occurrence"
+          ]
+        },
+        "left_source_record_id": {
+          "$ref": "#/$defs/id"
+        },
+        "right_source_record_id": {
+          "$ref": "#/$defs/id"
+        },
+        "action": {
+          "enum": [
+            "merge",
+            "separate",
+            "review",
+            "not_applicable"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "vetoes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rule_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "level": {
+                "const": "event"
+              }
+            },
+            "required": [
+              "level"
+            ]
+          },
+          "then": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "merge",
+                  "separate",
+                  "review"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entity_id",
+        "source_record_ids"
+      ],
+      "properties": {
+        "entity_id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_record_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        }
+      }
+    },
+    "identityOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "level",
+        "type",
+        "input_entity_ids",
+        "output_entity_ids",
+        "memberships_before",
+        "memberships_after",
+        "decision_ids",
+        "actor",
+        "reason",
+        "created_at",
+        "supersedes_operation_id"
+      ],
+      "properties": {
+        "operation_id": {
+          "$ref": "#/$defs/id"
+        },
+        "level": {
+          "enum": [
+            "event",
+            "occurrence"
+          ]
+        },
+        "type": {
+          "enum": [
+            "merge",
+            "split"
+          ]
+        },
+        "input_entity_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "output_entity_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "memberships_before": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/membership"
+          }
+        },
+        "memberships_after": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/membership"
+          }
+        },
+        "decision_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "supersedes_operation_id": {
+          "$ref": "#/$defs/nullableId"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "merge"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "input_entity_ids": {
+                "minItems": 2
+              },
+              "output_entity_ids": {
+                "minItems": 1,
+                "maxItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "input_entity_ids": {
+                "minItems": 1,
+                "maxItems": 1
+              },
+              "output_entity_ids": {
+                "minItems": 2
+              }
+            }
+          }
+        }
+      ],
+      "description": "Append-only new-ID операция. Merge и split создают новые opaque output IDs; input IDs retire и никогда не воскресают. Membership существующего ID не мутирует: history сохраняет отдельные before/after snapshots. Inputs и outputs disjoint; каждый retired input получает redirect к активной сущности или split tombstone."
+    },
+    "idRedirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redirect_id",
+        "level",
+        "from_id",
+        "to_id",
+        "replacement_ids",
+        "operation_id"
+      ],
+      "properties": {
+        "redirect_id": {
+          "$ref": "#/$defs/id"
+        },
+        "level": {
+          "enum": [
+            "event",
+            "occurrence"
+          ]
+        },
+        "from_id": {
+          "$ref": "#/$defs/id"
+        },
+        "to_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "replacement_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "operation_id": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "to_id": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "replacement_ids": {
+                "minItems": 2
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "replacement_ids": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "moderationTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "type",
+        "subject_ids",
+        "status",
+        "decision_id",
+        "created_at",
+        "resolved_at"
+      ],
+      "properties": {
+        "task_id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "enum": [
+            "event_pair_review",
+            "occurrence_pair_review",
+            "cluster_bridge_review",
+            "conflicting_strong_evidence",
+            "event_boundary_review",
+            "field_conflict_review",
+            "stale_or_missing_source_review",
+            "split_membership_review",
+            "untrusted_content_review"
+          ]
+        },
+        "subject_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "status": {
+          "enum": [
+            "open",
+            "resolved"
+          ]
+        },
+        "decision_id": {
+          "$ref": "#/$defs/nullableId"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "resolved_at": {
+          "$ref": "#/$defs/nullableDateTime"
+        }
+      }
+    }
+  }
+}
