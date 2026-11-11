@@ -997,6 +997,206 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:authentication_required",
+                  "title": "Authentication required",
+                  "status": 401,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "authentication_required",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:forbidden",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "forbidden",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:occurrence_not_found",
+                  "title": "Resource not found",
+                  "status": 404,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "occurrence_not_found",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:rate_limited",
+                  "title": "Rate limited",
+                  "status": 429,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "rate_limited",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "required": true,
+                "description": "Delay before retry; delta seconds in this contract.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "urn:afisha:problem:internal_error",
+                  "title": "Internal error",
+                  "status": 500,
+                  "detail": "{safe_diagnostic_without_implementation_details}",
+                  "code": "internal_error",
+                  "request_ref": "request_fixture_001"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {},
+          {
+            "WidgetCapability": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OccurrenceId"
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/comparison-previews": {
+      "post": {
+        "operationId": "createComparisonPreview",
+        "summary": "Compare two or three Occurrence IDs from the current search allowlist",
+        "responses": {
+          "200": {
+            "description": "Successful contract result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonPreview"
+                },
+                "example": {
+                  "preview_id": "compare_fixture_001",
+                  "preview_revision": 1,
+                  "session_revision": 4,
+                  "result_revision": 2,
+                  "occurrence_ids": [
+                    "occ_fixture_001",
+                    "occ_fixture_002"
+                  ],
+                  "occurrences": [
+                    {
+                      "occurrence_id": "occ_fixture_001",
+                      "event_id": "event_fixture_001",
+                      "title": "{synthetic_title}",
+                      "start": {
+                        "utc": "2026-01-01T12:00:00Z",
+                        "local_raw": null,
+                        "timezone": "Etc/UTC",
+                        "offset_raw": "Z",
+                        "precision": "minute"
+                      },
+                      "end": null,
+                      "venue_name": null,
+                      "status": "unknown",
+                      "status_is_verified": false,
+                      "age_rating": null,
+                      "offer": {
+                        "offer_id": "offer_fixture_001",
+                        "amount_minor": null,
+                        "currency": null,
+                        "fees_included": null,
+                        "availability": "unknown",
+                        "observed_at": "2026-01-01T00:00:00Z",
+                        "source_assertion_ids": []
+                      },
+                      "source_label": null,
+                      "observed_at": null,
+                      "freshness_state": "unknown"
+                    },
+                    {
+                      "occurrence_id": "occ_fixture_002",
+                      "event_id": "event_fixture_002",
+                      "title": "{synthetic_title}",
+                      "start": {
+                        "utc": "2026-01-01T12:00:00Z",
+                        "local_raw": null,
+                        "timezone": "Etc/UTC",
+                        "offset_raw": "Z",
+                        "precision": "minute"
+                      },
+                      "end": null,
+                      "venue_name": null,
+                      "status": "unknown",
+                      "status_is_verified": false,
+                      "age_rating": null,
+                      "offer": {
+                        "offer_id": "offer_fixture_001",
+                        "amount_minor": null,
+                        "currency": null,
+                        "fees_included": null,
+                        "availability": "unknown",
+                        "observed_at": "2026-01-01T00:00:00Z",
+                        "source_assertion_ids": []
+                      },
+                      "source_label": null,
+                      "observed_at": null,
+                      "freshness_state": "unknown"
+                    }
+                  ],
+                  "expires_at": "2026-01-01T01:00:00Z"
+                }
+              }
+            }
           }
         }
       }
