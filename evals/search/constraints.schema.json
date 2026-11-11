@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:afisha:query-understanding:v1",
+  "title": "Afisha query understanding benchmark v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "family", "category", "split", "query", "reference_now", "timezone", "expected", "retrieval_focus"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Z]+-[0-9]{3}$"},
+    "family": {"type": "string", "minLength": 3},
+    "category": {"type": "string", "minLength": 3},
+    "split": {"enum": ["dev", "test"]},
+    "query": {"type": "string", "minLength": 1},
+    "reference_now": {"type": "string", "format": "date-time"},
+    "timezone": {"type": "string", "minLength": 1},
+    "previous": {"$ref": "#/$defs/constraints"},
+    "expected": {"$ref": "#/$defs/expected"},
+    "retrieval_focus": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "notes": {"type": "string"}
+  },
+  "$defs": {
+    "dateRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": {"type": "string", "format": "date"},
+        "to": {"type": "string", "format": "date"}
+      }
+    },
+    "timeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "start_from": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "start_to": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "fits_from": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"},
+        "fits_to": {"type": "string", "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"}
+      }
+    },
+    "participants": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "total": {"type": "integer", "minimum": 1},
+        "adults": {"type": "integer", "minimum": 0},
+        "children_count": {"type": "integer", "minimum": 0},
+        "children_ages": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 17}, "uniqueItems": false},
+        "participant_ages": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 120}, "uniqueItems": false}
+      }
+    },
+    "hard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cities": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "region": {"type": "string"},
+        "date": {"$ref": "#/$defs/dateRange"},
+        "time": {"$ref": "#/$defs/timeRange"},
+        "participants": {"$ref": "#/$defs/participants"},
+        "max_total_price": {"type": "number", "minimum": 0},
+        "max_price_per_person": {"type": "number", "minimum": 0},
+        "currency": {"const": "RUB"},
+        "free_only": {"type": "boolean"},
+        "categories_any": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "categories_exclude": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "required_age_rating": {"type": "string"},
+        "venue_query": {"type": "string", "minLength": 1},
+        "geo_query": {"type": "string", "minLength": 1},
+        "title_query": {"type": "string", "minLength": 1},
+        "topic_query": {"type": "string", "minLength": 1},
+        "statuses": {"type": "array", "items": {"enum": ["scheduled", "cancelled", "postponed", "sold_out", "unknown"]}, "minItems": 1, "uniqueItems": true}
+      }
+    },
+    "soft": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "semantic_query": {"type": "string", "minLength": 1},
+        "preferences": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "preferred_categories": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "category_priority": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "avoid_categories": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "price_direction": {"const": "lower"},
+        "prefer_free": {"type": "boolean"},
+        "less_travel": {"type": "boolean"},
+        "audience": {"type": "string"}
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hard", "soft"],
+      "properties": {
+        "hard": {"$ref": "#/$defs/hard"},
+        "soft": {"$ref": "#/$defs/soft"}
+      }
+    },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reset", "set", "unset"],
+      "properties": {
+        "reset": {"type": "boolean"},
+        "set": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hard": {"$ref": "#/$defs/hard"},
+            "soft": {"$ref": "#/$defs/soft"}
+          }
+        },
+        "unset": {"type": "array", "items": {"type": "string", "pattern": "^(hard|soft)\\.[A-Za-z0-9_]+$"}, "uniqueItems": true}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "hard", "soft"],
+      "properties": {
+        "action": {"enum": ["search", "clarify", "out_of_scope"]},
+        "hard": {"$ref": "#/$defs/hard"},
+        "soft": {"$ref": "#/$defs/soft"},
+        "clarify": {"type": "array", "items": {"enum": ["city", "date", "time", "child_age", "participants", "budget", "category", "audience", "location", "contradiction"]}, "minItems": 1, "uniqueItems": true},
+        "assumptions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "allowed_relaxations": {"type": "array", "items": {"enum": ["soft_preferences", "date", "time", "budget", "city", "venue", "category", "age", "status"]}, "uniqueItems": true},
+        "unsupported_actions": {"type": "array", "items": {"enum": ["purchase", "booking", "write_sql", "reveal_private_data", "reveal_system_prompt"]}, "uniqueItems": true},
+        "forbidden": {"type": "array", "items": {"enum": ["fabricate_event", "fabricate_price", "fabricate_link", "ignore_hard_constraints", "ignore_age", "ignore_status", "raw_sql_execution", "reveal_secrets", "claim_purchase", "claim_age_compatible"]}, "uniqueItems": true},
+        "patch": {"$ref": "#/$defs/patch"}
+      }
+    }
+  }
+}
