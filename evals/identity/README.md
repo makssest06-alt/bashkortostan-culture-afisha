@@ -4,7 +4,8 @@
 
 ## Состав
 
-- `pairs.jsonl` — 72 пары наблюдений;
+- `pairs.jsonl` — 36 dev-пар наблюдений;
+- `pairs.test.jsonl` — 36 test-пар наблюдений; физическое разделение снижает риск случайного использования test при настройке;
 - `clusters.json` — 12 кластерных сценариев;
 - `fixtures.schema.json` — JSON Schema Draft 2020-12 для обоих форматов;
 - `validate.py` — structural/semantic checks, консервативный cluster oracle и negative self-tests;
@@ -32,7 +33,7 @@ python3 evals/identity/validate.py --require-jsonschema --self-test
 
 ```bash
 python3 evals/identity/validate.py \
-  --pairs evals/identity/pairs.jsonl \
+  --pairs evals/identity/pairs.jsonl evals/identity/pairs.test.jsonl \
   --clusters evals/identity/clusters.json \
   --schema evals/identity/fixtures.schema.json
 ```
@@ -41,7 +42,7 @@ python3 evals/identity/validate.py \
 
 ## Pair fixtures
 
-Каждая строка `pairs.jsonl` соответствует `#/$defs/pairCase` в `fixtures.schema.json`. Корневая схема файла применяется к `clusters.json`; к JSONL она не применяется как единый документ.
+Каждая строка `pairs.jsonl` и `pairs.test.jsonl` соответствует `#/$defs/pairCase` в `fixtures.schema.json`. По умолчанию validator загружает оба файла вместе; `--pairs` принимает один или несколько путей. Корневая схема файла применяется к `clusters.json`; к JSONL она не применяется как единый документ.
 
 ### Распределение
 

@@ -55,6 +55,13 @@ def read_jsonl(path: Path):
     return result
 
 
+def read_pairs(paths):
+    result = []
+    for path in paths:
+        result.extend(read_jsonl(path))
+    return result
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -952,7 +959,7 @@ def validate_all(pairs, clusters_doc, schema, require_jsonschema=False):
 
 
 
-def print_summary(pairs, clusters_doc, pairs_path, clusters_path, schema_status):
+def print_summary(pairs, clusters_doc, pairs_paths, clusters_path, schema_status):
     print(
         f"Fixtures валидны: {len(pairs)} пары; "
         + ", ".join(f"{category}=6" for category in CATEGORIES)
@@ -971,7 +978,8 @@ def print_summary(pairs, clusters_doc, pairs_path, clusters_path, schema_status)
     print("Occurrence actions:", dict(sorted(Counter(case["expected"]["occurrence_action"] for case in pairs).items())))
     print(f"Cluster scenarios: {len(clusters_doc['scenarios'])}; заявленные order permutations проверены.")
     print(f"JSON Schema: {schema_status}.")
-    print(f"pairs.jsonl SHA-256: {sha256(pairs_path)}")
+    for pairs_path in pairs_paths:
+        print(f"{pairs_path.name} SHA-256: {sha256(pairs_path)}")
     print(f"clusters.json SHA-256: {sha256(clusters_path)}")
     print("Production precision/recall и duplicate rate не вычислялись: реальный каталог и независимая разметка отсутствуют.")
 
@@ -1088,7 +1096,11 @@ def run_self_test(pairs, clusters_doc, schema, require_jsonschema):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     base = Path(__file__).resolve().parent
-    parser.add_argument("--pairs", type=Path, default=base / "pairs.jsonl")
+    parser.add_argument(
+        "--pairs", type=Path, nargs="+",
+        default=[base / "pairs.jsonl", base / "pairs.test.jsonl"],
+        help="dev/test JSONL files; defaults load both physical splits",
+    )
     parser.add_argument("--clusters", type=Path, default=base / "clusters.json")
     parser.add_argument("--schema", type=Path, default=base / "fixtures.schema.json")
     parser.add_argument("--require-jsonschema", action="store_true")
@@ -1096,7 +1108,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        pairs = read_jsonl(args.pairs)
+        pairs = read_pairs(args.pairs)
         clusters_doc = read_json(args.clusters)
         schema = read_json(args.schema)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
