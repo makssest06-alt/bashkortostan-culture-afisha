@@ -1,0 +1,2547 @@
+{
+  "schema_version": "1.0.0",
+  "synthetic": true,
+  "scenarios": [
+    {
+      "case_id": "CL-001",
+      "synthetic": true,
+      "title": "Полный согласованный кластер",
+      "scenario": "Три записи имеют полный набор сильных pair decisions; Event и Occurrence можно объединить.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_001_a_b",
+          "ical_uid": "syn_uid_cl_001",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_001",
+          "work_id": "syn_work_cl_001",
+          "venue_id": "syn_venue_cl_001",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_001",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_beta",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_001_a_b",
+          "ical_uid": "syn_uid_cl_001",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_001",
+          "work_id": "syn_work_cl_001",
+          "venue_id": "syn_venue_cl_001",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_001",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_001_a_b",
+          "ical_uid": "syn_uid_cl_001",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_001",
+          "work_id": "syn_work_cl_001",
+          "venue_id": "syn_venue_cl_001",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_001",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b",
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b",
+            "c"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "forbidden_pairs": [],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-002",
+      "synthetic": true,
+      "title": "Sparse bridge с cannot-link",
+      "scenario": "A-B и B-C положительны, но A-C имеет cannot-link; connected components создал бы запрещённый кластер.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": "syn_shared_event_a",
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_002",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_002",
+          "work_id": "syn_work_cl_002",
+          "venue_id": "syn_venue_cl_002",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_002",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_002_b_c",
+          "ical_uid": "syn_uid_cl_002",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_002",
+          "work_id": "syn_work_cl_002",
+          "venue_id": "syn_venue_cl_002",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_002",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": "syn_shared_event_c",
+          "shared_occurrence_id": "syn_shared_occ_cl_002_b_c",
+          "ical_uid": "syn_uid_cl_002",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_002",
+          "work_id": "syn_work_cl_002",
+          "venue_id": "syn_venue_cl_002",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_002",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_source_occurrence_key"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_shared_event_ids"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "review",
+        "public_clusters": [
+          [
+            "a"
+          ],
+          [
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a"
+          ],
+          [
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [],
+        "forbidden_pairs": [
+          [
+            "a",
+            "c"
+          ]
+        ],
+        "required_occurrence_pairs": [],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "c"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-003",
+      "synthetic": true,
+      "title": "Две Production в candidate set",
+      "scenario": "A-B — подтверждённые дубли, C — другая Production; cannot-link не даёт поглотить C.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_003_a_b",
+          "ical_uid": "syn_uid_cl_003",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_003",
+          "work_id": "syn_work_cl_003",
+          "venue_id": "syn_venue_cl_003",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_003",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_beta",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_003_a_b",
+          "ical_uid": "syn_uid_cl_003",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_003",
+          "work_id": "syn_work_cl_003",
+          "venue_id": "syn_venue_cl_003",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_003",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_003",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_other_cl_003_c",
+          "work_id": "syn_work_cl_003",
+          "venue_id": "syn_venue_cl_003",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_003",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_work"
+          ],
+          "vetoes": [
+            "conflicting_productions"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_work"
+          ],
+          "vetoes": [
+            "conflicting_productions"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-004",
+      "synthetic": true,
+      "title": "Фестивальный parent и subevent",
+      "scenario": "A-B — две записи родительского фестиваля, C — самостоятельный subevent; part_of не является дубликатом.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_004_a_b",
+          "ical_uid": "syn_uid_cl_004",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_004",
+          "work_id": "syn_work_cl_004",
+          "venue_id": "syn_venue_cl_004",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "festival",
+          "series_id": "syn_series_cl_004",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_beta",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_004_a_b",
+          "ical_uid": "syn_uid_cl_004",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_004",
+          "work_id": "syn_work_cl_004",
+          "venue_id": "syn_venue_cl_004",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "festival",
+          "series_id": "syn_series_cl_004",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_004",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_004",
+          "work_id": "syn_work_cl_004",
+          "venue_id": "syn_venue_cl_004",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": "part_of",
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_004",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "parent_child_relation"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "parent_child_relation"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-005",
+      "synthetic": true,
+      "title": "Один Event без потери Occurrence",
+      "scenario": "A-B дублируют один сеанс, C — другой сеанс того же Event; Event cluster общий, Occurrence clusters разные.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_same",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_005_a_b",
+          "ical_uid": "syn_uid_cl_005",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_005",
+          "work_id": "syn_work_cl_005",
+          "venue_id": "syn_venue_cl_005",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_005",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_same",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_005_a_b",
+          "ical_uid": "syn_uid_cl_005",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_005",
+          "work_id": "syn_work_cl_005",
+          "venue_id": "syn_venue_cl_005",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_005",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_same",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_005",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_005",
+          "work_id": "syn_work_cl_005",
+          "venue_id": "syn_venue_cl_005",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_005",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_source_event_key"
+          ],
+          "vetoes": [
+            "different_stable_occurrence_keys"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_source_event_key"
+          ],
+          "vetoes": [
+            "different_stable_occurrence_keys"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b",
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "forbidden_pairs": [],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-006",
+      "synthetic": true,
+      "title": "Инвариантность к перестановкам",
+      "scenario": "Два безопасных кластера должны сохранить memberships при шести порядках входа.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_006_a_b",
+          "ical_uid": "syn_uid_cl_006",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_006",
+          "work_id": "syn_work_cl_006",
+          "venue_id": "syn_venue_cl_006",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_006",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_beta",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_006_a_b",
+          "ical_uid": "syn_uid_cl_006",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_006",
+          "work_id": "syn_work_cl_006",
+          "venue_id": "syn_venue_cl_006",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_006",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_006_c_d",
+          "ical_uid": "syn_uid_cl_006",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_other_cl_006",
+          "work_id": "syn_work_cl_006",
+          "venue_id": "syn_venue_cl_006",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_006",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "d",
+          "source_id": "syn_src_delta",
+          "external_event_id": "syn_ext_event_d",
+          "external_occurrence_id": "syn_ext_occ_d",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_006_c_d",
+          "ical_uid": "syn_uid_cl_006",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_other_cl_006",
+          "work_id": "syn_work_cl_006",
+          "venue_id": "syn_venue_cl_006",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_006",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        [
+          "d",
+          "c",
+          "b",
+          "a"
+        ],
+        [
+          "b",
+          "a",
+          "d",
+          "c"
+        ],
+        [
+          "c",
+          "d",
+          "a",
+          "b"
+        ],
+        [
+          "d",
+          "c",
+          "b",
+          "a"
+        ],
+        [
+          "b",
+          "d",
+          "a",
+          "c"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "c",
+          "right": "d",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions",
+            "conflicting_shared_occurrence_ids"
+          ],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "d",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions",
+            "conflicting_shared_occurrence_ids"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions",
+            "conflicting_shared_occurrence_ids"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "d",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions",
+            "conflicting_shared_occurrence_ids"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c",
+            "d"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c",
+            "d"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c",
+            "d"
+          ]
+        ],
+        "forbidden_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "a",
+            "d"
+          ],
+          [
+            "b",
+            "c"
+          ],
+          [
+            "b",
+            "d"
+          ]
+        ],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c",
+            "d"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "a",
+            "d"
+          ],
+          [
+            "b",
+            "c"
+          ],
+          [
+            "b",
+            "d"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-007",
+      "synthetic": true,
+      "title": "Позднее противоречивое наблюдение",
+      "scenario": "Существующий подтверждённый A-B сохраняется, а новое C с review edges не присоединяется автоматически.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_007_a_b",
+          "ical_uid": "syn_uid_cl_007",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_007",
+          "work_id": "syn_work_cl_007",
+          "venue_id": "syn_venue_cl_007",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_007",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_beta",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_007_a_b",
+          "ical_uid": "syn_uid_cl_007",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_007",
+          "work_id": "syn_work_cl_007",
+          "venue_id": "syn_venue_cl_007",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_007",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_007",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_other_cl_007_c",
+          "work_id": "syn_work_cl_007",
+          "venue_id": "syn_venue_cl_007",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_007",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "review",
+          "occurrence_action": "review",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "review",
+          "occurrence_action": "review",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "review",
+        "public_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_pairs": [],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-008",
+      "synthetic": true,
+      "title": "Обратимый merge/split по history",
+      "scenario": "После двух merges split восстанавливает A-B и C по сохранённым memberships; старый merged ID становится tombstone.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_008_a_b",
+          "ical_uid": "syn_uid_cl_008",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_008",
+          "work_id": "syn_work_cl_008",
+          "venue_id": "syn_venue_cl_008",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_008",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_beta",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_008_a_b",
+          "ical_uid": "syn_uid_cl_008",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_008",
+          "work_id": "syn_work_cl_008",
+          "venue_id": "syn_venue_cl_008",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_008",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_008",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_other_cl_008_c",
+          "work_id": "syn_work_cl_008",
+          "venue_id": "syn_venue_cl_008",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_008",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "separate",
+          "occurrence_action": "separate",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [
+            "conflicting_productions"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": [
+          {
+            "from_id": "syn_original_a",
+            "terminal_id": null,
+            "replacement_ids": [
+              "syn_split_ab",
+              "syn_split_c"
+            ]
+          },
+          {
+            "from_id": "syn_original_b",
+            "terminal_id": null,
+            "replacement_ids": [
+              "syn_split_ab",
+              "syn_split_c"
+            ]
+          },
+          {
+            "from_id": "syn_original_c",
+            "terminal_id": null,
+            "replacement_ids": [
+              "syn_split_ab",
+              "syn_split_c"
+            ]
+          },
+          {
+            "from_id": "syn_original_ab",
+            "terminal_id": null,
+            "replacement_ids": [
+              "syn_split_ab",
+              "syn_split_c"
+            ]
+          },
+          {
+            "from_id": "syn_merged_abc",
+            "terminal_id": null,
+            "replacement_ids": [
+              "syn_split_ab",
+              "syn_split_c"
+            ]
+          }
+        ]
+      },
+      "history": {
+        "operations": [
+          {
+            "operation_id": "syn_op_merge_ab",
+            "type": "merge",
+            "level": "event",
+            "input_entity_ids": [
+              "syn_original_a",
+              "syn_original_b"
+            ],
+            "output_entity_ids": [
+              "syn_original_ab"
+            ],
+            "memberships_before": [
+              {
+                "entity_id": "syn_original_a",
+                "record_ids": [
+                  "a"
+                ]
+              },
+              {
+                "entity_id": "syn_original_b",
+                "record_ids": [
+                  "b"
+                ]
+              }
+            ],
+            "memberships_after": [
+              {
+                "entity_id": "syn_original_ab",
+                "record_ids": [
+                  "a",
+                  "b"
+                ]
+              }
+            ],
+            "created_at": "2030-01-01T00:00:00Z"
+          },
+          {
+            "operation_id": "syn_op_merge_abc",
+            "type": "merge",
+            "level": "event",
+            "input_entity_ids": [
+              "syn_original_ab",
+              "syn_original_c"
+            ],
+            "output_entity_ids": [
+              "syn_merged_abc"
+            ],
+            "memberships_before": [
+              {
+                "entity_id": "syn_original_ab",
+                "record_ids": [
+                  "a",
+                  "b"
+                ]
+              },
+              {
+                "entity_id": "syn_original_c",
+                "record_ids": [
+                  "c"
+                ]
+              }
+            ],
+            "memberships_after": [
+              {
+                "entity_id": "syn_merged_abc",
+                "record_ids": [
+                  "a",
+                  "b",
+                  "c"
+                ]
+              }
+            ],
+            "created_at": "2030-01-02T00:00:00Z"
+          },
+          {
+            "operation_id": "syn_op_split_abc",
+            "type": "split",
+            "level": "event",
+            "input_entity_ids": [
+              "syn_merged_abc"
+            ],
+            "output_entity_ids": [
+              "syn_split_ab",
+              "syn_split_c"
+            ],
+            "memberships_before": [
+              {
+                "entity_id": "syn_merged_abc",
+                "record_ids": [
+                  "a",
+                  "b",
+                  "c"
+                ]
+              }
+            ],
+            "memberships_after": [
+              {
+                "entity_id": "syn_split_ab",
+                "record_ids": [
+                  "a",
+                  "b"
+                ]
+              },
+              {
+                "entity_id": "syn_split_c",
+                "record_ids": [
+                  "c"
+                ]
+              }
+            ],
+            "created_at": "2030-01-03T00:00:00Z"
+          }
+        ],
+        "redirects": [
+          {
+            "from_id": "syn_original_a",
+            "to_id": "syn_original_ab",
+            "replacement_ids": []
+          },
+          {
+            "from_id": "syn_original_b",
+            "to_id": "syn_original_ab",
+            "replacement_ids": []
+          },
+          {
+            "from_id": "syn_original_ab",
+            "to_id": "syn_merged_abc",
+            "replacement_ids": []
+          },
+          {
+            "from_id": "syn_original_c",
+            "to_id": "syn_merged_abc",
+            "replacement_ids": []
+          },
+          {
+            "from_id": "syn_merged_abc",
+            "to_id": null,
+            "replacement_ids": [
+              "syn_split_ab",
+              "syn_split_c"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "CL-009",
+      "synthetic": true,
+      "title": "Дубли внутри одного источника",
+      "scenario": "A-B имеют разные source keys, но общий shared occurrence ID; нельзя предполагать отсутствие дублей внутри источника.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_same",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_009_a_b",
+          "ical_uid": "syn_uid_cl_009",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_009",
+          "work_id": "syn_work_cl_009",
+          "venue_id": "syn_venue_cl_009",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_009",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_same",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_009_a_b",
+          "ical_uid": "syn_uid_cl_009",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_009",
+          "work_id": "syn_work_cl_009",
+          "venue_id": "syn_venue_cl_009",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_009",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_same",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_009",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_009",
+          "work_id": "syn_work_cl_009",
+          "venue_id": "syn_venue_cl_009",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_009",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_source_event_key"
+          ],
+          "vetoes": [
+            "different_stable_occurrence_keys"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_source_event_key"
+          ],
+          "vetoes": [
+            "different_stable_occurrence_keys"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b",
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "forbidden_pairs": [],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-010",
+      "synthetic": true,
+      "title": "Низкая плотность без veto",
+      "scenario": "A-B и B-C положительны, но A-C в review; отсутствие veto не разрешает транзитивный commit.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_010_a_b",
+          "ical_uid": "syn_uid_cl_010",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_010",
+          "work_id": "syn_work_cl_010",
+          "venue_id": "syn_venue_cl_010",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_010",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_010_a_b",
+          "ical_uid": "syn_uid_cl_010",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_010",
+          "work_id": "syn_work_cl_010",
+          "venue_id": "syn_venue_cl_010",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_010",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_010",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_010",
+          "work_id": "syn_work_cl_010",
+          "venue_id": "syn_venue_cl_010",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_010",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_source_occurrence_key"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "review",
+          "occurrence_action": "review",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "review",
+        "public_clusters": [
+          [
+            "a"
+          ],
+          [
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a"
+          ],
+          [
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [],
+        "forbidden_pairs": [],
+        "required_occurrence_pairs": [],
+        "forbidden_occurrence_pairs": [],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-011",
+      "synthetic": true,
+      "title": "Высокий threshold не исправляет bridge",
+      "scenario": "Даже score 0.99 и 0.98 не отменяют отдельное A-C separate; компонент удерживается от commit.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_011_a_b",
+          "ical_uid": "syn_uid_cl_011",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_011",
+          "work_id": "syn_work_cl_011",
+          "venue_id": "syn_venue_cl_011",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_011",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": "syn_shared_occ_cl_011_a_b",
+          "ical_uid": "syn_uid_cl_011",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_011",
+          "work_id": "syn_work_cl_011",
+          "venue_id": "syn_venue_cl_011",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_011",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_011",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_011",
+          "work_id": "syn_work_cl_011",
+          "venue_id": "syn_venue_cl_011",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_011",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_shared_occurrence_id"
+          ],
+          "vetoes": [],
+          "score": 0.99
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_source_occurrence_key"
+          ],
+          "vetoes": [],
+          "score": 0.98
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "review",
+          "occurrence_action": "review",
+          "evidence": [
+            "text_similarity"
+          ],
+          "vetoes": [],
+          "score": 0.2
+        }
+      ],
+      "expected": {
+        "resolution": "review",
+        "public_clusters": [
+          [
+            "a"
+          ],
+          [
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a"
+          ],
+          [
+            "b"
+          ],
+          [
+            "c"
+          ]
+        ],
+        "required_pairs": [],
+        "forbidden_pairs": [],
+        "required_occurrence_pairs": [],
+        "forbidden_occurrence_pairs": [],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    },
+    {
+      "case_id": "CL-012",
+      "synthetic": true,
+      "title": "Recurrence override и отдельный экземпляр",
+      "scenario": "A-B-C описывают один override по UID+RECURRENCE-ID, D — другой recurrence instance того же Event.",
+      "records": [
+        {
+          "record_id": "a",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_a",
+          "external_occurrence_id": "syn_ext_occ_a",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_012",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_012",
+          "work_id": "syn_work_cl_012",
+          "venue_id": "syn_venue_cl_012",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_012",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "b",
+          "source_id": "syn_src_beta",
+          "external_event_id": "syn_ext_event_b",
+          "external_occurrence_id": "syn_ext_occ_b",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_012",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_012",
+          "work_id": "syn_work_cl_012",
+          "venue_id": "syn_venue_cl_012",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_012",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "c",
+          "source_id": "syn_src_gamma",
+          "external_event_id": "syn_ext_event_c",
+          "external_occurrence_id": "syn_ext_occ_c",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_012",
+          "recurrence_id": "20300115T140000Z",
+          "production_id": "syn_prod_cl_012",
+          "work_id": "syn_work_cl_012",
+          "venue_id": "syn_venue_cl_012",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_012",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        },
+        {
+          "record_id": "d",
+          "source_id": "syn_src_alpha",
+          "external_event_id": "syn_ext_event_d",
+          "external_occurrence_id": "syn_ext_occ_d",
+          "namespace": "syn_ns_shared",
+          "shared_event_id": null,
+          "shared_occurrence_id": null,
+          "ical_uid": "syn_uid_cl_012",
+          "recurrence_id": "20300116T140000Z_d",
+          "production_id": "syn_prod_cl_012",
+          "work_id": "syn_work_cl_012",
+          "venue_id": "syn_venue_cl_012",
+          "city": "syn_city_a",
+          "start_utc": "2030-01-15T14:00:00Z",
+          "relation_to_other": null,
+          "event_kind": "performance_run",
+          "series_id": "syn_series_cl_012",
+          "language": "ru",
+          "hall": "main",
+          "timezone": "Asia/Yekaterinburg",
+          "precision": "minute"
+        }
+      ],
+      "input_order": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ],
+      "permutations": [
+        [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        [
+          "d",
+          "c",
+          "b",
+          "a"
+        ]
+      ],
+      "pairs": [
+        {
+          "left": "a",
+          "right": "b",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_ical_uid_recurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_ical_uid_recurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "c",
+          "event_action": "merge",
+          "occurrence_action": "merge",
+          "evidence": [
+            "same_ical_uid_recurrence_id"
+          ],
+          "vetoes": [],
+          "score": null
+        },
+        {
+          "left": "a",
+          "right": "d",
+          "event_action": "merge",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_ical_uid",
+            "same_production"
+          ],
+          "vetoes": [
+            "different_recurrence_ids"
+          ],
+          "score": null
+        },
+        {
+          "left": "b",
+          "right": "d",
+          "event_action": "merge",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_ical_uid",
+            "same_production"
+          ],
+          "vetoes": [
+            "different_recurrence_ids"
+          ],
+          "score": null
+        },
+        {
+          "left": "c",
+          "right": "d",
+          "event_action": "merge",
+          "occurrence_action": "separate",
+          "evidence": [
+            "same_ical_uid",
+            "same_production"
+          ],
+          "vetoes": [
+            "different_recurrence_ids"
+          ],
+          "score": null
+        }
+      ],
+      "expected": {
+        "resolution": "commit",
+        "public_clusters": [
+          [
+            "a",
+            "b",
+            "c",
+            "d"
+          ]
+        ],
+        "public_occurrence_clusters": [
+          [
+            "a",
+            "b",
+            "c"
+          ],
+          [
+            "d"
+          ]
+        ],
+        "required_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "a",
+            "c"
+          ],
+          [
+            "a",
+            "d"
+          ],
+          [
+            "b",
+            "c"
+          ],
+          [
+            "b",
+            "d"
+          ],
+          [
+            "c",
+            "d"
+          ]
+        ],
+        "forbidden_pairs": [],
+        "required_occurrence_pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "a",
+            "c"
+          ],
+          [
+            "b",
+            "c"
+          ]
+        ],
+        "forbidden_occurrence_pairs": [
+          [
+            "a",
+            "d"
+          ],
+          [
+            "b",
+            "d"
+          ],
+          [
+            "c",
+            "d"
+          ]
+        ],
+        "order_invariant": true,
+        "redirect_resolution": []
+      }
+    }
+  ]
+}
