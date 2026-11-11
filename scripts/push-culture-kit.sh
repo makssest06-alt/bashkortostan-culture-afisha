@@ -10,8 +10,8 @@
 #   2. Запустите из любого каталога:
 #        bash scripts/push-culture-kit.sh /путь/к/bashkir-culture-kit
 #   3. Скрипт склонирует репозиторий во временную папку, переключится на ветку research/6-culture-kit,
-#      скопирует изображения в design/culture-kit/, закоммитит и запушит.
-#   Нужен настроенный доступ к репозиторию (SSH-ключ или gh auth login).
+#      скопирует изображения в design/culture-kit/, пересоберёт галерею, закоммитит и запушит.
+#   Нужен настроенный доступ к репозиторию (SSH-ключ или gh auth login) и python3 (для галереи).
 
 set -euo pipefail
 
@@ -38,11 +38,9 @@ for d in 01-ornament-kuskar 02-vyshivka 03-symbols 04-kostyum-ukrasheniya 05-yur
   fi
 done
 
-# превью для галереи
-if [ -d "$KIT_SRC/gallery-site/thumbs" ]; then
-  mkdir -p "$DEST/gallery-site/thumbs"
-  cp "$KIT_SRC/gallery-site/thumbs/"* "$DEST/gallery-site/thumbs/"
-  echo "> gallery-site/thumbs: скопировано"
+# пересобираем офлайн-галерею по загруженным изображениям
+if command -v python3 >/dev/null; then
+  (cd "$TMP/repo" && python3 scripts/build-culture-gallery.py)
 fi
 
 cd "$TMP/repo"
