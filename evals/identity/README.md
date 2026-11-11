@@ -5,7 +5,7 @@
 ## Состав
 
 - `pairs.jsonl` — 36 dev-пар наблюдений;
-- `pairs.test.jsonl` и `pairs.test-extra.jsonl` — по 18 test-пар в каждом, всего 36; оба shard охватывают все 12 категорий; физическое разделение снижает риск случайного использования test при настройке;
+- `pairs.test.jsonl` — 18 test-пар; `pairs.test-extra.jsonl` — 9, `pairs.test-extra-2.jsonl` — 8 и `pairs.test-security.jsonl` — 1 test-пара с длинным недоверенным описанием, всего 36; объединённый test split охватывает все 12 категорий; физическое разделение снижает риск случайного использования test при настройке;
 - `clusters.json` — 12 кластерных сценариев;
 - `fixtures.schema.json` — JSON Schema Draft 2020-12 для обоих форматов;
 - `validate.py` — structural/semantic checks, консервативный cluster oracle и negative self-tests;
@@ -33,7 +33,9 @@ python3 evals/identity/validate.py --require-jsonschema --self-test
 
 ```bash
 python3 evals/identity/validate.py \
-  --pairs evals/identity/pairs.jsonl evals/identity/pairs.test.jsonl evals/identity/pairs.test-extra.jsonl \
+  --pairs evals/identity/pairs.jsonl evals/identity/pairs.test.jsonl \
+    evals/identity/pairs.test-extra.jsonl evals/identity/pairs.test-extra-2.jsonl \
+    evals/identity/pairs.test-security.jsonl \
   --clusters evals/identity/clusters.json \
   --schema evals/identity/fixtures.schema.json
 ```
@@ -42,7 +44,7 @@ python3 evals/identity/validate.py \
 
 ## Pair fixtures
 
-Каждая строка `pairs.jsonl`, `pairs.test.jsonl` и `pairs.test-extra.jsonl` соответствует `#/$defs/pairCase` в `fixtures.schema.json`. По умолчанию validator загружает все три файла вместе; `--pairs` принимает один или несколько путей. Корневая схема файла применяется к `clusters.json`; к JSONL она не применяется как единый документ.
+Каждая строка `pairs.jsonl`, `pairs.test.jsonl`, `pairs.test-extra.jsonl`, `pairs.test-extra-2.jsonl` и `pairs.test-security.jsonl` соответствует `#/$defs/pairCase` в `fixtures.schema.json`. По умолчанию validator загружает все пять файлов вместе; `--pairs` принимает один или несколько путей. Корневая схема файла применяется к `clusters.json`; к JSONL она не применяется как единый документ.
 
 ### Распределение
 
