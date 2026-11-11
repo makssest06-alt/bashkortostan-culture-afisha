@@ -1098,8 +1098,8 @@ def main(argv=None):
     base = Path(__file__).resolve().parent
     parser.add_argument(
         "--pairs", type=Path, nargs="+",
-        default=[base / "pairs.jsonl", base / "pairs.test.jsonl"],
-        help="dev/test JSONL files; defaults load both physical splits",
+        default=[base / "pairs.jsonl", base / "pairs.test.jsonl", base / "pairs.test-extra.jsonl"],
+        help="dev/test JSONL files; defaults load all physical split files",
     )
     parser.add_argument("--clusters", type=Path, default=base / "clusters.json")
     parser.add_argument("--schema", type=Path, default=base / "fixtures.schema.json")

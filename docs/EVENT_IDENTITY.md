@@ -565,7 +565,7 @@ B3-Recall    = среднее recall(r) по записям
 
 - `contracts/event_identity.schema.json` — контракт canonical snapshot;
 - `evals/identity/fixtures.schema.json` — JSON Schema pair/cluster fixtures;
-- `evals/identity/pairs.jsonl` и `evals/identity/pairs.test.jsonl` — соответственно 36 dev и 36 test пар, всего 72 пары, 12 категорий по 6;
+- `evals/identity/pairs.jsonl` — 36 dev пар; `pairs.test.jsonl` и `pairs.test-extra.jsonl` — по 18 test пар, всего 72 пары, 12 категорий по 6; каждый test shard покрывает все категории;
 - `evals/identity/clusters.json` — 12 кластерных сценариев;
 - `evals/identity/validate.py` — structural/semantic validator и reference cluster oracle;
 - `evals/identity/README.md` — запуск, формат и ограничения.
