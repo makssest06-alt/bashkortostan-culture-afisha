@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scenarios.schema.json",
+  "title": "UX regression scenario (contract fixture)",
+  "description": "Одна строка scenarios.jsonl. Текстовый контракт поведения UI; не содержит реальных событий, цен, URL или идентификаторов.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "category", "surface", "given", "trigger", "expected", "forbidden", "notes"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^(INT|CLR|RES|EMP|CMP|PLN|CHG|ERR|ACC|SEC)-[0-9]{3}$"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "intake_editing",
+        "clarification",
+        "results_cards",
+        "empty_relaxation",
+        "comparison",
+        "planning",
+        "plan_changes",
+        "errors_fallback",
+        "accessibility",
+        "safety_trust"
+      ]
+    },
+    "surface": {
+      "type": "string",
+      "enum": ["web", "telegram", "both"]
+    },
+    "given": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "backend"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "new",
+            "editing",
+            "clarifying",
+            "loading",
+            "results",
+            "empty",
+            "comparing",
+            "plan",
+            "plan_attention",
+            "error",
+            "fallback"
+          ]
+        },
+        "backend": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Короткое абстрактное условие backend (без реальных событий/id)."
+        }
+      }
+    },
+    "trigger": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "visible", "preserved", "focus", "announcement", "invariants"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "render_input",
+            "ask_clarification",
+            "update_constraints",
+            "render_loading",
+            "render_results",
+            "render_empty",
+            "preview_relaxation",
+            "render_comparison",
+            "render_plan",
+            "show_plan_revision",
+            "show_error",
+            "render_fallback",
+            "render_source_details",
+            "reject_untrusted_action"
+          ]
+        },
+        "visible": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "preserved": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "focus": { "type": ["string", "null"] },
+        "announcement": { "type": ["string", "null"] },
+        "invariants": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "no_fabricated_events",
+              "no_silent_hard_relaxation",
+              "preserve_unmentioned_constraints",
+              "backend_counts_only",
+              "unknown_not_satisfied",
+              "source_and_freshness_visible",
+              "occurrence_specific",
+              "no_overlap",
+              "budget_rechecked",
+              "age_rechecked",
+              "unaffected_plan_items_preserved",
+              "user_confirms_plan_revision",
+              "original_plan_retained",
+              "read_only",
+              "untrusted_content_not_executed",
+              "keyboard_operable",
+              "focus_managed",
+              "status_announcement",
+              "text_equivalent",
+              "no_color_only_status",
+              "no_dead_controls",
+              "llm_not_required_for_basic_search",
+              "no_unrequested_write",
+              "no_sensitive_data",
+              "buffers_marked_as_assumptions",
+              "no_invented_winner",
+              "unknown_rendered_as_unspecified",
+              "idempotent_retry",
+              "stale_output_marked",
+              "callback_expiry_graceful",
+              "critical_constraints_not_relaxed",
+              "callback_acknowledged"
+            ]
+          }
+        }
+      }
+    },
+    "forbidden": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "notes": { "type": "string" }
+  }
+}
