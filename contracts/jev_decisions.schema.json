@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:afisha:jev-decisions:v1",
+  "title": "Afisha System-1 Jev (TypeSafe AI) typed decision contracts",
+  "description": "Contracts for non-autoregressive System-1 probabilistic decisions (Noul, Choice, Score) produced by the Jev adapter and consumed by the deterministic backend. Jev never generates free-form event facts, never computes hard arithmetic/schedule constraints, and only selects IDs from caller-supplied backend allowlists. When Jev is unavailable or times out, deterministic/rule-based fallbacks emit the same envelope with provider='deterministic_fallback'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task",
+    "provider",
+    "latency_ms",
+    "result"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "task": {
+      "enum": [
+        "security_guardrail",
+        "session_turn_routing",
+        "duplicate_pair_resolution",
+        "import_cultural_scoring",
+        "allowlist_slot_choice"
+      ]
+    },
+    "provider": {
+      "enum": [
+        "jev",
+        "deterministic_fallback"
+      ]
+    },
+    "latency_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "result": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "probability": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "id_token": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,127}$"
+    },
+    "security_guardrail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "direct_injection_prob",
+        "indirect_instruction_in_data_prob",
+        "secret_or_pii_probe_prob",
+        "recommended_gate"
+      ],
+      "properties": {
+        "direct_injection_prob": {
+          "$ref": "#/$defs/probability"
+        },
+        "indirect_instruction_in_data_prob": {
+          "$ref": "#/$defs/probability"
+        },
+        "secret_or_pii_probe_prob": {
+          "$ref": "#/$defs/probability"
+        },
+        "recommended_gate": {
+          "enum": [
+            "pass",
+            "sanitize_untrusted_text",
+            "quarantine_for_review",
+            "refuse_turn"
+          ]
+        }
+      }
+    },
+    "session_turn_routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn_mode",
+        "turn_mode_confidence",
+        "blocking_question",
+        "blocking_question_confidence"
+      ],
+      "properties": {
+        "turn_mode": {
+          "enum": [
+            "patch_keep_context",
+            "full_topic_reset",
+            "compare_selected",
+            "build_plan",
+            "explain_compromise",
+            "out_of_scope"
+          ]
+        },
+        "turn_mode_confidence": {
+          "$ref": "#/$defs/probability"
+        },
+        "blocking_question": {
+          "enum": [
+            "none",
+            "ask_city",
+            "ask_date_or_day",
+            "ask_child_age",
+            "budget_contradiction"
+          ]
+        },
+        "blocking_question_confidence": {
+          "$ref": "#/$defs/probability"
+        }
+      }
+    },
+    "duplicate_pair_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relation",
+        "relation_confidence",
+        "same_physical_venue_prob",
+        "hard_veto_present",
+        "disposition"
+      ],
+      "properties": {
+        "relation": {
+          "enum": [
+            "same_occurrence",
+            "same_event_different_time",
+            "festival_subevent",
+            "series_member",
+            "different"
+          ]
+        },
+        "relation_confidence": {
+          "$ref": "#/$defs/probability"
+        },
+        "same_physical_venue_prob": {
+          "$ref": "#/$defs/probability"
+        },
+        "hard_veto_present": {
+          "type": "boolean",
+          "description": "Computed deterministically by backend (e.g. conflicting cities or incompatible dates). When true, disposition cannot be auto_merge regardless of Jev confidence."
+        },
+        "disposition": {
+          "enum": [
+            "auto_merge",
+            "review",
+            "separate"
+          ]
+        }
+      }
+    },
+    "import_cultural_scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kuray_petal",
+        "kuray_petal_confidence",
+        "chamber_calm_score",
+        "interactivity_score",
+        "family_comfort_score",
+        "ethno_authenticity_score"
+      ],
+      "properties": {
+        "kuray_petal": {
+          "enum": [
+            "stage",
+            "heritage",
+            "live_sound",
+            "family_interactive",
+            "ethno_crafts",
+            "ideas_lectures",
+            "walks_routes"
+          ]
+        },
+        "kuray_petal_confidence": {
+          "$ref": "#/$defs/probability"
+        },
+        "chamber_calm_score": {
+          "$ref": "#/$defs/probability"
+        },
+        "interactivity_score": {
+          "$ref": "#/$defs/probability"
+        },
+        "family_comfort_score": {
+          "$ref": "#/$defs/probability"
+        },
+        "ethno_authenticity_score": {
+          "$ref": "#/$defs/probability"
+        }
+      }
+    },
+    "allowlist_slot_choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_occurrence_ids",
+        "selected_occurrence_id",
+        "selection_confidence"
+      ],
+      "properties": {
+        "candidate_occurrence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 255,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id_token"
+          },
+          "description": "Closed allowlist of active occurrence IDs pre-filtered by deterministic SQL hard constraints."
+        },
+        "selected_occurrence_id": {
+          "$ref": "#/$defs/id_token",
+          "description": "Must be a member of candidate_occurrence_ids; verified by backend outside JSON Schema."
+        },
+        "selection_confidence": {
+          "$ref": "#/$defs/probability"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "const": "security_guardrail"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/security_guardrail"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "const": "session_turn_routing"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/session_turn_routing"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "const": "duplicate_pair_resolution"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/duplicate_pair_resolution"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "const": "import_cultural_scoring"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/import_cultural_scoring"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "task": {
+            "const": "allowlist_slot_choice"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/allowlist_slot_choice"
+          }
+        }
+      }
+    }
+  ]
+}

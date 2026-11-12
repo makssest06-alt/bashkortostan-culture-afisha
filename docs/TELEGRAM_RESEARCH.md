@@ -1,8 +1,8 @@
 # Telegram Bot API: первичная сверка для адаптера куратора
 
 Дата: 2026-11-12  
-Статус: исследование официальной документации, не живой интеграционный тест  
-Связанные материалы: Issue #13, `docs/CHANNELS_API.md`, `evals/channels/`
+Статус: исследование официальной документации (актуализировано по Bot API 10.4 от 2026-11-09), не живой интеграционный тест  
+Связанные материалы: Issue #13, `docs/CHANNELS_API.md`, `docs/TELEGRAM_WIDGETS_10_4.md`, `contracts/telegram_widget_state.schema.json`, `evals/channels/`
 
 ## 1. Границы
 
@@ -274,3 +274,19 @@ Webhook
 ```
 
 Этот порядок уменьшает потерю updates, повторные мутации и зависшие кнопки, но не является заявлением об уже измеренной надёжности системы.
+
+## 13. Дополнение по Bot API 10.4 (релиз 2026-11-09): HTML Widgets и Ephemeral Messages
+
+Источники:
+
+- [Bot API Changelog — November 9, 2026 (Bot API 10.4)](https://core.telegram.org/bots/api-changelog#november-9-2026);
+- [Telegram HTML Widgets](https://core.telegram.org/bots/widgets);
+- [`Widget` / `sendWidget` / `WidgetQuery` / `answerWidgetQuery` / `editMessageWidgetData`](https://core.telegram.org/bots/api#widget).
+
+Полная инженерная спецификация вынесена в `docs/TELEGRAM_WIDGETS_10_4.md`, а компактная схема состояния — в `contracts/telegram_widget_state.schema.json`. Ключевые выводы для транспортного адаптера:
+
+1. **Нативные HTML-виджеты в пузыре личного чата (`sendWidget`):** исполняются клиентом в офлайн-песочнице QuickJS без доступа к сети (`NetworkDisabledError`), с неизменяемым после отправки `html` (`<= 32 768` байт UTF-8 и `<= 4 096` байт после `zlib` level 9) и состоянием `chat_data` / `public_data` (`0–1 024` байт UTF-8), которое пишет только бот.
+2. **Полная совместимость с контуром `CallbackQuery`:** запросы из виджета (`TelegramWidget.request(data)`, `1–64` байта UTF-8) приходят в `Update.widget_query` и используют тот же формат `v1:<opaque_short_action_token>`, тот же durable inbox/dedupe по `update_id` и `widget_query.id`, серверную проверку владельца (`WidgetQuery.from.id`), ревизий и allowlist.
+3. **Двойная фиксация ответа:** `answerWidgetQuery` возвращает `data` (`0–1 024` байт) в активный экземпляр виджета, а `editMessageWidgetData` сохраняет обновлённый `chat_data` в самом сообщении (после проверки canonical diff и монотонной ревизии `r`).
+4. **Ограничения production-среды и fallback:** в production `sendWidget` доступен только в личных чатах с ботом (`private`) и автоматически включает `protect_content` (без пересылки). Каждый вызов `sendWidget` обязан сопровождаться читаемым `caption` (`0–1 024` симв.) и `reply_markup` (кнопка полной карты в Web/Mini App и резервное действие) для клиентов старых версий.
+5. **Групповые сценарии в production:** поскольку виджеты в группах пока работают только на тестовом сервере Telegram, для персональных ответов в групповых чатах используется вторая возможность Bot API 10.4 — `ephemeral_message_parameters` с `callback_query_id` без `receiver_user_id` в `sendMessage` / `sendRichMessage`.

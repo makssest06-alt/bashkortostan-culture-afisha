@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:afisha:telegram-widget-state:v1",
+  "title": "Telegram Bot API 10.4 HTML Widget compact state and query contract",
+  "description": "Contract for native in-bubble HTML widgets in Telegram Bot API 10.4 (sendWidget, editMessageWidgetData, Update.widget_query, answerWidgetQuery). Distinct from contracts/widget_protocol.schema.json, which governs external partner website embeds. Serialized JSON of chat_data, public_data and answerWidgetQuery.data MUST NOT exceed 1024 UTF-8 bytes; serialized WidgetQuery request string MUST be 1-64 UTF-8 bytes ('v1:' + opaque action token). All untrusted strings in state are rendered exclusively via textContent inside the offline QuickJS sandbox.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "m",
+    "r",
+    "s"
+  ],
+  "properties": {
+    "v": {
+      "const": 1,
+      "description": "Compact schema version."
+    },
+    "m": {
+      "enum": [
+        "search",
+        "plan",
+        "attention"
+      ],
+      "description": "Widget view mode: search (Kuray + chips + up to 3 occurrences), plan (saved day timeline), attention (cancelled/changed slot + replacement preview)."
+    },
+    "r": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic server-side render revision; widget ignores answers/events with lower r."
+    },
+    "k": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7,
+      "description": "Active Kuray petal index (0 = none, 1..7 = stage, heritage, live_sound, family_interactive, ethno_crafts, ideas_lectures, walks_routes)."
+    },
+    "c": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 28,
+            "description": "Short display label of active constraint chip (e.g. 'Уфа', 'Сб', '7+', '≤1500₽', '~тихое')."
+          },
+          {
+            "enum": [
+              0,
+              1
+            ],
+            "description": "1 = hard constraint (deterministic filter), 0 = soft preference (ranking only)."
+          },
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{2,24}$",
+            "description": "Short opaque server-bound action suffix used to form 'v1:' + token on tap."
+          }
+        ],
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "description": "Compact constraint chips tuple list [label, is_hard, action_token]."
+    },
+    "s": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 3,
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,31}$",
+            "description": "Public occurrence_id from active backend allowlist."
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16,
+            "description": "Compact local time or window (e.g. '15:00' or '14:30–16:00')."
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "description": "Truncated plain-text title + venue summary; rendered strictly via textContent."
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "Explicit price/age badge preserving unknown semantics (e.g. '400₽ · 6+', 'Цена не указ.')."
+          },
+          {
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "description": "Occurrence status code: 0 = scheduled_verified, 1 = partially_unknown, 2 = cancelled_or_moved, 3 = stale_needs_recheck."
+          },
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{2,24}$",
+            "description": "Opaque server-bound action suffix for primary slot tap ('v1:' + token)."
+          }
+        ],
+        "minItems": 6,
+        "maxItems": 6
+      },
+      "description": "Up to 3 occurrence or timeline slots [occ_id, time, title_venue, price_age_badge, status_code, action_token]."
+    },
+    "rep": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{1,31}$",
+          "description": "Candidate replacement occurrence_id from backend allowlist."
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16,
+          "description": "Replacement time window."
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 44,
+          "description": "Replacement plain-text title + venue."
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 18,
+          "description": "Replacement price/age badge."
+        },
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{2,24}$",
+          "description": "Opaque token to accept replacement ('v1:' + accept_token)."
+        },
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{2,24}$",
+          "description": "Opaque token to reject replacement and retain saved plan ('v1:' + reject_token)."
+        }
+      ],
+      "minItems": 6,
+      "maxItems": 6,
+      "description": "Optional replacement preview tuple shown only when m='attention'."
+    }
+  }
+}
