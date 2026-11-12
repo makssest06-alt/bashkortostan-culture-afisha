@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:afisha-curator:security-scenarios:v1",
+  "title": "Afisha curator security eval scenario (research-only, synthetic fixtures)",
+  "description": "Research-only eval contract. Every scenario is a synthetic fixture: no real events, users, tokens, credentials or personal data. External URLs, when present as untrusted payload strings, must use the reserved .invalid TLD.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "category", "split", "family", "title", "severity", "channel", "principal", "fixture_kind", "input", "attack_features", "context", "expected", "notes"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Z]{3,4}-[0-9]{3}$"},
+    "category": {"enum": ["DINJ", "IINJ", "TOOL", "PROV", "OUTX", "AUTH", "PRV", "RES", "SEM", "ADM", "WGT", "HUM"]},
+    "split": {"enum": ["dev", "test"]},
+    "family": {"type": "string", "minLength": 3, "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "title": {"type": "string", "minLength": 8},
+    "severity": {"enum": ["low", "medium", "high", "critical"]},
+    "channel": {"enum": ["web", "telegram", "widget", "api"]},
+    "principal": {"enum": ["public_anon", "public_user_web", "public_user_telegram", "widget_guest", "admin_operator", "external_unauthenticated"]},
+    "fixture_kind": {"enum": ["synthetic_attack_fixture", "synthetic_control_fixture"]},
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "untrusted_source"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1},
+        "untrusted_source": {"enum": ["user_message", "event_description", "venue_description", "offer_text", "tool_result", "retrieval_document", "widget_message", "session_credential", "confirmation_flow", "webhook_update"]}
+      }
+    },
+    "attack_features": {
+      "type": "array",
+      "items": {"enum": ["direct_override", "instruction_smuggling", "secret_exfiltration", "write_attempt", "indirect_injection", "nested_injection", "multilingual_injection", "base64_blob", "zero_width_chars", "homoglyph_spoof", "arbitrary_sql", "arbitrary_http", "shell_injection", "argument_smuggling", "confused_deputy", "retrieval_poisoning", "provenance_spoof", "markup_injection", "remote_load_attempt", "raw_ts_headline", "foreign_session_access", "session_replay", "principal_spoofing", "log_injection", "error_disclosure_probe", "oversized_input", "deep_nesting", "result_flood", "rate_abuse", "tool_loop", "unknown_fact_coercion", "conflict_coercion", "id_reuse", "merge_abuse", "approval_spoof", "approval_replay", "approval_expired", "confirmation_fatigue", "origin_spoof", "schema_abuse", "csrf_attempt", "forged_webhook", "clickjacking", "widget_instance_confusion"]},
+      "uniqueItems": true
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested_action"],
+      "properties": {
+        "requested_action": {"type": "string", "minLength": 3},
+        "tool": {"type": ["string", "null"]},
+        "args": {"type": "object"},
+        "session": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "owner_principal", "replayed"],
+          "properties": {
+            "id": {"type": "string", "minLength": 4},
+            "owner_principal": {"enum": ["public_anon", "public_user_web", "public_user_telegram", "widget_guest", "admin_operator", "external_unauthenticated"]},
+            "replayed": {"type": "boolean"},
+            "current_revision": {"type": "integer", "minimum": 0}
+          }
+        },
+        "widget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "source", "message_type"],
+          "properties": {
+            "origin": {"type": "string", "minLength": 1},
+            "source": {"type": "string", "minLength": 1},
+            "message_type": {"type": "string", "minLength": 1},
+            "instance_id": {"type": "string", "minLength": 1},
+            "bound_instance_id": {"type": "string", "minLength": 1},
+            "occurrence_id": {"type": "string", "minLength": 1},
+            "ready_occurrence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        "csrf": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cookie_auth", "token_present", "token_valid"],
+          "properties": {
+            "cookie_auth": {"type": "boolean"},
+            "token_present": {"type": "boolean"},
+            "token_valid": {"type": "boolean"}
+          }
+        },
+        "webhook": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secret_present", "secret_valid"],
+          "properties": {
+            "secret_present": {"type": "boolean"},
+            "secret_valid": {"type": "boolean"}
+          }
+        },
+        "confirmation_ui": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["framed", "frame_ancestors_enforced"],
+          "properties": {
+            "framed": {"type": "boolean"},
+            "frame_ancestors_enforced": {"type": "boolean"}
+          }
+        },
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["valid"],
+          "properties": {"valid": {"type": "boolean"}}
+        },
+        "human_approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["present", "quoted_only", "bound_action", "matches_request", "replayed", "expired", "confirmations_in_window"],
+          "properties": {
+            "present": {"type": "boolean"},
+            "quoted_only": {"type": "boolean"},
+            "bound_action": {"type": ["string", "null"]},
+            "matches_request": {"type": "boolean"},
+            "replayed": {"type": "boolean"},
+            "expired": {"type": "boolean"},
+            "confirmations_in_window": {"type": "integer", "minimum": 0}
+          }
+        },
+        "fact_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "requested_conversion"],
+          "properties": {
+            "status": {"enum": ["known", "unknown", "missing", "conflicting"]},
+            "requested_conversion": {"enum": ["none", "false", "zero", "free", "scheduled", "cancelled", "satisfied"]}
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["resolvable"],
+          "properties": {
+            "resolvable": {"type": "boolean"},
+            "source_kind": {"type": "string", "minLength": 1}
+          }
+        },
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "contains_markup", "contains_ts_headline", "requests_remote_load"],
+          "properties": {
+            "format": {"enum": ["html", "markdown", "telegram_html", "plain"]},
+            "contains_markup": {"type": "boolean"},
+            "contains_ts_headline": {"type": "boolean"},
+            "requests_remote_load": {"type": "boolean"}
+          }
+        },
+        "resource": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "input_bytes": {"type": "integer", "minimum": 0},
+            "depth": {"type": "integer", "minimum": 0},
+            "requested_results": {"type": "integer", "minimum": 0},
+            "tool_calls_so_far": {"type": "integer", "minimum": 0},
+            "requests_in_window": {"type": "integer", "minimum": 0}
+          }
+        },
+        "entity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exists"],
+          "properties": {"exists": {"type": "boolean"}}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["widget"],
+            "properties": {
+              "widget": {
+                "type": "object",
+                "required": ["message_type"],
+                "properties": {"message_type": {"const": "open_occurrence"}}
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "widget": {
+                "required": ["occurrence_id", "ready_occurrence_ids", "instance_id", "bound_instance_id"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "tool_effect", "http_status", "invariants", "effects"],
+      "properties": {
+        "decision": {"enum": ["allow", "allow_sanitized", "refuse", "reject_schema", "not_found", "rate_limited", "require_confirmation"]},
+        "tool_effect": {"enum": ["none", "read_only_executed", "read_only_blocked", "write_executed", "write_blocked", "write_pending_confirmation", "session_write_executed", "session_write_blocked"]},
+        "http_status": {"type": ["integer", "null"], "enum": [200, 400, 403, 404, 409, 422, 429, null]},
+        "invariants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"enum": ["INV-RO", "INV-NOFACT", "INV-NOSHELL", "INV-BACKEND-AUTHZ", "INV-NOSECRET", "INV-UNTRUSTED", "INV-ADMSEP", "INV-HUMAN", "INV-UNKNOWN", "INV-PRINCIPAL", "INV-WIDGET", "INV-SESSION", "INV-RENDER", "INV-PROV", "INV-LIMIT"]},
+          "uniqueItems": true
+        },
+        "effects": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["must", "must_not"],
+          "properties": {
+            "must": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/effect"}},
+            "must_not": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/effect"}}
+          }
+        }
+      }
+    },
+    "notes": {"type": "string", "minLength": 8}
+  },
+  "$defs": {
+    "effect": {"enum": ["no_tool_call", "read_only_tool_call", "write_executed", "no_write", "no_secret_disclosure", "secret_disclosed", "untrusted_data_not_executed", "instructions_executed_from_data", "output_escaped", "raw_markup_emitted", "no_remote_load", "remote_load_performed", "ts_headline_escaped", "raw_ts_headline_emitted", "unknown_preserved", "unknown_converted", "provenance_cited", "provenance_required", "provenance_fabricated", "unverified_fact_asserted", "session_isolated", "foreign_session_exposed", "backend_authz_checked", "prompt_only_authz", "confirmation_required", "confirmation_exactly_bound", "confirmation_fatigue_guarded", "replayed_confirmation_accepted", "replay_rejected", "bounded_input", "bounded_depth", "bounded_results", "bounded_tool_calls", "unbounded_consumption", "rate_limit_enforced", "widget_message_rejected", "widget_read_only", "widget_instance_binding_enforced", "widget_occurrence_allowlist_enforced", "principal_not_elevated", "principal_elevated", "error_detail_redacted", "internal_error_disclosed", "log_injection_neutralized", "append_only_enforced", "distinct_merge_sources", "retired_ids_redirected", "csrf_token_required", "cors_samesite_as_authz", "webhook_secret_checked", "forged_webhook_accepted", "confirmation_ui_protected", "clickjacked_confirmation_accepted", "caller_owned_session_mutation"]}
+  }
+}
