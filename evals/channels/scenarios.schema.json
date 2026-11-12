@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:afisha:channel-contract-scenarios:v1",
+  "title": "Synthetic Web Telegram widget and API contract scenarios",
+  "type": "array",
+  "minItems": 60,
+  "maxItems": 60,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "category",
+      "surface",
+      "given",
+      "trigger",
+      "expected",
+      "forbidden",
+      "notes"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^(INT|SRC|PLN|CHG|TGR|DLV|WDG|API|XCH|SEC)-00[1-6]$"
+      },
+      "category": {
+        "enum": [
+          "intake_revisions",
+          "search_allowlists",
+          "planning",
+          "plan_changes",
+          "telegram_callbacks",
+          "telegram_delivery",
+          "widget_protocol",
+          "api_semantics",
+          "cross_channel_identity",
+          "security_fallback"
+        ]
+      },
+      "surface": {
+        "enum": [
+          "web",
+          "telegram",
+          "widget",
+          "api",
+          "all"
+        ]
+      },
+      "given": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "result_revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_state": {
+            "enum": [
+              "none",
+              "saved",
+              "attention"
+            ]
+          },
+          "data_state": {
+            "enum": [
+              "current",
+              "stale",
+              "partially_unknown"
+            ]
+          },
+          "backend": {
+            "const": "synthetic_contract"
+          }
+        },
+        "required": [
+          "session_revision",
+          "result_revision",
+          "plan_revision",
+          "plan_state",
+          "data_state",
+          "backend"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "plan_state": {
+                  "const": "none"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "plan_revision": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "plan_state": {
+                  "enum": [
+                    "saved",
+                    "attention"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "plan_revision": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "trigger": {
+        "type": "string",
+        "minLength": 1
+      },
+      "expected": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "create_session",
+              "read_session",
+              "apply_patch",
+              "reject_patch",
+              "search_preview",
+              "discard_stale_response",
+              "open_occurrence",
+              "comparison_preview",
+              "plan_preview",
+              "replacement_preview",
+              "accept_plan",
+              "reject_replacement",
+              "recheck_plan",
+              "callback_acknowledge",
+              "resolve_callback",
+              "recover_message",
+              "receive_webhook",
+              "deduplicate_update",
+              "widget_handshake",
+              "widget_reject",
+              "widget_open",
+              "api_replay",
+              "api_error",
+              "api_reject",
+              "channel_isolate",
+              "structured_fallback",
+              "refuse_action"
+            ]
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state_effect": {
+            "enum": [
+              "none",
+              "session_updated",
+              "preview_created",
+              "plan_saved",
+              "attention_set",
+              "attention_retained",
+              "message_recovered",
+              "rejected"
+            ]
+          },
+          "callback_ack": {
+            "enum": [
+              "not_applicable",
+              "required",
+              "sent"
+            ]
+          },
+          "visible": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "preserved": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "invariants": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "no_fabricated_events",
+                "occurrence_specific",
+                "unknown_not_satisfied",
+                "hard_constraints_backend",
+                "soft_ranking_only",
+                "max_three_occurrences",
+                "session_patch_increments_revision",
+                "stale_response_discarded",
+                "stale_results_read_only",
+                "result_allowlist_only",
+                "plan_allowlist_only",
+                "replacement_allowlist_only",
+                "preview_revision_bound",
+                "plan_revision_bound",
+                "ordered_occurrence_ids_match",
+                "original_plan_retained",
+                "unaffected_plan_items_preserved",
+                "user_confirms_plan_revision",
+                "attention_until_valid_accept",
+                "no_silent_hard_relaxation",
+                "critical_constraints_not_relaxed",
+                "callback_acknowledged",
+                "opaque_callback_token",
+                "stale_callback_no_mutation",
+                "edit_failure_new_message",
+                "text_equivalent",
+                "idempotent_retry",
+                "no_duplicate_effect",
+                "problem_details",
+                "sanitized_error",
+                "retry_after_present",
+                "foreign_session_not_leaked",
+                "no_account_auto_link",
+                "same_backend_contract",
+                "widget_origin_exact",
+                "widget_source_checked",
+                "widget_schema_validated",
+                "no_wildcard_target_origin",
+                "no_top_navigation",
+                "no_arbitrary_url",
+                "widget_read_only",
+                "read_only",
+                "no_unrequested_write",
+                "untrusted_content_not_executed",
+                "no_sensitive_data",
+                "llm_not_required_for_basic_search",
+                "no_dead_controls",
+                "durable_inbox_before_ack",
+                "duplicate_update_deduplicated",
+                "ordered_update_not_trusted",
+                "slot_mapping_match",
+                "preview_expiry_checked",
+                "immutable_saved_plan",
+                "plan_recheck_no_snapshot_mutation",
+                "no_widget_session_mutation"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "action",
+          "http_status",
+          "state_effect",
+          "callback_ack",
+          "visible",
+          "preserved",
+          "invariants"
+        ]
+      },
+      "forbidden": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uniqueItems": true
+      },
+      "notes": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}
