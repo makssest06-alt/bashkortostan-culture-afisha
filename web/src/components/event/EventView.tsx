@@ -33,6 +33,7 @@ import { MoreInCity } from './MoreInCity';
 import { PriceBlock } from './PriceBlock';
 import { Sessions } from './Sessions';
 import { ShareButton } from './ShareButton';
+import { SourcesBlock } from './SourcesBlock';
 import { TrustBlock } from './TrustBlock';
 import { VenueBlock } from './VenueBlock';
 
@@ -176,6 +177,7 @@ export function EventView({ event, today, backHref, more, imageMeta }: EventView
             </FactList>
 
             <TrustBlock event={event} />
+            <SourcesBlock sources={event.sources} />
           </div>
 
           <div className={cn(styles.venue, styles.reveal)} style={order(4)}>

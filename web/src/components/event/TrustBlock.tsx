@@ -105,9 +105,9 @@ export function TrustBlock({ event, className }: TrustBlockProps) {
         <Fact label={copy('sourcesLabel', lang)}>
           <span data-trust-sources={source.sources_count}>
             {merged ? (
-              <Link href={ROUTES.aboutDedup} className={cn(TEXT_LINK, '-my-3 inline-flex min-h-11 items-center')}>
+              <a href="#sources" className={cn(TEXT_LINK, '-my-3 inline-flex min-h-11 items-center')}>
                 {t('event.sources', { count: source.sources_count })}
-              </Link>
+              </a>
             ) : (
               copy('sourcesSingle', lang)
             )}
