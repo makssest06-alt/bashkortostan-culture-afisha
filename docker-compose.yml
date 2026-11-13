@@ -1,0 +1,54 @@
+# Полный стек «Афиши культуры Башкортостана»: PostgreSQL 16 + REST API / ИИ-агент + сайт.
+#
+#   cp .env.example .env
+#   docker compose up --build
+#
+# Сайт подключается через include (web/compose.yaml) и читает переменные из корневого .env.
+
+include:
+  - web/compose.yaml
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-afisha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-afisha}
+      POSTGRES_DB: ${POSTGRES_DB:-afisha}
+    volumes:
+      - afisha-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-afisha} -d ${POSTGRES_DB:-afisha}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    image: afisha-api:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      PORT: 8000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-afisha}:${POSTGRES_PASSWORD:-afisha}@postgres:5432/${POSTGRES_DB:-afisha}}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      ADMIN_OPEN: ${ADMIN_OPEN:-}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3210}
+      ASSISTANT_DISABLED: ${ASSISTANT_DISABLED:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-12000}
+      FEEDBACK_RETENTION_DAYS: ${FEEDBACK_RETENTION_DAYS:-90}
+      METRICS_RATE_LIMIT: ${METRICS_RATE_LIMIT:-120}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    restart: unless-stopped
+
+volumes:
+  afisha-postgres-data:
