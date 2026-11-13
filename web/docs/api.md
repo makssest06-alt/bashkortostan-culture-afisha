@@ -2,9 +2,9 @@
 
 Один каталог событий для сайта, виджета, Telegram-бота и сторонних сайтов. Сайт афиши сам ходит в этот API: то, что видит разработчик, совпадает с тем, что видит посетитель.
 
-Сейчас API отдаёт демонстрационные данные. У каждого события стоит `synthetic: true`, источник назван «Демо-источник». Форма ответов та же, что будет у боевого API: при переходе на настоящий каталог менять клиентский код не придётся.
+Событие приходит в форме контракта команды по п. 8.1 ТЗ: `contracts/event.schema.json` и `contracts/api.openapi.yaml` (PR #18). Сейчас API отдаёт демонстрационные данные: у каждого демо-события `synthetic: true`, источник назван «Демо-источник». События, введённые в админке или импортированные из файла, идут с `synthetic: false`.
 
-Примеры ответов в этом документе сняты с работающего кода при дате 12 ноября 2026 года. Даты в заглушках считаются от «сегодня», поэтому в вашем ответе они будут другими.
+Примеры ответов в этом документе сняты с работающего кода 13 ноября 2026 года. Даты в заглушках считаются от «сегодня», поэтому в вашем ответе они будут другими.
 
 ## Содержание
 
@@ -13,23 +13,26 @@
 3. [GET /api/v1/events/{id}](#get-apiv1eventsid): карточка события
 4. [GET /api/v1/facets](#get-apiv1facets): счётчики
 5. [GET /api/v1/dictionaries](#get-apiv1dictionaries): справочники
-6. [POST /api/v1/assistant/query](#post-apiv1assistantquery): подбор по фразе
-7. [GET /api/v1/health и GET /api/v1](#служебные-методы)
-8. [Событие: все поля](#событие-все-поля)
-9. [Клиент на TypeScript](#клиент-на-typescript)
+6. [POST /api/v1/assistant/query](#post-apiv1assistantquery): подбор по фразе и резервный режим
+7. [POST /api/v1/feedback](#post-apiv1feedback): заявка организатора
+8. [Админка: /api/v1/admin/*](#админка-apiv1admin)
+9. [GET /api/v1/health и GET /api/v1](#служебные-методы)
+10. [Событие: все поля](#событие-все-поля)
+11. [Клиент на TypeScript](#клиент-на-typescript)
 
 ## Общие правила
 
 **Базовый адрес.** `https://<адрес сайта>/api/v1`. При локальном запуске: `http://localhost:3210/api/v1`.
 
-**Доступ.** Ключ не нужен. API только читает данные и не использует cookie.
+**Доступ.** Публичные методы без ключа и без cookie. Методы админки требуют токен модератора (см. [Админка](#админка-apiv1admin)).
 
 **CORS.** Каждый ответ, включая ошибки, приходит с заголовками:
 
 ```
 Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type, Accept
+Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Accept, Authorization, If-Match, If-None-Match, X-Request-Id, X-Assistant-Demo
+Access-Control-Expose-Headers: ETag, X-Request-Id, Retry-After, Location
 Access-Control-Max-Age: 86400
 ```
 
@@ -39,46 +42,56 @@ Access-Control-Max-Age: 86400
 
 **Время.** Все события идут по поясу `Asia/Yekaterinburg` (UTC+5). «Сегодня», «завтра» и «выходные» считаются в этом поясе. В ответах списка есть `reference_date`: дата, от которой сервер считал периоды.
 
-**Деньги.** Суммы в ответах лежат в копейках в полях `amount_minor`. В параметрах запроса цена задаётся в рублях.
+**Деньги.** Цена в рублях, как в п. 8.1: `price_min`, `price_max`, `is_free`. `0` значит бесплатно, `null` значит «цена не указана». Тарифы с названиями лежат в `offers` (тоже в рублях). В параметрах запроса цена в рублях.
 
 **Пробелы в подписях.** В готовых подписях ассистента между числом и словом стоит неразрывный пробел (U+00A0): «14 ноября», «1 000 ₽». В примерах ниже он показан обычным пробелом.
 
 **Языки.** Подписи справочников приходят на двух языках: `{ "ru": "Уфа", "ba": "Өфө" }`. Названия и описания событий приходят на языке источника; башкирское название лежит в `title_ba`, если оно есть.
 
-**Кэш.** Ответы с событиями идут с `Cache-Control: no-store`: даты и признак `is_past` зависят от текущего времени. Справочники можно держать в кэше 5 минут.
+**Кэш.** Список событий идёт с `Cache-Control: no-store`: даты и признак `is_past` зависят от текущего времени. Карточка события (`max-age=60`) и справочники (`max-age=300`) приходят с `ETag`: повторный запрос с `If-None-Match` получает `304` без тела.
+
+**Трассировка.** Каждый ответ несёт `X-Request-Id`. Его можно прислать в запросе своим, и он попадёт в журнал сервера.
 
 **Три правила достоверности.**
 
 1. Неизвестное не считается подходящим. Событие без цены не проходит фильтр `price_max`, событие без возрастной метки не проходит фильтр `age`. Такие события не теряются молча: их число лежит в `hidden_unknown_price` и `hidden_unknown_age`.
-2. «Бесплатно» появляется только из явной пометки источника. `price_summary.kind = "unknown"` означает «цена не указана», а не «вход свободный».
+2. «Бесплатно» появляется только из явной пометки источника. `price_min: null` означает «цена не указана», а не «вход свободный».
 3. Условия пользователя сами не ослабляются. При пустой выдаче API предлагает варианты в `relaxations`, и у каждого стоит число событий, посчитанное настоящим поиском.
 
 ### Ошибки
 
-Ошибка приходит с кодом HTTP и телом одного вида:
+Ошибка приходит с кодом HTTP и телом одного вида `{ code, message, details, request_id }`:
 
 ```json
 {
-  "error": {
-    "code": "validation_error",
-    "message": "Неизвестный город «moscow». Допустимые значения: ufa, sterlitamak, salavat, neftekamsk, oktyabrsky, beloretsk, sibay, kumertau",
-    "details": [
-      { "field": "city", "message": "Неизвестный город «moscow». Допустимые значения: ufa, sterlitamak, salavat, neftekamsk, oktyabrsky, beloretsk, sibay, kumertau" }
-    ]
-  }
+  "code": "validation_error",
+  "message": "Неизвестный город «moscow». Допустимые значения: ufa, sterlitamak, salavat, neftekamsk, oktyabrsky, beloretsk, sibay, kumertau",
+  "details": [
+    {
+      "field": "city",
+      "message": "Неизвестный город «moscow». Допустимые значения: ufa, sterlitamak, salavat, neftekamsk, oktyabrsky, beloretsk, sibay, kumertau"
+    }
+  ],
+  "request_id": "req_02fec11fddc14f618895"
 }
 ```
 
-Сообщение написано для человека: его можно показать как есть.
+Сообщение написано для человека: его можно показать как есть. `details` всегда массив: пустой, если ошибка не про конкретные поля.
 
-| Код HTTP | `error.code` | Когда |
+| Код HTTP | `code` | Когда |
 |---|---|---|
 | 400 | `validation_error` | Параметр не прошёл проверку. В `details` перечислены все поля с причинами |
-| 400 | `invalid_json` | Тело запроса к ассистенту не разбирается как JSON |
-| 404 | `not_found` | Нет такого события или такого метода |
-| 405 | `method_not_allowed` | Метод не подходит адресу: например, `POST` на список событий. Разрешённые методы названы в сообщении и в заголовке `Allow` |
-| 413 | `payload_too_large` | Тело запроса к ассистенту длиннее 20 000 знаков |
+| 400 | `invalid_json` | Тело запроса не разбирается как JSON |
+| 401 | `unauthorized` | Метод админки без токена или с неверным токеном |
+| 403 | `forbidden` | Изменяющий запрос админки по cookie пришёл не со страницы сайта |
+| 404 | `not_found` | Нет такого события или такого метода. Черновик публично тоже даёт 404 |
+| 405 | `method_not_allowed` | Метод не подходит адресу. Разрешённые методы в заголовке `Allow` |
+| 409 | `conflict` | Правка без заголовка `If-Match` или карточку уже разобрали в модерации |
+| 412 | `precondition_failed` | `If-Match` устарел: событие изменили, пока вы его правили |
+| 413 | `payload_too_large` | Тело слишком большое |
+| 429 | `rate_limited` | Слишком часто. Через сколько секунд повторить, сказано в `Retry-After` |
 | 500 | `internal_error` | Сбой на сервере. Подробности остаются в журнале сервера |
+| 503 | `unavailable` | Ассистент недоступен (резервный режим) или админка выключена |
 
 Неизвестные параметры запроса игнорируются.
 
@@ -93,7 +106,7 @@ Access-Control-Max-Age: 86400
 | Параметр | Тип | Описание |
 |---|---|---|
 | `city` | список | Города: `ufa`, `sterlitamak`, `salavat`, `neftekamsk`, `oktyabrsky`, `beloretsk`, `sibay`, `kumertau` |
-| `category` | список | Категории: `theatre`, `concert`, `museum`, `exhibition`, `festival`, `kids` |
+| `category` | список | Категории п. 8.1: `concert`, `performance`, `exhibition`, `festival`, `cinema`, `excursion`, `other` |
 | `date` | строка | Готовый период: `today`, `tomorrow`, `weekend`, `week`. Или одна дата `ГГГГ-ММ-ДД`. Нельзя сочетать с `date_from` и `date_to` |
 | `date_from`, `date_to` | дата | Границы периода `ГГГГ-ММ-ДД`, включаются обе |
 | `time_from`, `time_to` | время | Начало сеанса не раньше и не позже, `ЧЧ:ММ`. Выставка без времени начала такой фильтр не проходит |
@@ -101,8 +114,8 @@ Access-Control-Max-Age: 86400
 | `free_only` | логическое | Только события с явной пометкой «бесплатно». Короткая запись: `free=1` |
 | `age` | целое | Возраст ребёнка. Проходят события с возрастной меткой не выше. Событие без метки не проходит и считается в `hidden_unknown_age` |
 | `age_rating` | список | Точное совпадение метки: `0+`, `6+`, `12+`, `16+`, `18+`. Можно писать без плюса: `age_rating=6` |
-| `audience` | строка | `kids`: раздел «Детям» и события с метками `0+` и `6+` |
-| `status` | список | Статусы сеансов: `scheduled`, `cancelled`, `postponed`, `rescheduled`, `unknown` или `all`. По умолчанию `scheduled,rescheduled` |
+| `audience` | строка | `kids`: события с меткой «дети» в `tags` и события с ограничением 0+ и 6+ |
+| `status` | список | Статусы сеансов: `scheduled`, `cancelled`, `postponed`, `rescheduled`, `unknown` или `all`. По умолчанию `scheduled,rescheduled`. Отменённые, черновые события в список не попадают никогда (п. 6.1) |
 | `q` | строка | Поиск по названию, описанию, площадке, городу и категории. Регистр и разница между «ё» и «е» не учитываются. До 100 знаков |
 | `sort` | строка | `date` (по умолчанию, сначала ближайшие), `price` (сначала дешевле, без цены в конце), `popularity` |
 | `page` | целое | Номер страницы с 1 |
@@ -124,61 +137,132 @@ curl "http://localhost:3210/api/v1/events?city=ufa&date=weekend&price_max=1000&a
 {
   "items": [
     {
-      "id": "evt_demo_k1",
+      "id": "334e2fca-4f18-5058-b0b2-3ccff50863de",
       "title": "Спектакль для детей: сказки Урала",
+      "normalized_title": "спектакль для детей сказки урала",
+      "category": "performance",
+      "tags": [
+        "дети"
+      ],
+      "date_start": "2026-11-14T11:00:00+05:00",
+      "date_end": "2026-11-14T11:45:00+05:00",
+      "duration_min": 45,
+      "city": "Уфа",
+      "venue": "Башкирский государственный театр кукол",
+      "address": "проспект Октября, 158",
+      "lat": null,
+      "lon": null,
       "description": "Кукольный спектакль по уральским сказкам. Идёт 45 минут без антракта.",
-      "category": "kids",
+      "price_min": 500,
+      "price_max": 500,
+      "is_free": false,
+      "age_limit": 0,
+      "language": null,
+      "org_link": "/about#demo",
+      "source_url": "/about#demo",
+      "source_type": "manual",
+      "source_hash": "748267553863b8ea8a5e64e2e5d974eb3ef07ab09ab4e90100fe1e19817f15f2",
+      "verified_at": "2026-11-13T05:16:00Z",
+      "confidence": 0.95,
+      "status": "published",
+      "dedup_key": "спектакль для детей сказки урала|2026-11-14|ven_ufa_puppet",
+      "created_at": "2026-11-06T05:16:00Z",
+      "updated_at": "2026-11-13T05:16:00Z",
+      "city_id": "ufa",
+      "venue_id": "ven_ufa_puppet",
+      "time_precision": "minute",
       "kind": "performance_run",
-      "age_rating": "0+",
-      "image": "/images/events/kids-1.webp",
-      "organizer": "Башкирский государственный театр кукол",
       "popularity": 90,
+      "organizer": "Башкирский государственный театр кукол",
+      "image": "/images/events/kids-1.webp",
+      "synthetic": true,
+      "sources": [
+        {
+          "source_url": "/about#demo",
+          "source_type": "manual",
+          "source_hash": "748267553863b8ea8a5e64e2e5d974eb3ef07ab09ab4e90100fe1e19817f15f2",
+          "verified_at": "2026-11-13T05:16:00Z",
+          "title": "Демо-источник: афиша площадки"
+        }
+      ],
       "occurrences": [
         {
           "id": "occ_demo_k1_1",
-          "event_id": "evt_demo_k1",
-          "venue_id": "ven_ufa_puppet",
-          "start": { "local": "2026-11-14T11:00:00+05:00", "utc": "2026-11-14T06:00:00Z", "timezone": "Asia/Yekaterinburg", "precision": "minute" },
-          "end": { "local": "2026-11-14T11:45:00+05:00", "utc": "2026-11-14T06:45:00Z", "timezone": "Asia/Yekaterinburg", "precision": "minute" },
+          "date_start": "2026-11-14T11:00:00+05:00",
+          "date_end": "2026-11-14T11:45:00+05:00",
+          "time_precision": "minute",
           "status": "scheduled",
-          "status_is_verified": true,
+          "status_verified": true,
           "availability": "available",
           "is_past": false
         }
       ],
-      "venue": {
-        "id": "ven_ufa_puppet",
-        "name": "Башкирский государственный театр кукол",
-        "city": "ufa",
-        "city_name": { "ru": "Уфа", "ba": "Өфө" },
-        "address": "проспект Октября, 158",
-        "map_url": "https://yandex.ru/maps/?text=..."
-      },
       "offers": [
-        { "id": "off_demo_k1_1", "amount_minor": 50000, "currency": "RUB", "audience": "adult", "is_free": false },
-        { "id": "off_demo_k1_2", "amount_minor": 40000, "currency": "RUB", "audience": "child", "is_free": false }
+        {
+          "price": 500,
+          "is_free": false,
+          "audience": "adult"
+        },
+        {
+          "price": 400,
+          "is_free": false,
+          "audience": "child"
+        }
       ],
-      "price_summary": { "kind": "from", "amount_minor": 50000 },
-      "source": { "name": "Демо-источник", "url": "/about#demo", "checked_at": "2026-11-12T02:00:00Z", "sources_count": 3 },
-      "ticket_url": "/about#demo",
-      "synthetic": true,
-      "matched_occurrence_ids": ["occ_demo_k1_1", "occ_demo_k1_2", "occ_demo_k1_3"],
+      "matched_occurrence_ids": [
+        "occ_demo_k1_1",
+        "occ_demo_k1_2",
+        "occ_demo_k1_3"
+      ],
       "primary_occurrence_id": "occ_demo_k1_1"
     }
   ],
-  "total": 11,
+  "total": 12,
   "page": 1,
   "page_size": 1,
-  "total_pages": 11,
+  "total_pages": 12,
   "facets": {
-    "cities": [{ "id": "ufa", "name": { "ru": "Уфа", "ba": "Өфө" }, "count": 11 }],
-    "categories": [{ "id": "kids", "name": { "ru": "Детям", "ba": "Балаларға" }, "count": 5 }],
-    "age_ratings": [{ "id": "0+", "name": { "ru": "0+", "ba": "0+" }, "count": 4 }],
-    "price": { "free": 3, "paid": 8, "unknown": 0 },
-    "total": 11
+    "cities": [
+      {
+        "id": "ufa",
+        "name": {
+          "ru": "Уфа",
+          "ba": "Өфө"
+        },
+        "count": 12
+      }
+    ],
+    "categories": [
+      {
+        "id": "concert",
+        "name": {
+          "ru": "Концерты",
+          "ba": "Концерттар"
+        },
+        "count": 3
+      }
+    ],
+    "age_ratings": [
+      {
+        "id": "0+",
+        "name": {
+          "ru": "0+",
+          "ba": "0+"
+        },
+        "count": 4
+      }
+    ],
+    "price": {
+      "free": 3,
+      "paid": 9,
+      "unknown": 0
+    },
+    "total": 12
   },
   "applied": {
-    "city": ["ufa"],
+    "city": [
+      "ufa"
+    ],
     "category": [],
     "date": "weekend",
     "date_from": "2026-11-14",
@@ -190,26 +274,34 @@ curl "http://localhost:3210/api/v1/events?city=ufa&date=weekend&price_max=1000&a
     "age": 7,
     "age_rating": [],
     "audience": null,
-    "status": ["scheduled", "rescheduled"],
+    "status": [
+      "scheduled",
+      "rescheduled"
+    ],
     "q": null,
     "sort": "date",
-    "active": ["city", "date", "price_max", "age"]
+    "active": [
+      "city",
+      "date",
+      "price_max",
+      "age"
+    ]
   },
   "hidden_unknown_price": 0,
   "hidden_unknown_age": 0,
   "relaxations": [],
-  "reference_date": "2026-11-12",
+  "reference_date": "2026-11-13",
   "timezone": "Asia/Yekaterinburg"
 }
 ```
 
-В примере у события показан один сеанс из трёх, а в `facets` по одной строке из каждого списка: в настоящем ответе списки полные.
+В примере у события показан один сеанс и один источник, а в `facets` по одной строке из каждого списка: в настоящем ответе списки полные.
 
 ### Поля ответа
 
 | Поле | Описание |
 |---|---|
-| `items` | События страницы. К полям события добавлены `matched_occurrence_ids` (сеансы, прошедшие условия) и `primary_occurrence_id` (ближайший из них: его дату и статус показывает карточка) |
+| `items` | События страницы в форме п. 8.1 (см. [Событие: все поля](#событие-все-поля)). К ним добавлены `matched_occurrence_ids` (сеансы, прошедшие условия) и `primary_occurrence_id` (ближайший из них) |
 | `total`, `page`, `page_size`, `total_pages` | Пагинация |
 | `facets` | Счётчики для фильтров, см. [GET /api/v1/facets](#get-apiv1facets) |
 | `applied` | Условия, которые сервер реально применил: вычисленные даты, статусы по умолчанию. В `active` перечислены условия, заданные пользователем |
@@ -262,61 +354,118 @@ curl "http://localhost:3210/api/v1/events?city=sibay&date=today"
 
 ## GET /api/v1/events/{id}
 
-Карточка события со всеми сеансами, включая прошедшие, отменённые и перенесённые.
+Карточка события со всеми сеансами, включая прошедшие, отменённые и перенесённые. Идентификатор это UUID; старые коды вида `evt_demo_k1` тоже принимаются.
+
+- Отменённое событие (`status: "cancelled"`) открывается: в выдаче его нет, а по прямой ссылке видно «Отменено».
+- Черновик (`status: "draft"`) публично даёт `404`, его видит только админка.
+- Ответ идёт с `ETag` и `Cache-Control: public, max-age=60, must-revalidate`; с `If-None-Match` приходит `304`.
 
 ```bash
-curl "http://localhost:3210/api/v1/events/evt_demo_t4"
+curl -i "http://localhost:3210/api/v1/events/evt_demo_k1"
 ```
 
 ```json
 {
-  "id": "evt_demo_t4",
-  "title": "Моноспектакль на камерной сцене",
-  "description": "Камерный спектакль одного актёра: небольшой зал, спокойный вечер без антракта.",
-  "category": "theatre",
+  "id": "334e2fca-4f18-5058-b0b2-3ccff50863de",
+  "title": "Спектакль для детей: сказки Урала",
+  "normalized_title": "спектакль для детей сказки урала",
+  "category": "performance",
+  "tags": [
+    "дети"
+  ],
+  "date_start": "2026-11-14T11:00:00+05:00",
+  "date_end": "2026-11-14T11:45:00+05:00",
+  "duration_min": 45,
+  "city": "Уфа",
+  "venue": "Башкирский государственный театр кукол",
+  "address": "проспект Октября, 158",
+  "lat": null,
+  "lon": null,
+  "description": "Кукольный спектакль по уральским сказкам. Идёт 45 минут без антракта.",
+  "price_min": 500,
+  "price_max": 500,
+  "is_free": false,
+  "age_limit": 0,
+  "language": null,
+  "org_link": "/about#demo",
+  "source_url": "/about#demo",
+  "source_type": "manual",
+  "source_hash": "748267553863b8ea8a5e64e2e5d974eb3ef07ab09ab4e90100fe1e19817f15f2",
+  "verified_at": "2026-11-13T05:16:00Z",
+  "confidence": 0.95,
+  "status": "published",
+  "dedup_key": "спектакль для детей сказки урала|2026-11-14|ven_ufa_puppet",
+  "created_at": "2026-11-06T05:16:00Z",
+  "updated_at": "2026-11-13T05:16:00Z",
+  "city_id": "ufa",
+  "venue_id": "ven_ufa_puppet",
+  "time_precision": "minute",
   "kind": "performance_run",
-  "age_rating": "12+",
-  "image": "/images/events/theatre-4.webp",
-  "popularity": 58,
+  "popularity": 90,
+  "organizer": "Башкирский государственный театр кукол",
+  "image": "/images/events/kids-1.webp",
+  "synthetic": true,
+  "sources": [
+    {
+      "source_url": "/about#demo",
+      "source_type": "manual",
+      "source_hash": "748267553863b8ea8a5e64e2e5d974eb3ef07ab09ab4e90100fe1e19817f15f2",
+      "verified_at": "2026-11-13T05:16:00Z",
+      "title": "Демо-источник: афиша площадки"
+    },
+    {
+      "source_url": "/about#demo",
+      "source_type": "page",
+      "source_hash": "ec13a7fff463cb21f6b3b5b16b53bea22a0f49702c8f77f83b55993d2f14dd94",
+      "verified_at": "2026-11-13T05:16:00Z",
+      "title": "Демо-источник: страница организатора"
+    },
+    {
+      "source_url": "/about#demo",
+      "source_type": "api",
+      "source_hash": "c844ddab0c1f4756d5eae13c716ad0e345c2aa47eb6adee918be859194cb6f6a",
+      "verified_at": "2026-11-13T05:16:00Z",
+      "title": "Демо-источник: открытые данные"
+    }
+  ],
   "occurrences": [
     {
-      "id": "occ_demo_t4_1",
-      "event_id": "evt_demo_t4",
-      "venue_id": "ven_ufa_nmt",
-      "start": { "local": "2026-11-21T19:00:00+05:00", "utc": "2026-11-21T14:00:00Z", "timezone": "Asia/Yekaterinburg", "precision": "minute" },
-      "end": { "local": "2026-11-21T20:20:00+05:00", "utc": "2026-11-21T15:20:00Z", "timezone": "Asia/Yekaterinburg", "precision": "minute" },
-      "status": "rescheduled",
-      "status_is_verified": true,
-      "previous_start": { "local": "2026-11-14T19:00:00+05:00", "utc": "2026-11-14T14:00:00Z", "timezone": "Asia/Yekaterinburg", "precision": "minute" },
+      "id": "occ_demo_k1_1",
+      "date_start": "2026-11-14T11:00:00+05:00",
+      "date_end": "2026-11-14T11:45:00+05:00",
+      "time_precision": "minute",
+      "status": "scheduled",
+      "status_verified": true,
+      "availability": "available",
+      "is_past": false
+    },
+    {
+      "id": "occ_demo_k1_2",
+      "date_start": "2026-11-14T13:00:00+05:00",
+      "date_end": "2026-11-14T13:45:00+05:00",
+      "time_precision": "minute",
+      "status": "scheduled",
+      "status_verified": true,
       "availability": "available",
       "is_past": false
     }
   ],
-  "venue": {
-    "id": "ven_ufa_nmt",
-    "name": "Национальный молодёжный театр им. М. Карима",
-    "city": "ufa",
-    "city_name": { "ru": "Уфа", "ba": "Өфө" },
-    "address": null,
-    "map_url": "https://yandex.ru/maps/?text=..."
-  },
-  "offers": [{ "id": "off_demo_t4_1", "amount_minor": 40000, "currency": "RUB", "is_free": false }],
-  "price_summary": { "kind": "from", "amount_minor": 40000 },
-  "source": { "name": "Демо-источник", "url": "/about#demo", "checked_at": "2026-11-12T01:00:00Z", "sources_count": 1 },
-  "ticket_url": "/about#demo",
-  "synthetic": true
+  "offers": [
+    {
+      "price": 500,
+      "is_free": false,
+      "audience": "adult"
+    },
+    {
+      "price": 400,
+      "is_free": false,
+      "audience": "child"
+    }
+  ]
 }
 ```
 
-Если события нет, ответ `404` с кодом `not_found`:
-
-```bash
-curl -i "http://localhost:3210/api/v1/events/none"
-```
-
-```json
-{ "error": { "code": "not_found", "message": "Событие не найдено. Проверьте идентификатор или откройте каталог: /api/v1/events" } }
-```
+В примере показаны два сеанса из всех. Если события нет, ответ `404` с кодом `not_found`.
 
 ## GET /api/v1/facets
 
@@ -332,7 +481,7 @@ curl "http://localhost:3210/api/v1/facets"
     { "id": "ufa", "name": { "ru": "Уфа", "ba": "Өфө" }, "count": 19 },
     { "id": "sterlitamak", "name": { "ru": "Стерлитамак", "ba": "Стәрлетамаҡ" }, "count": 5 }
   ],
-  "categories": [{ "id": "theatre", "name": { "ru": "Театр", "ba": "Театр" }, "count": 7 }],
+  "categories": [{ "id": "performance", "name": { "ru": "Спектакли", "ba": "Спектаклдәр" }, "count": 10 }],
   "age_ratings": [
     { "id": "0+", "name": { "ru": "0+", "ba": "0+" }, "count": 11 },
     { "id": "unknown", "name": { "ru": "Возраст не указан", "ba": "Йәше күрһәтелмәгән" }, "count": 1 }
@@ -520,14 +669,14 @@ curl -X POST "http://localhost:3210/api/v1/assistant/query" \
   ],
   "results": [
     {
-      "event": { "id": "evt_demo_k1", "title": "Спектакль для детей: сказки Урала" },
+      "event": { "id": "334e2fca-4f18-5058-b0b2-3ccff50863de", "title": "Спектакль для детей: сказки Урала", "…": "остальные поля события п. 8.1" },
       "occurrence_id": "occ_demo_k1_1",
       "reasons": [
         "в субботу, 14 ноября, в 11:00",
         "подходит по возрасту: 0+",
         "цена от 500 ₽, в бюджете",
         "Уфа: Башкирский государственный театр кукол",
-        "раздел «Детям»"
+        "для детей"
       ],
       "caveats": []
     }
@@ -606,9 +755,112 @@ curl -X POST "http://localhost:3210/api/v1/assistant/query" \
 }
 ```
 
+### Резервный режим
+
+Если модель недоступна, метод отвечает `503 unavailable`. Сайт сам переходит на обычный поиск по `GET /api/v1/events` с теми же фильтрами и показывает «ИИ временно недоступен, показываю обычный поиск» (п. 7.5). Недоступность бывает:
+
+- на сервере задано `ASSISTANT_DISABLED=1` (модель выключена, кончился бюджет);
+- запрос пришёл с заголовком `X-Assistant-Demo: unavailable`: так работает переключатель «Демо: ИИ недоступен» на `/ask` и ссылка `/ask?ai=off`.
+
+```bash
+curl -X POST "http://localhost:3210/api/v1/assistant/query" -H "Content-Type: application/json" \
+  -H "X-Assistant-Demo: unavailable" -d '{"message": "концерт"}'
+```
+
+```json
+{
+  "code": "unavailable",
+  "message": "ИИ временно недоступен. Поиск по фильтрам работает: GET /api/v1/events",
+  "details": [],
+  "request_id": "req_eadb0951d1e541938771"
+}
+```
+
+## POST /api/v1/feedback
+
+Заявка организатора, уточнение к карточке или вопрос (п. 6.3). Форма на `/about` и в карточке события ходит сюда.
+
+| Поле | Описание |
+|---|---|
+| `kind` | `organizer_application`, `correction`, `question` |
+| `event_id` | UUID события для уточнения, иначе `null` |
+| `name` | Как обращаться, 2–80 знаков |
+| `contact` | Телефон (10–15 цифр) или e-mail: только для ответа |
+| `organization` | Необязательно, до 120 знаков |
+| `text` | 10–2000 знаков |
+| `website` | Ловушка для ботов: человек оставляет пустым. Заполнено: ответ обычный, но обращение не сохраняется |
+
+```bash
+curl -X POST "http://localhost:3210/api/v1/feedback" -H "Content-Type: application/json" \
+  -d '{"kind":"organizer_application","name":"Анна","contact":"anna@example.ru","organization":null,"text":"Концерт хора 20 декабря в 18:00, вход свободный","website":""}'
+```
+
+Ответ `202`:
+
+```json
+{
+  "id": "fb_506450acbcfa4be0",
+  "status": "received"
+}
+```
+
+Ограничение: 5 обращений за 10 минут и 20 за сутки с одного адреса, дальше `429` и `Retry-After`. Имя и контакт видит только модератор, хранятся 90 дней. В журнал сервера они не пишутся.
+
+## Админка: /api/v1/admin/*
+
+Методы модерации (п. 6.1, 6.3). Пока бэкенда нет, они работают на моках с тем же контрактом (`contracts/api.openapi.yaml`, тег `admin`); правки, импорт и журнал хранятся в `.next/cache/afisha/admin-state.json` (путь меняется переменной `AFISHA_DATA_FILE`).
+
+**Доступ.** Токен модератора задаётся переменной `ADMIN_TOKEN` (от 12 знаков). Скрипты присылают `Authorization: Bearer <токен>`, страница `/admin` входит по токену и держит сессию в cookie `HttpOnly; SameSite=Strict`; изменяющие запросы по cookie проверяют `Origin`. Без токена админка в боевой сборке выключена (`503`), при локальной разработке открыта с пометкой «демо».
+
+| Метод | Что делает |
+|---|---|
+| `GET /admin/events?status=&disputed=&source=&q=&page=` | Все события любого статуса, у каждого `etag` |
+| `GET /admin/events/{id}` | Событие с заголовком `ETag` |
+| `PATCH /admin/events/{id}` | Правка полей п. 8.1 и `status` (`published`, `draft`, `cancelled`). Обязателен `If-Match`: без него `409`, устаревший `412`. Даты демо-событий не правятся |
+| `POST /admin/imports` | Импорт CSV или JSON: тело `text/csv`, `application/json` или `multipart/form-data` с полем `file`, имя файла в `?file_name=` |
+| `GET /admin/imports` | История импортов с отчётами |
+| `GET /admin/moderation` | Очередь спорных: `{ event, reasons, duplicate_candidates }` |
+| `POST /admin/moderation/{id}/resolve` | `{ action: publish \| keep_draft \| cancel \| merge, merge_into, comment }` |
+| `GET /admin/audit?entity_id=&page=` | Журнал: кто, когда, что (`changes: [{ field, from, to }]`) |
+| `GET /admin/applications`, `PATCH /admin/applications/{id}` | Обращения с формы и отметка «обработано» |
+| `POST /admin/reset` | Вернуть демо-данные к исходному виду (журнал сохраняется) |
+
+**Импорт.** Колонки по п. 8.1: `title`, `category`, `date_start`, `city`, `venue`, `source_url` обязательны; ещё `date_end`, `duration_min`, `address`, `lat`, `lon`, `description`, `price_min`, `price_max` (или одна `price`), `is_free`, `age_limit`, `language`, `org_link`, `tags`, `status`, `confidence`, `external_id`. Понимаются и русские заголовки (`название`, `дата`, `город`, `площадка`, `цена`…), разделитель `,` или `;`, даты `2026-12-06 18:00`, `06.12.2026 18:00` и ISO 8601.
+
+- Повторная загрузка того же файла ничего не меняет: у каждой строки `source_hash`.
+- Изменённая строка того же события (тот же `dedup_key`: название, дата, площадка) обновляет запись.
+- То же событие из другого источника добавляет источник к существующей карточке, дубль не создаётся.
+- Спорные строки (площадка не из справочника, нет описания, низкая уверенность) сохраняются черновиками в очереди модерации.
+
+```bash
+curl -X POST "http://localhost:3210/api/v1/admin/imports?file_name=afisha.csv" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: text/csv" --data-binary @afisha.csv
+```
+
+```json
+{
+  "import_id": "imp_98d17022b7df",
+  "format": "csv",
+  "received": 2,
+  "added": 1,
+  "updated": 0,
+  "merged": 0,
+  "unchanged": 0,
+  "rejected": [
+    {
+      "row": 3,
+      "source_hash": "bde6681149a107462835d1b5275b359c63930c90a809c73b3eaf59ae21038403",
+      "reason_code": "invalid_field",
+      "reason": "Город «Москва» не найден в справочнике. Сейчас в афише: Уфа, Стерлитамак, Салават, Нефтекамск, Октябрьский, Белорецк, Сибай, Кумертау"
+    }
+  ],
+  "disputed": []
+}
+```
+
 ## Служебные методы
 
-`GET /api/v1/health` проверяет, что API отвечает, и сообщает, откуда берутся данные:
+`GET /api/v1/health` проверяет, что API отвечает, и сообщает, откуда берутся данные и сколько опубликованных событий в каталоге:
 
 ```bash
 curl "http://localhost:3210/api/v1/health"
@@ -624,61 +876,37 @@ curl "http://localhost:3210/api/v1/health"
 
 ## Событие: все поля
 
+Поля п. 8.1 ТЗ лежат на верхнем уровне с теми же именами. Полная схема: `contracts/event.schema.json`.
+
 | Поле | Тип | Описание |
 |---|---|---|
-| `id` | строка | Идентификатор события |
-| `title` | строка | Название на языке источника |
-| `title_ba` | строка, необязательное | Название на башкирском, если оно есть в источнике |
+| `id` | UUID | Идентификатор |
+| `title` | строка | Название как у источника |
+| `normalized_title` | строка | Нижний регистр, ё→е, без кавычек: для поиска и дедупликации |
+| `category` | строка | `concert`, `performance`, `exhibition`, `festival`, `cinema`, `excursion`, `other` |
+| `tags` | список строк | Метки: «дети», «джаз», «бесплатно», «башкирский язык» |
+| `date_start`, `date_end` | date-time или `null` | Ближайший актуальный сеанс. При `time_precision: "date"` время неизвестно: стоит местная полночь, показывать её нельзя |
+| `duration_min` | число или `null` | Длительность, если известна |
+| `city`, `venue`, `address` | строка | Город, площадка, адрес (`null`, если не подтверждён) |
+| `lat`, `lon` | число или `null` | Координаты, если известны |
 | `description` | строка | Описание. Абзацы разделены пустой строкой |
-| `category` | строка | `theatre`, `concert`, `museum`, `exhibition`, `festival`, `kids` |
-| `kind` | строка | Вид события: `standalone`, `performance_run`, `exhibition`, `festival` |
-| `age_rating` | строка или `null` | `0+`, `6+`, `12+`, `16+`, `18+`. `null`: возраст не указан, это не то же самое, что `0+` |
-| `image` | строка или `null` | Путь к картинке от корня сайта. `null`: картинки нет |
-| `organizer` | строка, необязательное | Организатор |
-| `popularity` | число | Условная популярность от 0 до 100 для сортировки |
-| `occurrences` | список | Все сеансы по возрастанию даты, включая прошедшие и отменённые |
-| `venue` | объект | Площадка |
-| `offers` | список | Цены. Пустой список: цена не указана |
-| `price_summary` | объект | Сводная цена для карточки |
-| `source` | объект | Откуда запись и когда её проверяли |
-| `ticket_url` | строка, необязательное | Куда ведёт кнопка «Купить билет». У демонстрационных событий это `/about#demo` |
-| `synthetic` | `true` | Признак демонстрационной записи. В боевом API поле исчезнет |
+| `price_min`, `price_max` | число или `null` | Рубли. `0` бесплатно, `null` цена не указана |
+| `is_free` | логическое | Только по явной пометке источника |
+| `age_limit` | `0`, `6`, `12`, `16`, `18` или `null` | `null`: не указано, это не то же самое, что 0+ |
+| `language` | строка или `null` | `ru`, `ba`, `tt` |
+| `org_link` | ссылка или `null` | Организатор или билеты |
+| `source_url`, `source_type`, `source_hash` | | Основной источник: ссылка, вид (`manual`, `import`, `rss`, `api`, `page`), хеш исходной записи |
+| `verified_at` | date-time | Когда источник проверен |
+| `confidence` | 0–1 | Уверенность извлечения |
+| `status` | строка | `published`, `draft`, `cancelled` |
+| `dedup_key` | строка | Название, местная дата начала и площадка |
+| `created_at`, `updated_at` | date-time | Служебные |
 
-**Сеанс (`occurrences[]`).**
+Расширения (п. 8.1 разрешает): `city_id`, `venue_id` (коды справочников), `time_precision`, `kind` (`standalone`, `performance_run`, `exhibition`, `festival`), `popularity` (0–100), `organizer`, `image`, `title_ba`, `synthetic`, `review` (`{ disputed, reasons, merged_into }`), а также:
 
-| Поле | Описание |
-|---|---|
-| `id`, `event_id`, `venue_id` | Идентификаторы |
-| `start` | Начало: `{ local, utc, timezone, precision }` |
-| `end` | Конец сеанса или последний день выставки. Поля нет, если источник его не сообщил |
-| `status` | `scheduled`, `cancelled`, `postponed` (перенесён, новой даты нет), `rescheduled` (перенесён на дату из `start`), `unknown` |
-| `status_is_verified` | `false`: статус взят без подтверждения источником. Для `unknown` всегда `false` |
-| `previous_start` | Прежнее начало перенесённого сеанса. Есть у `rescheduled` |
-| `availability` | `available`, `sold_out`, `unknown` |
-| `is_past` | На сеанс уже не попасть |
-
-**Время (`start`, `end`, `previous_start`).**
-
-| `precision` | `local` | `utc` | Когда |
-|---|---|---|---|
-| `minute` | `2026-11-14T11:00:00+05:00` | `2026-11-14T06:00:00Z` | Известны дата и время |
-| `date` | `2026-11-14` | `null` | Известна только дата: выставка с периодом работы. Полночь не подставляется |
-
-**Площадка (`venue`).** `id`, `name`, `city` (код города), `city_name` (название на двух языках), `address` (улица и дом или `null`, если адрес не подтверждён), `lat` и `lon` (есть не у всех площадок), `map_url` (поиск площадки на карте по названию и городу, работает и без координат).
-
-**Цены (`offers[]`).** `id`, `name` (название тарифа, если есть), `amount_minor` (цена в копейках или `null`), `currency` (`RUB`), `audience` (`adult`, `child`, `reduced`; не указано: общий билет), `is_free` (только по явному утверждению источника).
-
-**Сводная цена (`price_summary`).**
-
-| `kind` | Значение | Как показывать |
-|---|---|---|
-| `free` | Все общие билеты бесплатные | «Бесплатно» |
-| `from` | Есть цена. Минимальная цена общего билета лежит в `amount_minor` | «от 500 ₽» |
-| `unknown` | Цена не указана | «Цена не указана» |
-
-Сводка считается по общим и взрослым билетам. Детские и льготные тарифы на неё не влияют.
-
-**Источник (`source`).** `name`, `url` (ссылка на первоисточник), `checked_at` (когда запись последний раз сверяли с источником, ISO 8601 в UTC), `sources_count` (из скольких источников сведена карточка).
+- **`sources[]`**: все источники после дедупликации, `{ source_url, source_type, source_hash, verified_at, title }`. Первый совпадает с `source_url`.
+- **`occurrences[]`**: все сеансы, `{ id, date_start, date_end, time_precision, status, status_verified, previous_date_start, availability, is_past }`. `status`: `scheduled`, `cancelled`, `postponed` (новой даты нет), `rescheduled` (новая дата в `date_start`, прежняя в `previous_date_start`), `unknown`. У отменённого события все сеансы `cancelled`.
+- **`offers[]`**: тарифы `{ name, price, audience, is_free }`, `price` в рублях. `price_min` и `price_max` считаются по общим и взрослым билетам.
 
 ## Клиент на TypeScript
 
@@ -693,8 +921,10 @@ import { listEvents, getEvent, getDictionaries, getFacets, askAssistant } from '
 
 import type { AfishaEvent, EventsQuery, EventsListResponse, AssistantResponse } from '@/lib/api/types';
 
+// Клиент сам переводит событие из формы контракта (lib/api/wire.ts) во внутреннюю модель интерфейса.
+
 const weekend = await listEvents({ city: ['ufa'], date: 'weekend', price_max: 1000 });
-const event = await getEvent('evt_demo_t1'); // null, если события нет
+const event = await getEvent('334e2fca-4f18-5058-b0b2-3ccff50863de'); // null, если события нет
 const answer = await askAssistant({ message: 'куда пойти в субботу с ребёнком до 1000 ₽' });
 ```
 

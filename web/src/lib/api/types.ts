@@ -643,7 +643,7 @@ export interface ApiErrorBody {
 }
 
 export interface ApiEndpointInfo {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   path: string;
   description: string;
 }
