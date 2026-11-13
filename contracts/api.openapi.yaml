@@ -986,6 +986,15 @@ paths:
             example: |
               title,category,date_start,city,venue,source_url,price_min,price_max,is_free,age_limit,tags
               Демо-концерт «Ёлочные мелодии»,concert,2026-12-19T18:00:00+05:00,Уфа,Демо-площадка «Зал № 1»,https://example.invalid/demo/events/1,300,800,false,6,дети;синтетическое
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
       responses:
         '200':
           description: Отчёт об импорте.
@@ -2180,6 +2189,7 @@ components:
           - venue
           - category
           - age
+          - status
           - query
           description: Главное ослабленное условие.
         codes:
@@ -2194,6 +2204,7 @@ components:
             - venue
             - category
             - age
+            - status
             - query
           description: Все ослабленные условия.
         label:
@@ -2203,10 +2214,13 @@ components:
           type: object
           description: Параметры `GET /events` с уже ослабленным условием.
           additionalProperties:
-            type:
-            - string
-            - integer
-            - boolean
+            oneOf:
+            - type: string
+            - type: integer
+            - type: boolean
+            - type: array
+              items:
+                type: string
         count:
           type: integer
           minimum: 1
@@ -2592,6 +2606,14 @@ components:
         import_id:
           type: string
           format: uuid
+        at:
+          $ref: ./event.schema.json#/$defs/dateTime
+        actor:
+          type: string
+        file_name:
+          type:
+          - string
+          - 'null'
         format:
           type: string
           enum:
@@ -2606,6 +2628,10 @@ components:
         updated:
           type: integer
           minimum: 0
+        merged:
+          type: integer
+          minimum: 0
+          description: 'Подмножество updated: сколько строк сведено в существующие карточки как дополнительный источник.'
         unchanged:
           type: integer
           minimum: 0
@@ -2642,13 +2668,44 @@ components:
             - id
             - reasons
             properties:
+              row:
+                type: integer
+                minimum: 1
               id:
                 type: string
                 format: uuid
+              title:
+                type: string
               reasons:
                 type: array
                 items:
                   type: string
+        rows:
+          type: array
+          items:
+            type: object
+            required:
+            - row
+            - title
+            - outcome
+            properties:
+              row:
+                type: integer
+                minimum: 1
+              id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              outcome:
+                type: string
+                enum:
+                - added
+                - updated
+                - merged
+                - unchanged
+              note:
+                type: string
     EventPatch:
       type: object
       description: Частичная правка карточки. Передаются только меняемые поля. `normalized_title` и `dedup_key` сервер пересчитывает
@@ -2775,6 +2832,12 @@ components:
           - keep_draft
           - cancel
           - merge
+        comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Комментарий модератора для журнала аудита.
         merge_into:
           type: string
           format: uuid
