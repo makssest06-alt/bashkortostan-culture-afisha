@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:afisha:jev-decisions:v1",
   "title": "Afisha System-1 Jev (TypeSafe AI) typed decision contracts",
-  "description": "Contracts for non-autoregressive System-1 probabilistic decisions (Noul, Choice, Score) produced by the Jev adapter and consumed by the deterministic backend. Jev never generates free-form event facts, never computes hard arithmetic/schedule constraints, and only selects IDs from caller-supplied backend allowlists. When Jev is unavailable or times out, deterministic/rule-based fallbacks emit the same envelope with provider='deterministic_fallback'.",
+  "description": "ВНЕ СКОУПА ХАКАТОНА (2026-11-13, D-013): ТЗ не требует контура Jev. Действующий контракт v1: contracts/event.schema.json, contracts/api.openapi.yaml, contracts/agent_tools.json; см. docs/DECISIONS.md. Contracts for non-autoregressive System-1 probabilistic decisions (Noul, Choice, Score) produced by the Jev adapter and consumed by the deterministic backend. Jev never generates free-form event facts, never computes hard arithmetic/schedule constraints, and only selects IDs from caller-supplied backend allowlists. When Jev is unavailable or times out, deterministic/rule-based fallbacks emit the same envelope with provider='deterministic_fallback'.",
   "type": "object",
   "additionalProperties": false,
   "required": [

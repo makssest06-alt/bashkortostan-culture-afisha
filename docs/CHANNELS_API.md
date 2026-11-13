@@ -1,5 +1,7 @@
 # Telegram, встраиваемый виджет и публичный API
 
+> **Вне скоупа хакатона (2026-11-13): сессии ассистента, оси ревизий, allowlist'ы, Problem Details, `Idempotency-Key`, `postMessage`-протокол виджета.** ТЗ требует REST API по п. 6.3 и агента с инструментами п. 7.2. Действующий контракт: [`contracts/api.openapi.yaml`](../contracts/api.openapi.yaml), [`contracts/agent_tools.json`](../contracts/agent_tools.json). Разделы про безопасность Telegram-адаптера и виджета остаются полезными как исследование. Подробнее — [`docs/DECISIONS.md`](DECISIONS.md).
+
 Дата: 2026-11-12  
 Статус: исследовательский и контрактный черновик до получения официального задания, критериев и API хакатона  
 Связанная задача: Issue #13  

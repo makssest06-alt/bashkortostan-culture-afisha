@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:afisha:telegram-widget-state:v1",
   "title": "Telegram Bot API 10.4 HTML Widget compact state and query contract",
-  "description": "Contract for native in-bubble HTML widgets in Telegram Bot API 10.4 (sendWidget, editMessageWidgetData, Update.widget_query, answerWidgetQuery). Distinct from contracts/widget_protocol.schema.json, which governs external partner website embeds. Serialized JSON of chat_data, public_data and answerWidgetQuery.data MUST NOT exceed 1024 UTF-8 bytes; serialized WidgetQuery request string MUST be 1-64 UTF-8 bytes ('v1:' + opaque action token). All untrusted strings in state are rendered exclusively via textContent inside the offline QuickJS sandbox.",
+  "description": "ВНЕ ОБЯЗАТЕЛЬНОГО СКОУПА (2026-11-13, D-014): ТЗ п. 6.2 требует инлайн-кнопки, виджеты Bot API 10.4 — необязательное улучшение. Действующий контракт v1: contracts/event.schema.json, contracts/api.openapi.yaml, contracts/agent_tools.json; см. docs/DECISIONS.md. Contract for native in-bubble HTML widgets in Telegram Bot API 10.4 (sendWidget, editMessageWidgetData, Update.widget_query, answerWidgetQuery). Distinct from contracts/widget_protocol.schema.json, which governs external partner website embeds. Serialized JSON of chat_data, public_data and answerWidgetQuery.data MUST NOT exceed 1024 UTF-8 bytes; serialized WidgetQuery request string MUST be 1-64 UTF-8 bytes ('v1:' + opaque action token). All untrusted strings in state are rendered exclusively via textContent inside the offline QuickJS sandbox.",
   "type": "object",
   "additionalProperties": false,
   "required": [
