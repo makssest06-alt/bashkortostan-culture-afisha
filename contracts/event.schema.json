@@ -1,0 +1,553 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://afisha-rb.example.invalid/contracts/event.schema.json",
+  "title": "Event",
+  "description": "Событие афиши. Контракт v1: поля строго по п. 8.1 ТЗ плюс необязательные расширения. Все поля п. 8.1 обязательны и всегда присутствуют в ответе API; неизвестное значение передаётся как null там, где null разрешён. Правила и пояснения: docs/EVENT_SCHEMA.md. Поля вне этого списка не входят в контракт: никто не обязан их отдавать, и потребители на них не опираются.",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "normalized_title",
+    "category",
+    "tags",
+    "date_start",
+    "date_end",
+    "duration_min",
+    "city",
+    "venue",
+    "address",
+    "lat",
+    "lon",
+    "description",
+    "price_min",
+    "price_max",
+    "is_free",
+    "age_limit",
+    "language",
+    "org_link",
+    "source_url",
+    "source_type",
+    "source_hash",
+    "verified_at",
+    "confidence",
+    "status",
+    "dedup_key",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": {
+      "description": "Идентификатор события, UUID. Непрозрачная строка, не разбирается клиентом.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "title": {
+      "description": "Название как у источника.",
+      "type": "string",
+      "minLength": 1
+    },
+    "normalized_title": {
+      "description": "Название для дедупликации и поиска: нижний регистр, ё→е, без кавычек и лишних пробелов.",
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "$ref": "#/$defs/category"
+    },
+    "tags": {
+      "description": "Метки: «джаз», «дети», «бесплатно», «башкирский язык». Пустой массив, если меток нет.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "date_start": {
+      "description": "Начало. Для события с несколькими сеансами — ближайший актуальный сеанс.",
+      "$ref": "#/$defs/dateTime"
+    },
+    "date_end": {
+      "description": "Окончание, если известно.",
+      "$ref": "#/$defs/nullableDateTime"
+    },
+    "duration_min": {
+      "description": "Длительность в минутах, если известна.",
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "city": {
+      "description": "Город или населённый пункт, как показывать пользователю: «Уфа».",
+      "type": "string",
+      "minLength": 1
+    },
+    "venue": {
+      "description": "Название площадки.",
+      "type": "string",
+      "minLength": 1
+    },
+    "address": {
+      "description": "Адрес площадки.",
+      "type": ["string", "null"]
+    },
+    "lat": {
+      "description": "Широта, если известна.",
+      "type": ["number", "null"],
+      "minimum": -90,
+      "maximum": 90
+    },
+    "lon": {
+      "description": "Долгота, если известна.",
+      "type": ["number", "null"],
+      "minimum": -180,
+      "maximum": 180
+    },
+    "description": {
+      "description": "Краткое описание. Текст источника: недоверенные данные, при выводе экранируется.",
+      "type": "string"
+    },
+    "price_min": {
+      "description": "Минимальная цена в рублях. 0 — бесплатно. null — цена не указана, это НЕ бесплатно.",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "price_max": {
+      "description": "Максимальная цена в рублях. 0 — бесплатно. null — цена не указана, это НЕ бесплатно.",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "is_free": {
+      "description": "Бесплатный вход. true только по явной пометке источника; тогда price_min = price_max = 0.",
+      "type": "boolean"
+    },
+    "age_limit": {
+      "description": "Возрастное ограничение: 0, 6, 12, 16 или 18. null — не указано, это НЕ «0+».",
+      "enum": [0, 6, 12, 16, 18, null]
+    },
+    "language": {
+      "description": "Язык мероприятия, код ISO 639: ru, ba, tt. null — не указан.",
+      "type": ["string", "null"],
+      "pattern": "^[a-z]{2,3}$"
+    },
+    "org_link": {
+      "description": "Ссылка на организатора или билеты.",
+      "type": ["string", "null"],
+      "format": "uri"
+    },
+    "source_url": {
+      "description": "Основной источник, откуда взято событие. Совпадает с sources[0].source_url, если sources передан.",
+      "type": "string",
+      "format": "uri"
+    },
+    "source_type": {
+      "$ref": "#/$defs/sourceType"
+    },
+    "source_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "verified_at": {
+      "description": "Когда источник проверен. null — не проверялся.",
+      "$ref": "#/$defs/nullableDateTime"
+    },
+    "confidence": {
+      "description": "Уверенность извлечения, от 0 до 1.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "status": {
+      "description": "published — в выдаче; draft — только в админке, публично 404; cancelled — не в выдаче, но открывается по прямой ссылке с пометкой.",
+      "enum": ["published", "draft", "cancelled"]
+    },
+    "dedup_key": {
+      "description": "Ключ дедупликации: normalized_title + местная дата начала YYYY-MM-DD + venue_id. Формат склейки — docs/EVENT_SCHEMA.md.",
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "$ref": "#/$defs/dateTime"
+    },
+    "updated_at": {
+      "$ref": "#/$defs/dateTime"
+    },
+    "city_id": {
+      "description": "Расширение. Код города из справочника GET /cities, используется в фильтре city.",
+      "$ref": "#/$defs/slug"
+    },
+    "venue_id": {
+      "description": "Расширение. Код площадки из справочника GET /venues.",
+      "$ref": "#/$defs/slug"
+    },
+    "time_precision": {
+      "description": "Расширение. Точность date_start и date_end события. date — время неизвестно, в date_start стоит местная полночь, время не показывается. Если поля нет, считается minute.",
+      "$ref": "#/$defs/timePrecision"
+    },
+    "occurrences": {
+      "description": "Расширение. Все сеансы события по возрастанию даты, включая прошедшие и отменённые.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/occurrence"
+      }
+    },
+    "offers": {
+      "description": "Расширение. Тарифы. price_min и price_max выводятся из общих билетов: тарифов без audience или с audience = adult.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/offer"
+      }
+    },
+    "sources": {
+      "description": "Расширение. Все источники после дедупликации. Первый совпадает с source_url.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      }
+    },
+    "review": {
+      "description": "Расширение. Пометка спорной карточки (п. 6.1).",
+      "$ref": "#/$defs/review"
+    },
+    "popularity": {
+      "description": "Расширение. Условная популярность 0..100 для sort=popularity.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "organizer": {
+      "description": "Расширение. Название организатора.",
+      "type": ["string", "null"]
+    },
+    "kind": {
+      "description": "Расширение. Вид события: разовое, серия показов одной постановки, выставка, фестиваль.",
+      "enum": ["standalone", "performance_run", "exhibition", "festival"]
+    },
+    "image": {
+      "description": "Расширение. Путь или URL картинки. Альтернативный текст по умолчанию строится из title.",
+      "type": ["string", "null"],
+      "format": "uri-reference"
+    },
+    "title_ba": {
+      "description": "Расширение. Название на башкирском, если оно есть в источнике.",
+      "type": ["string", "null"]
+    },
+    "synthetic": {
+      "description": "Расширение. true у демонстрационных синтетических событий.",
+      "type": "boolean"
+    }
+  },
+  "allOf": [
+    {
+      "description": "Бесплатное событие: обе цены равны 0.",
+      "if": {
+        "properties": { "is_free": { "const": true } },
+        "required": ["is_free"]
+      },
+      "then": {
+        "properties": {
+          "price_min": { "const": 0 },
+          "price_max": { "const": 0 }
+        }
+      }
+    },
+    {
+      "description": "price_max = 0 означает «бесплатно», поэтому is_free = true.",
+      "if": {
+        "properties": { "price_max": { "const": 0 } },
+        "required": ["price_max"]
+      },
+      "then": {
+        "properties": { "is_free": { "const": true } }
+      }
+    },
+    {
+      "description": "При точности date в date_start стоит местная полночь.",
+      "if": {
+        "properties": { "time_precision": { "const": "date" } },
+        "required": ["time_precision"]
+      },
+      "then": {
+        "properties": {
+          "date_start": { "pattern": "T00:00:00(Z|[+-][0-9]{2}:[0-9]{2})$" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "category": {
+      "description": "Категория: концерт, спектакль, выставка, фестиваль, кино, экскурсия, другое.",
+      "enum": ["concert", "performance", "exhibition", "festival", "cinema", "excursion", "other"]
+    },
+    "sourceType": {
+      "description": "Тип источника: ручной ввод, импорт файла, RSS, API, страница учреждения.",
+      "enum": ["manual", "import", "rss", "api", "page"]
+    },
+    "sha256": {
+      "description": "SHA-256 исходной записи, 64 шестнадцатеричных символа в нижнем регистре. Нужен для идемпотентного импорта.",
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "timePrecision": {
+      "enum": ["minute", "date"]
+    },
+    "dateTime": {
+      "description": "Дата и время RFC 3339 с поясом, например 2026-11-14T19:00:00+05:00.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "nullableDateTime": {
+      "anyOf": [
+        { "$ref": "#/$defs/dateTime" },
+        { "type": "null" }
+      ]
+    },
+    "occurrence": {
+      "description": "Сеанс. date_start события равен ближайшему актуальному сеансу.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "date_start", "date_end", "time_precision", "status", "status_verified", "availability", "is_past"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "date_start": {
+          "$ref": "#/$defs/dateTime"
+        },
+        "date_end": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "time_precision": {
+          "$ref": "#/$defs/timePrecision"
+        },
+        "status": {
+          "description": "Статус сеанса. unknown — источник статус не сообщил.",
+          "enum": ["scheduled", "cancelled", "postponed", "rescheduled", "unknown"]
+        },
+        "status_verified": {
+          "description": "Статус подтверждён источником при последней проверке.",
+          "type": "boolean"
+        },
+        "previous_date_start": {
+          "description": "Прежнее начало для перенесённого сеанса.",
+          "$ref": "#/$defs/dateTime"
+        },
+        "availability": {
+          "description": "Наличие билетов. sold_out — это не отмена сеанса.",
+          "enum": ["available", "sold_out", "unknown"]
+        },
+        "is_past": {
+          "description": "Сеанс уже прошёл относительно текущего времени сервера.",
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "time_precision": { "const": "date" } },
+            "required": ["time_precision"]
+          },
+          "then": {
+            "properties": {
+              "date_start": { "pattern": "T00:00:00(Z|[+-][0-9]{2}:[0-9]{2})$" }
+            }
+          }
+        }
+      ]
+    },
+    "offer": {
+      "description": "Тариф. price в рублях; null — цена тарифа не указана.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "is_free"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "price": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "audience": {
+          "description": "Для кого тариф: взрослый, детский, льготный. Без поля — общий билет.",
+          "enum": ["adult", "child", "reduced"]
+        },
+        "is_free": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "is_free": { "const": true } },
+            "required": ["is_free"]
+          },
+          "then": {
+            "properties": { "price": { "const": 0 } }
+          }
+        }
+      ]
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_url", "source_type", "source_hash", "verified_at"],
+      "properties": {
+        "source_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "source_type": {
+          "$ref": "#/$defs/sourceType"
+        },
+        "source_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "verified_at": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "title": {
+          "description": "Подпись источника для блока «Источники».",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disputed", "reasons"],
+      "properties": {
+        "disputed": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "description": "Коды причин, например price_unknown, possible_duplicate, source_unreachable, date_in_past.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "id": "37f67e9c-7aa5-463c-ab52-16b58ca0beaf",
+      "title": "Демо-концерт «Ёлочные мелодии»",
+      "normalized_title": "демо-концерт елочные мелодии",
+      "category": "concert",
+      "tags": ["дети", "синтетическое"],
+      "date_start": "2026-12-19T18:00:00+05:00",
+      "date_end": "2026-12-19T19:30:00+05:00",
+      "duration_min": 90,
+      "city": "Уфа",
+      "venue": "Демо-площадка «Зал № 1»",
+      "address": "ул. Примерная, 1 (демо-адрес)",
+      "lat": 54.7388,
+      "lon": 55.9721,
+      "description": "Синтетическое событие для проверки контракта. Такого концерта нет.",
+      "price_min": 300,
+      "price_max": 800,
+      "is_free": false,
+      "age_limit": 6,
+      "language": "ru",
+      "org_link": "https://example.invalid/demo/tickets/1",
+      "source_url": "https://example.invalid/demo/events/1",
+      "source_type": "import",
+      "source_hash": "4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531",
+      "verified_at": "2026-11-13T10:00:00+05:00",
+      "confidence": 1,
+      "status": "published",
+      "dedup_key": "демо-концерт елочные мелодии|2026-12-19|demo-hall-1",
+      "created_at": "2026-11-13T10:00:00+05:00",
+      "updated_at": "2026-11-13T10:00:00+05:00",
+      "city_id": "ufa",
+      "venue_id": "demo-hall-1",
+      "time_precision": "minute",
+      "kind": "standalone",
+      "popularity": 40,
+      "organizer": "Демо-организатор",
+      "offers": [
+        { "name": "Входной билет", "price": 800, "is_free": false },
+        { "name": "Ранний билет", "price": 300, "audience": "adult", "is_free": false },
+        { "name": "Детский", "price": 200, "audience": "child", "is_free": false }
+      ],
+      "occurrences": [
+        {
+          "id": "37f67e9c-7aa5-463c-ab52-16b58ca0beaf-1",
+          "date_start": "2026-12-19T18:00:00+05:00",
+          "date_end": "2026-12-19T19:30:00+05:00",
+          "time_precision": "minute",
+          "status": "scheduled",
+          "status_verified": true,
+          "availability": "available",
+          "is_past": false
+        }
+      ],
+      "sources": [
+        {
+          "source_url": "https://example.invalid/demo/events/1",
+          "source_type": "import",
+          "source_hash": "4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531",
+          "verified_at": "2026-11-13T10:00:00+05:00",
+          "title": "Демо-источник"
+        },
+        {
+          "source_url": "https://example.invalid/demo/partner/events/77",
+          "source_type": "manual",
+          "source_hash": "850ff8531879ec2954c233eea09624d4671c787f248464f3811bc7719c29a98f",
+          "verified_at": null,
+          "title": "Демо-источник партнёра"
+        }
+      ],
+      "review": { "disputed": false, "reasons": [] },
+      "image": null,
+      "title_ba": null,
+      "synthetic": true
+    },
+    {
+      "id": "6b377726-8b93-4b02-87b4-815d694dd620",
+      "title": "Демо-выставка «Синтетический пейзаж»",
+      "normalized_title": "демо-выставка синтетический пейзаж",
+      "category": "exhibition",
+      "tags": [],
+      "date_start": "2026-11-28T00:00:00+05:00",
+      "date_end": null,
+      "duration_min": null,
+      "city": "Стерлитамак",
+      "venue": "Демо-галерея",
+      "address": null,
+      "lat": null,
+      "lon": null,
+      "description": "Синтетическое отменённое событие: цена и возраст источником не указаны.",
+      "price_min": null,
+      "price_max": null,
+      "is_free": false,
+      "age_limit": null,
+      "language": null,
+      "org_link": null,
+      "source_url": "https://example.invalid/demo/events/2",
+      "source_type": "manual",
+      "source_hash": "e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46",
+      "verified_at": null,
+      "confidence": 1,
+      "status": "cancelled",
+      "dedup_key": "демо-выставка синтетический пейзаж|2026-11-28|demo-gallery",
+      "created_at": "2026-11-13T10:00:00+05:00",
+      "updated_at": "2026-11-13T12:00:00+05:00",
+      "city_id": "sterlitamak",
+      "venue_id": "demo-gallery",
+      "time_precision": "date",
+      "review": { "disputed": true, "reasons": ["price_unknown"] },
+      "synthetic": true
+    }
+  ]
+}
