@@ -1,0 +1,61 @@
+[
+  {
+    "title": "Демо-вечер башкирской поэзии",
+    "category": "other",
+    "city": "ufa",
+    "venue": "Государственный концертный зал «Башкортостан»",
+    "date_start": "2026-11-21T19:00:00+05:00",
+    "price_min": 400,
+    "price_max": 900,
+    "age_limit": 12,
+    "language": "ba",
+    "description": "Синтетический литературно-музыкальный вечер современной башкирской поэзии.",
+    "source_url": "https://example.invalid/demo/import/poetry-1",
+    "org_link": "https://example.invalid/demo/tickets/poetry-1",
+    "synthetic": true,
+    "tags": ["поэзия", "башкирский язык"]
+  },
+  {
+    "title": "Синтетический утренник «Зимние узоры»",
+    "category": "performance",
+    "city": "sterlitamak",
+    "venue": "Неизвестная малая сцена Стерлитамака",
+    "date_start": "2026-11-22",
+    "price_min": null,
+    "age_limit": null,
+    "description": "Кратко",
+    "source_url": "https://example.invalid/demo/import/winter-unknown",
+    "synthetic": true
+  },
+  {
+    "title": "Демо-вечер башкирской поэзии",
+    "category": "other",
+    "city": "ufa",
+    "venue": "Государственный концертный зал «Башкортостан»",
+    "date_start": "2026-11-21T19:00:00+05:00",
+    "price_min": 400,
+    "age_limit": 12,
+    "description": "Второй источник того же синтетического вечера поэзии с уточнённым описанием для проверки дедупликации.",
+    "organizer": "Демо-объединение поэтов",
+    "source_url": "https://example.invalid/demo/import/poetry-mirror",
+    "synthetic": true
+  },
+  {
+    "title": "Синтетическая запись с битой ссылкой",
+    "category": "concert",
+    "city": "ufa",
+    "venue": "Башкирская государственная филармония им. Х. Ахметова",
+    "date_start": "2026-11-25T18:00:00+05:00",
+    "source_url": "not-a-valid-url",
+    "synthetic": true
+  },
+  {
+    "title": "Синтетическая запись с неизвестным городом",
+    "category": "concert",
+    "city": "kazan",
+    "venue": "Демо-зал",
+    "date_start": "2026-11-26T18:00:00+05:00",
+    "source_url": "https://example.invalid/demo/import/bad-city",
+    "synthetic": true
+  }
+]
