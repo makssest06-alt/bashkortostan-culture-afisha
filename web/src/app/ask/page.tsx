@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { AskExperience } from '@/components/ask/AskExperience';
 import type { InitialExchange } from '@/components/ask/useAskDialog';
 import { DEFAULT_RESULT_LIMIT, MAX_MESSAGE_LENGTH } from '@/lib/api/nlu/request';
+import { assistantDisabled } from '@/lib/api/assistant-availability';
 import { askAssistant } from '@/lib/api/server';
 import { getServerT } from '@/lib/i18n/server';
 
@@ -30,6 +31,8 @@ type Start = {
 async function loadStart(raw: SearchParams): Promise<Start> {
   const query = readQuery(raw);
   if (!query) return { initial: null, pendingQuery: null };
+  // ИИ выключен на сервере или в демо (?ai=off): фразу отправит браузер и сразу перейдёт на обычный поиск.
+  if (assistantDisabled() || raw.ai === 'off') return { initial: null, pendingQuery: query };
   try {
     const response = await askAssistant({ message: query, limit: DEFAULT_RESULT_LIMIT });
     return { initial: { query, response, receivedAt: Date.now() }, pendingQuery: null };

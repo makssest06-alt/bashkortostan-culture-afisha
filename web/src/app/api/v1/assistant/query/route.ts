@@ -5,6 +5,7 @@
  */
 
 import { runAssistant } from '../../../../../lib/api/assistant';
+import { assistantUnavailable } from '../../../../../lib/api/assistant-availability';
 import {
   errorResponse,
   internalError,
@@ -21,6 +22,12 @@ const MAX_BODY_LENGTH = 20_000;
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    // Модель недоступна: сайт получает 503 и сам показывает обычный поиск с теми же фильтрами (п. 7.5).
+    if (assistantUnavailable(request)) {
+      return errorResponse(503, 'unavailable', 'ИИ временно недоступен. Поиск по фильтрам работает: GET /api/v1/events', undefined, {
+        headers: { 'Retry-After': '60' },
+      });
+    }
     const raw = await request.text();
     if (raw.length > MAX_BODY_LENGTH) {
       return errorResponse(413, 'payload_too_large', 'Тело запроса слишком большое: не больше 20 000 знаков');

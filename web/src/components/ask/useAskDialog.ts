@@ -11,7 +11,8 @@
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 
-import { askAssistant } from '@/lib/api/client';
+import { ApiClientError, askAssistant } from '@/lib/api/client';
+import { keywordFilters, mergeQueries } from '@/lib/api/keyword-filters';
 import type {
   AssistantAction,
   AssistantAssumption,
@@ -29,6 +30,8 @@ import type {
 
 /** Сколько индикатор «думает» держится минимум: без неё ответ правил мелькает. */
 const THINKING_MIN_MS = 450;
+/** Сколько ждём ассистента, прежде чем перейти на обычный поиск (п. 9.2: p95 ответа агента не больше 8 с). */
+const ASSISTANT_TIMEOUT_MS = 8000;
 const RESULT_LIMIT = 6;
 export const MAX_MESSAGE_LENGTH = 500;
 
@@ -56,6 +59,16 @@ export interface SearchView {
 
 export type Phase = 'idle' | 'thinking' | 'updating' | 'error';
 
+/**
+ * Резервный режим (п. 7.5): ассистент не ответил, и вместо него работает обычный поиск
+ * по каталогу. Условия берутся из прежнего диалога и явных слов последней фразы.
+ */
+export interface FallbackView {
+  query: EventsQuery;
+  /** Фраза, на которую ассистент не ответил. */
+  text: string;
+}
+
 export interface DialogState {
   turns: Turn[];
   constraints: Constraints | null;
@@ -69,6 +82,8 @@ export interface DialogState {
   phase: Phase;
   /** Чипы до правки: если запрос не удался, они возвращаются на место. */
   chipsBeforePatch: AssistantChip[] | null;
+  /** Ассистент недоступен: показывается обычный поиск. */
+  fallback: FallbackView | null;
   nextId: number;
 }
 
@@ -84,6 +99,8 @@ type Action =
   | { type: 'patch'; note: string; optimisticChips: AssistantChip[] | null }
   | { type: 'answer'; response: AssistantResponse; receivedAt: number }
   | { type: 'fail' }
+  | { type: 'fallback'; query: EventsQuery; text: string; note: string }
+  | { type: 'fallbackQuery'; query: EventsQuery }
   | { type: 'retry' }
   | { type: 'reset' };
 
@@ -97,6 +114,7 @@ const EMPTY: DialogState = {
   today: null,
   phase: 'idle',
   chipsBeforePatch: null,
+  fallback: null,
   nextId: 1,
 };
 
@@ -117,6 +135,7 @@ function applyResponse(state: DialogState, response: AssistantResponse, received
     today: response.reference_date,
     phase: 'idle',
     chipsBeforePatch: null,
+    fallback: null,
     nextId: state.nextId + 1,
   };
   if (response.action === 'search') {
@@ -160,6 +179,22 @@ function reducer(state: DialogState, action: Action): DialogState {
     case 'fail':
       // Условия на сервере не поменялись: возвращаем чипы, которые убрали заранее.
       return { ...state, chips: state.chipsBeforePatch ?? state.chips, chipsBeforePatch: null, phase: 'error' };
+    case 'fallback':
+      return {
+        ...state,
+        turns: [
+          ...state.turns,
+          { id: state.nextId, role: 'assistant', text: action.note, action: 'search', unsupported: [] },
+        ],
+        chips: state.chipsBeforePatch ?? state.chips,
+        chipsBeforePatch: null,
+        clarify: null,
+        phase: 'idle',
+        fallback: { query: action.query, text: action.text },
+        nextId: state.nextId + 1,
+      };
+    case 'fallbackQuery':
+      return state.fallback ? { ...state, fallback: { ...state.fallback, query: action.query } } : state;
     case 'retry':
       return { ...state, phase: 'thinking' };
     case 'reset':
@@ -190,19 +225,43 @@ export interface AskDialog {
   applyPatch: (patch: ConstraintsPatch, note: string, optimisticChips?: AssistantChip[]) => void;
   retry: () => void;
   reset: () => void;
+  /** Правка фильтров обычного поиска в резервном режиме. */
+  setFallbackQuery: (query: EventsQuery) => void;
 }
 
-export function useAskDialog(initial: InitialExchange | null, pendingQuery: string | null = null): AskDialog {
+export interface AskDialogOptions {
+  /** Демо-переключатель: запросы уходят с пометкой «ассистент недоступен». */
+  aiOff: boolean;
+  /** Реплика в ленте при переходе на обычный поиск. */
+  fallbackNote: string;
+}
+
+/** Отказ ассистента, после которого включается обычный поиск: недоступен, сбой сервера, нет сети, тайм-аут. */
+function isOutage(error: unknown, timedOut: boolean): boolean {
+  if (timedOut) return true;
+  return error instanceof ApiClientError && (error.status === 0 || error.status >= 500);
+}
+
+export function useAskDialog(
+  initial: InitialExchange | null,
+  pendingQuery: string | null = null,
+  options: AskDialogOptions = { aiOff: false, fallbackNote: '' },
+): AskDialog {
   const [state, dispatch] = useReducer(reducer, initial, initialState);
   const latest = useRef(state);
   const controller = useRef<AbortController | null>(null);
   const sequence = useRef(0);
   const lastRequest = useRef<{ payload: AssistantRequest; minDelay: number } | null>(null);
   const autoSent = useRef(false);
+  const settings = useRef(options);
 
   useEffect(() => {
     latest.current = state;
   }, [state]);
+
+  useEffect(() => {
+    settings.current = options;
+  }, [options]);
 
   const run = useCallback(async (payload: AssistantRequest, minDelay: number) => {
     controller.current?.abort();
@@ -211,18 +270,34 @@ export function useAskDialog(initial: InitialExchange | null, pendingQuery: stri
     sequence.current += 1;
     const ticket = sequence.current;
     lastRequest.current = { payload, minDelay };
+    let timedOut = false;
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      abort.abort();
+    }, ASSISTANT_TIMEOUT_MS);
+    const { aiOff, fallbackNote } = settings.current;
 
     try {
       const [response] = await Promise.all([
-        askAssistant(payload, { signal: abort.signal }),
+        askAssistant(payload, { signal: abort.signal, headers: aiOff ? { 'X-Assistant-Demo': 'unavailable' } : undefined }),
         minDelay > 0 ? wait(minDelay) : Promise.resolve(),
       ]);
       if (ticket !== sequence.current) return;
       dispatch({ type: 'answer', response, receivedAt: Date.now() });
     } catch (error) {
-      if (abort.signal.aborted || ticket !== sequence.current) return;
+      if ((abort.signal.aborted && !timedOut) || ticket !== sequence.current) return;
       console.warn('[ask] запрос к ассистенту не удался', error);
+      if (isOutage(error, timedOut)) {
+        // Ассистент недоступен: сразу показываем обычный поиск с условиями диалога и словами фразы (п. 7.5).
+        const current = latest.current;
+        const base = current.fallback?.query ?? current.view?.eventsQuery ?? null;
+        const words = payload.message ? keywordFilters(payload.message) : {};
+        dispatch({ type: 'fallback', query: mergeQueries(base, words), text: payload.message ?? '', note: fallbackNote });
+        return;
+      }
       dispatch({ type: 'fail' });
+    } finally {
+      window.clearTimeout(timer);
     }
   }, []);
 
@@ -274,6 +349,8 @@ export function useAskDialog(initial: InitialExchange | null, pendingQuery: stri
     send(pendingQuery);
   }, [pendingQuery, send]);
 
+  const setFallbackQuery = useCallback((query: EventsQuery) => dispatch({ type: 'fallbackQuery', query }), []);
+
   return {
     state,
     started: state.turns.length > 0,
@@ -282,5 +359,6 @@ export function useAskDialog(initial: InitialExchange | null, pendingQuery: stri
     applyPatch,
     retry,
     reset,
+    setFallbackQuery,
   };
 }

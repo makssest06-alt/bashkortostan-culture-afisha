@@ -17,7 +17,7 @@ import type { ApiErrorBody, ApiErrorDetail } from './types';
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, If-Match, If-None-Match, X-Request-Id',
+  'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, If-Match, If-None-Match, X-Request-Id, X-Assistant-Demo',
   'Access-Control-Expose-Headers': 'ETag, X-Request-Id, Retry-After, Location',
   'Access-Control-Max-Age': '86400',
 };

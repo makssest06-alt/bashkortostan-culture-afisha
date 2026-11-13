@@ -32,6 +32,8 @@ export interface ClientOptions {
   baseUrl?: string;
   /** Сигнал отмены: пригодится, когда пользователь быстро меняет фильтры. */
   signal?: AbortSignal;
+  /** Дополнительные заголовки запроса (например, демо-переключатель недоступности ассистента). */
+  headers?: Record<string, string>;
 }
 
 /** Ошибка API: код ответа, машинный код и понятное сообщение. */
@@ -74,7 +76,7 @@ async function request<T>(path: string, options: ClientOptions, setup: RequestSe
       method: setup.method ?? 'GET',
       body: setup.body,
       signal: options.signal,
-      headers: { Accept: 'application/json', ...(setup.headers ?? {}) },
+      headers: { Accept: 'application/json', ...(options.headers ?? {}), ...(setup.headers ?? {}) },
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;

@@ -7,6 +7,7 @@
  */
 
 import { ArrowCounterClockwise, Info } from '@phosphor-icons/react';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { PageShell } from '@/components/shell/PageShell';
@@ -22,6 +23,7 @@ import { Composer } from './Composer';
 import { Assumptions, Conditions } from './Conditions';
 import { ASK_GLOW } from './constants';
 import { askText } from './copy';
+import { FallbackSearch } from './FallbackSearch';
 import { removeChipPatch } from './patches';
 import { Results } from './Results';
 import type { ResultsMode } from './Results';
@@ -40,8 +42,25 @@ export type AskExperienceProps = {
 
 export function AskExperience({ initial, pendingQuery }: AskExperienceProps) {
   const { t, lang } = useT();
-  const dialog = useAskDialog(initial, pendingQuery);
-  const { state, started, busy, send, applyPatch, retry, reset } = dialog;
+  const searchParams = useSearchParams();
+  // Демо резервного режима (п. 7.5): ?ai=off или переключатель под полем ввода.
+  const [aiOff, setAiOff] = useState(() => searchParams.get('ai') === 'off');
+  const dialog = useAskDialog(initial, pendingQuery, {
+    aiOff,
+    fallbackNote: askText('fallbackNote', lang),
+  });
+  const { state, started, busy, send, applyPatch, retry, reset, setFallbackQuery } = dialog;
+
+  const toggleAi = useCallback(() => {
+    setAiOff((current) => {
+      const next = !current;
+      const url = new URL(window.location.href);
+      if (next) url.searchParams.set('ai', 'off');
+      else url.searchParams.delete('ai');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+      return next;
+    });
+  }, []);
 
   const [editing, setEditing] = useState<ChipKind | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -131,10 +150,12 @@ export function AskExperience({ initial, pendingQuery }: AskExperienceProps) {
     reset();
     setEditing(null);
     // Фраза из адреса больше не относится к диалогу: без этого перезагрузка задала бы её снова.
-    if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
+    // Демо-переключатель ИИ при этом сохраняется.
+    if (window.location.search)
+      window.history.replaceState(null, '', `${window.location.pathname}${aiOff ? '?ai=off' : ''}`);
     scrollToTarget(0, { immediate: true });
     inputRef.current?.focus({ preventScroll: true });
-  }, [reset]);
+  }, [reset, aiOff]);
 
   const toggleEdit = useCallback((kind: ChipKind): void => {
     setEditing((current) => (current === kind ? null : kind));
@@ -189,30 +210,59 @@ export function AskExperience({ initial, pendingQuery }: AskExperienceProps) {
                 {lang === 'ba' ? ` ${t('ask.langNote')}` : null}
               </span>
             </p>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={aiOff}
+                aria-describedby="ask-demo-hint"
+                onClick={toggleAi}
+                className="inline-flex min-h-11 items-center gap-3 rounded-sm border border-line-strong px-3 text-[0.875rem] text-fg hover:bg-hover"
+                data-ask-demo-toggle=""
+              >
+                <span
+                  aria-hidden="true"
+                  className={`inline-flex h-5 w-9 shrink-0 items-center rounded-full border px-0.5 transition-colors duration-150 ${aiOff ? 'justify-end border-status-moved bg-status-moved/40' : 'justify-start border-line-strong bg-surface'}`}
+                >
+                  <span className="block size-3.5 rounded-full bg-fg" />
+                </span>
+                {askText('demoToggle', lang)}
+              </button>
+              <span id="ask-demo-hint" className="max-w-[44ch] text-[0.8125rem] leading-[1.4] text-fg-muted">
+                {askText('demoToggleHint', lang)}
+              </span>
+            </div>
           </div>
 
           <div className={styles.workspace}>
-            <Conditions
-              chips={state.chips}
-              constraints={state.constraints}
-              today={state.today}
-              editing={editing}
-              busy={busy}
-              onToggleEdit={toggleEdit}
-              onCloseEdit={closeEditor}
-              onRemove={handleRemove}
-              onApply={handleApply}
-            />
-            <Assumptions assumptions={state.assumptions} busy={busy} onEdit={setEditing} />
-            <Results
-              mode={mode}
-              view={state.view}
-              today={state.today}
-              pendingQuestions={state.clarify?.pending.length ?? 1}
-              busy={busy}
-              onExample={handleExample}
-              onRelax={handleRelax}
-            />
+            {state.fallback ? (
+              <FallbackSearch query={state.fallback.query} onChange={setFallbackQuery} />
+            ) : (
+              <>
+                <Conditions
+                  chips={state.chips}
+                  constraints={state.constraints}
+                  today={state.today}
+                  editing={editing}
+                  busy={busy}
+                  onToggleEdit={toggleEdit}
+                  onCloseEdit={closeEditor}
+                  onRemove={handleRemove}
+                  onApply={handleApply}
+                />
+                <Assumptions assumptions={state.assumptions} busy={busy} onEdit={setEditing} />
+                <Results
+                  mode={mode}
+                  view={state.view}
+                  today={state.today}
+                  pendingQuestions={state.clarify?.pending.length ?? 1}
+                  busy={busy}
+                  onExample={handleExample}
+                  onRelax={handleRelax}
+                />
+              </>
+            )}
           </div>
         </div>
       </PageShell>
