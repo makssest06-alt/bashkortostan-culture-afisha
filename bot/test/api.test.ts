@@ -58,6 +58,8 @@ describe('ApiClient', () => {
       city: 'ufa',
       category: 'concert',
       date: 'weekend',
+      price_max: 1000,
+      free: true,
       page: 2,
       page_size: 5,
       sort: 'date',
@@ -72,9 +74,22 @@ describe('ApiClient', () => {
     expect(url.searchParams.get('city')).toBe('ufa');
     expect(url.searchParams.get('category')).toBe('concert');
     expect(url.searchParams.get('date')).toBe('weekend');
+    expect(url.searchParams.get('price_max')).toBe('1000');
+    expect(url.searchParams.get('free')).toBe('true');
     expect(url.searchParams.get('page')).toBe('2');
     expect(url.searchParams.get('page_size')).toBe('5');
     expect(url.searchParams.get('sort')).toBe('date');
+    expect(calls[0]?.init?.headers).toMatchObject({
+      'x-request-id': expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
+  });
+
+  it('не отправляет free=false и price_max=null', async () => {
+    const { client, calls } = clientWith(() => jsonResponse(makeListResponse()));
+    await client.searchEvents({ free: false, price_max: null });
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.searchParams.has('free')).toBe(false);
+    expect(url.searchParams.has('price_max')).toBe(false);
   });
 
   it('обрезает q до 200 знаков', async () => {
@@ -114,7 +129,22 @@ describe('ApiClient', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).details).toEqual([{ field: 'q', message: 'слишком длинный' }]);
+      expect((error as ApiError).requestId).toBe('req-1');
     }
+  });
+
+  it('берёт request_id из заголовка ответа', async () => {
+    const { client } = clientWith(
+      () =>
+        new Response(JSON.stringify({ code: 'unavailable', message: 'Нет данных', details: [] }), {
+          status: 503,
+          headers: { 'content-type': 'application/json', 'x-request-id': 'header-req-2' },
+        }),
+    );
+    await expect(client.searchEvents({})).rejects.toMatchObject({
+      status: 503,
+      requestId: 'header-req-2',
+    });
   });
 
   it('распознаёт 409 как уже существующую подписку', async () => {

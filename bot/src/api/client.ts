@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   ApiErrorBodySchema,
   CategoryListSchema,
@@ -23,6 +25,8 @@ export class ApiError extends Error {
   readonly code: string | null;
   readonly details: { field?: string; message: string }[];
   readonly userMessage: string;
+  /** Идентификатор запроса для логов и кода обращения в интерфейсе. */
+  readonly requestId: string | null;
 
   constructor(
     message: string,
@@ -32,6 +36,7 @@ export class ApiError extends Error {
       code?: string | null;
       details?: { field?: string; message: string }[];
       userMessage?: string;
+      requestId?: string | null;
       cause?: unknown;
     },
   ) {
@@ -42,6 +47,7 @@ export class ApiError extends Error {
     this.code = options.code ?? null;
     this.details = options.details ?? [];
     this.userMessage = options.userMessage ?? 'Сервис афиши временно недоступен. Попробуйте ещё раз через минуту.';
+    this.requestId = options.requestId ?? null;
   }
 }
 
@@ -49,7 +55,12 @@ export interface SearchEventsParams {
   q?: string | null;
   city?: string | null;
   category?: string | null;
-  date?: 'today' | 'tomorrow' | 'weekend' | 'week' | null;
+  /** Пресет (`today`, `tomorrow`, `weekend`, `week`) или `ГГГГ-ММ-ДД`. */
+  date?: string | null;
+  /** Потолок цены за человека; события с неизвестной ценой не проходят. */
+  price_max?: number | null;
+  /** Только события с явной пометкой «бесплатно». */
+  free?: boolean | null;
   page?: number;
   page_size?: number;
   sort?: 'date' | 'price' | 'popularity' | null;
@@ -101,12 +112,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     init?: RequestInit,
   ): Promise<T> {
     const url = `${baseUrl}${path}`;
+    const requestId = randomUUID();
     let response: Response;
     try {
       response = await fetchImpl(url, {
         ...init,
         headers: {
           accept: 'application/json',
+          'x-request-id': requestId,
           ...(init?.body ? { 'content-type': 'application/json' } : {}),
           ...init?.headers,
         },
@@ -116,12 +129,15 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
       throw new ApiError(timedOut ? 'API не ответил за отведённое время' : 'Не удалось связаться с API', {
         kind: timedOut ? 'timeout' : 'network',
+        requestId,
         cause: error,
         userMessage: timedOut
           ? 'Сервис афиши отвечает слишком долго. Попробуйте ещё раз через минуту.'
           : 'Сервис афиши сейчас недоступен. Попробуйте ещё раз через минуту.',
       });
     }
+
+    const responseRequestId = response.headers.get('x-request-id') ?? requestId;
 
     if (!response.ok) {
       const raw = await response.text().catch(() => '');
@@ -150,6 +166,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         code,
         details: errorBody?.details ?? [],
         userMessage,
+        requestId: errorBody?.request_id ?? responseRequestId,
       });
     }
 
@@ -165,6 +182,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       throw new ApiError('API вернул не JSON', {
         kind: 'contract',
         status: response.status,
+        requestId: responseRequestId,
         cause: error,
       });
     }
@@ -174,6 +192,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       throw new ApiError(`Ответ API не соответствует контракту: ${describeContractIssues(parsed.error.issues)}`, {
         kind: 'contract',
         status: response.status,
+        requestId: responseRequestId,
       });
     }
     return parsed.data;
@@ -190,6 +209,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (params.city) query.set('city', params.city);
       if (params.category) query.set('category', params.category);
       if (params.date) query.set('date', params.date);
+      if (params.price_max !== null && params.price_max !== undefined) {
+        query.set('price_max', String(params.price_max));
+      }
+      if (params.free === true) query.set('free', 'true');
       if (params.sort) query.set('sort', params.sort);
       query.set('page', String(params.page ?? 1));
       query.set('page_size', String(params.page_size ?? 5));

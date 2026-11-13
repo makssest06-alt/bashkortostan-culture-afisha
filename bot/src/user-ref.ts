@@ -1,3 +1,5 @@
+import { createHash, createHmac } from 'node:crypto';
+
 const USER_REF_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const TELEGRAM_PREFIX = 'telegram_';
 const MIN_DIGITS = 8;
@@ -29,4 +31,24 @@ export function telegramUserRef(telegramUserId: number | string): string {
 
 export function isUserRef(value: string): boolean {
   return USER_REF_RE.test(value);
+}
+
+/**
+ * Псевдоним пользователя для логов. Сам user_ref и telegram id в лог
+ * не попадают. С секретом используется HMAC: без него хеш от числового id
+ * слишком легко перебрать. Без секрета остаётся SHA-256 — для тестов и
+ * обратной совместимости.
+ */
+export function hashUserRef(userRef: string, secret?: string | null): string {
+  const digest = secret
+    ? createHmac('sha256', secret).update(userRef).digest('hex')
+    : createHash('sha256').update(userRef).digest('hex');
+  return `u_${digest.slice(0, 16)}`;
+}
+
+export function hashTelegramUserId(
+  telegramUserId: number | string,
+  secret?: string | null,
+): string {
+  return hashUserRef(telegramUserRef(telegramUserId), secret);
 }

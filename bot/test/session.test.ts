@@ -16,12 +16,20 @@ describe('SessionStore', () => {
     const store = new SessionStore();
     store.update(1, (session) => {
       session.awaitingQuery = true;
-      session.search = createSearchState({ q: 'балет', page: 2 });
+      session.search = createSearchState({
+        q: 'балет',
+        page: 2,
+        date: '2026-11-20',
+        priceMax: 1000,
+        freeOnly: false,
+      });
       session.draft = createSubscriptionDraft({ city: 'ufa' });
     });
     const session = store.get(1);
     expect(session.awaitingQuery).toBe(true);
     expect(session.search?.q).toBe('балет');
+    expect(session.search?.date).toBe('2026-11-20');
+    expect(session.search?.priceMax).toBe(1000);
     expect(session.draft?.city).toBe('ufa');
   });
 

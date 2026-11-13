@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isUserRef, telegramUserRef, UserRefError } from '../src/user-ref.js';
+import { isUserRef, telegramUserRef, UserRefError, hashTelegramUserId } from '../src/user-ref.js';
 
 describe('telegramUserRef', () => {
   it('строит user_ref из telegram id с дополнением до 8 цифр', () => {
@@ -25,5 +25,20 @@ describe('telegramUserRef', () => {
     const ref = telegramUserRef('9'.repeat(110));
     expect(ref.length).toBeLessThanOrEqual(128);
     expect(isUserRef(ref)).toBe(true);
+  });
+});
+
+describe('hashTelegramUserId', () => {
+  it('не содержит сырой id и зависит от секрета', () => {
+    const first = hashTelegramUserId(123, 'secret-one');
+    const second = hashTelegramUserId(123, 'secret-two');
+
+    expect(first).toMatch(/^u_[0-9a-f]{16}$/);
+    expect(first).not.toContain('123');
+    expect(first).not.toBe(second);
+  });
+
+  it('стабилен при одном секрете', () => {
+    expect(hashTelegramUserId('42', 'secret')).toBe(hashTelegramUserId('42', 'secret'));
   });
 });

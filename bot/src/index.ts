@@ -3,6 +3,7 @@ import { createBot } from './bot.js';
 import { ConfigError, loadConfig } from './config.js';
 import { createLogger } from './logger.js';
 import { SessionStore } from './session.js';
+import { BOT_COMMANDS } from './texts.js';
 
 async function main(): Promise<void> {
   let config;
@@ -37,6 +38,13 @@ async function main(): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
       base_url: config.apiBaseUrl,
     });
+  }
+
+  try {
+    await bot.api.setMyCommands(BOT_COMMANDS);
+    logger.info('bot_commands_set', { count: BOT_COMMANDS.length });
+  } catch (error) {
+    logger.warn('bot_commands_failed', { error });
   }
 
   let stopping = false;

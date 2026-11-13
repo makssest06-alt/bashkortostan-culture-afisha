@@ -1,6 +1,12 @@
+import { fileURLToPath } from 'node:url';
+
 import { z } from 'zod';
 
 const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value);
+
+const DEFAULT_BRAND_IMAGE_PATH = fileURLToPath(
+  new URL('../assets/token-height.png', import.meta.url),
+);
 
 const EnvSchema = z.object({
   TELEGRAM_BOT_TOKEN: z
@@ -32,6 +38,29 @@ const EnvSchema = z.object({
     emptyToUndefined,
     z.coerce.number().int().min(5).max(1440).default(120),
   ),
+  CALLBACK_TTL_MINUTES: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().min(5).max(1440).default(720),
+  ),
+  RATE_LIMIT_PER_MINUTE: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().min(0).max(120).default(20),
+  ),
+  LOG_HASH_SECRET: z.preprocess(
+    emptyToUndefined,
+    z.string().min(16, 'LOG_HASH_SECRET должен быть не короче 16 символов').max(200).optional(),
+  ),
+  BRAND_IMAGE_PATH: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) return DEFAULT_BRAND_IMAGE_PATH;
+        if (value === 'off' || value === 'none' || value === '0') return null;
+        return value;
+      }),
+  ),
 });
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -43,6 +72,12 @@ export interface BotConfig {
   logLevel: LogLevel;
   publicWebUrl: string | null;
   sessionTtlMs: number;
+  /** Необязательные поля: тесты могут собирать конфиг без них. */
+  callbackTtlMs?: number;
+  rateLimitPerMinute?: number;
+  brandImagePath?: string | null;
+  /** Ключ HMAC для псевдонимов в логах; по умолчанию — токен бота. */
+  logHashSecret?: string | null;
 }
 
 export class ConfigError extends Error {
@@ -84,5 +119,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BotConfig {
     logLevel: value.LOG_LEVEL,
     publicWebUrl: value.PUBLIC_WEB_URL ? value.PUBLIC_WEB_URL.replace(/\/+$/, '') : null,
     sessionTtlMs: value.SESSION_TTL_MINUTES * 60_000,
+    callbackTtlMs: value.CALLBACK_TTL_MINUTES * 60_000,
+    rateLimitPerMinute: value.RATE_LIMIT_PER_MINUTE,
+    brandImagePath: value.BRAND_IMAGE_PATH,
+    logHashSecret: value.LOG_HASH_SECRET ?? null,
   };
 }

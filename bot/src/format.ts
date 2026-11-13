@@ -3,9 +3,13 @@ import {
   categoryNameOne,
   cityName,
   datePresetLabel,
+  isDatePreset,
+  isIsoDate,
+  todayIsoDate,
   type CategoryId,
   type CityId,
   type DatePreset,
+  type SearchDate,
 } from './dictionaries.js';
 import type { Event, EventListItem, Occurrence, Subscription } from './api/types.js';
 
@@ -25,6 +29,8 @@ const MONTHS_GENITIVE = [
 ] as const;
 
 const WEEKDAYS_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'] as const;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface DateParts {
   year: number;
@@ -52,7 +58,7 @@ function weekday(date: DateParts): string {
 }
 
 function yearSuffix(date: DateParts, now: Date): string {
-  return date.year === now.getFullYear() ? '' : ` ${date.year}`;
+  return date.year === Number(todayIsoDate(now).slice(0, 4)) ? '' : ` ${date.year}`;
 }
 
 export function formatDate(value: string | null | undefined, now: Date = new Date()): string {
@@ -65,6 +71,29 @@ export function formatDateWithWeekday(value: string | null | undefined, now: Dat
   const date = parseDateParts(value);
   if (!date) return 'дата уточняется';
   return `${formatDate(value, now)}, ${weekday(date)}`;
+}
+
+const MONTHS_SHORT = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'мая',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
+] as const;
+
+/** Короткая подпись для кнопок выбора даты: «14 ноя, сб». */
+export function formatDateShort(value: string, now: Date = new Date()): string {
+  const date = parseDateParts(value);
+  if (!date) return value;
+  const suffix = date.year === Number(todayIsoDate(now).slice(0, 4)) ? '' : ` ${date.year}`;
+  return `${date.day} ${MONTHS_SHORT[date.month - 1] ?? ''}${suffix}, ${weekday(date)}`;
 }
 
 export function formatDateRange(
@@ -82,6 +111,33 @@ export function formatDateRange(
   }
 
   return `${formatDateWithWeekday(startValue, now)} – ${formatDateWithWeekday(endValue, now)}`;
+}
+
+/** Подпись для фильтра: пресет, конкретная дата или «Любая дата». */
+export function searchDateLabel(value: SearchDate | null | undefined, now: Date = new Date()): string {
+  if (!value) return 'Любая дата';
+  if (isDatePreset(value)) return datePresetLabel(value) ?? value;
+  if (isIsoDate(value)) return formatDateWithWeekday(value, now);
+  return value;
+}
+
+export function formatFreshness(value: string | null | undefined, now: Date = new Date()): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) return formatDate(value, now);
+
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return 'только что';
+  if (minutes < 60) return `${minutes} мин назад`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ч назад`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 14) return `${days} дн. назад`;
+  return formatDate(value, now);
 }
 
 function timePart(value: string | null | undefined): string | null {
@@ -171,28 +227,64 @@ export function truncate(text: string, max: number): string {
   return `${base.trimEnd()}…`;
 }
 
+const HTML_ESCAPE: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+};
+
+/**
+ * Любые данные из API и пользовательский ввод попадают в HTML-сообщение только
+ * через эту функцию. Иначе название события с `<` сломает разметку Telegram.
+ */
+export function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (char) => HTML_ESCAPE[char] ?? char);
+}
+
+function esc(value: string): string {
+  return escapeHtml(value);
+}
+
+function bold(value: string): string {
+  return `<b>${esc(value)}</b>`;
+}
+
 export interface SearchFilterState {
   q: string | null;
   city: CityId | null;
   category: CategoryId | null;
-  date: DatePreset | null;
+  date: SearchDate | null;
+  priceMax?: number | null;
+  freeOnly?: boolean;
 }
 
-export function formatFilterLine(filters: SearchFilterState): string {
+export function formatFilterLine(filters: SearchFilterState, now: Date = new Date()): string {
   const parts: string[] = [];
-  if (filters.city) parts.push(`Город: ${cityName(filters.city) ?? filters.city}`);
-  if (filters.category) parts.push(`Категория: ${categoryName(filters.category) ?? filters.category}`);
-  if (filters.date) parts.push(`Когда: ${datePresetLabel(filters.date) ?? filters.date}`);
+  if (filters.city) parts.push(`📍 Город: ${esc(cityName(filters.city) ?? filters.city)}`);
+  if (filters.category) {
+    parts.push(`🎭 Категория: ${esc(categoryName(filters.category) ?? filters.category)}`);
+  }
+  if (filters.date) parts.push(`📅 Когда: ${esc(searchDateLabel(filters.date, now))}`);
+  if (filters.freeOnly) {
+    parts.push('💰 Цена: Бесплатно');
+  } else if (filters.priceMax !== null && filters.priceMax !== undefined) {
+    parts.push(`💰 Цена: до ${formatRubles(filters.priceMax)}`);
+  }
   return parts.length > 0 ? parts.join(' · ') : 'Все города и категории';
 }
 
 function formatSummaryLines(event: EventListItem, index: number, now: Date): string {
   const city = cityName(event.city_id) ?? event.city;
   const price = formatPrice(event.price_min, event.price_max, event.is_free);
+  const freshness = formatFreshness(event.verified_at ?? event.updated_at, now);
+  const thirdLine = [`${city} · ${price}`, formatAge(event.age_limit)];
+  if (freshness) thirdLine.push(`обновлено ${freshness}`);
+
   return [
-    `${index}. ${truncate(event.title, 110)}`,
-    `   ${formatEventWhen(event, now)} · ${truncate(event.venue, 70)} · ${city}`,
-    `   ${price} · ${formatAge(event.age_limit)}`,
+    `${bold(`${index}. ${truncate(event.title, 110)}`)}`,
+    `${esc(formatEventWhen(event, now))} · ${esc(truncate(event.venue, 70))}`,
+    esc(thirdLine.join(' · ')),
   ].join('\n');
 }
 
@@ -205,8 +297,10 @@ export function formatSearchResults(
   const lines: string[] = [];
   const query = filters.q ? `«${truncate(filters.q, 80)}»` : null;
 
-  lines.push(`🔎 ${query ? `Поиск ${query}` : 'Афиша'} — найдено ${result.total}`);
-  lines.push(formatFilterLine(filters));
+  lines.push(
+    `🔎 ${query ? `Поиск ${bold(query)}` : bold('Афиша')} · найдено ${result.total}`,
+  );
+  lines.push(formatFilterLine(filters, now));
   if (options.queryWasTruncated) {
     lines.push('Запрос сокращён до 200 знаков — так требует API.');
   }
@@ -226,25 +320,39 @@ export function formatSearchResults(
   return lines.join('\n');
 }
 
-export function formatNoResults(filters: SearchFilterState): string {
-  const lines = ['😕 Ничего не нашлось'];
-  if (filters.q) lines.push(`Запрос: «${truncate(filters.q, 80)}»`);
-  lines.push(formatFilterLine(filters));
+export function formatNoResults(filters: SearchFilterState, now: Date = new Date()): string {
+  const lines = [`😕 ${bold('Ничего не нашлось')}`];
+  if (filters.q) lines.push(`Запрос: «${esc(truncate(filters.q, 80))}»`);
+  lines.push(formatFilterLine(filters, now));
   lines.push('');
-  lines.push('Попробуйте другой запрос, другой город или уберите фильтры.');
+  lines.push('Попробуйте убрать один из фильтров кнопками ниже — поиск выполнится заново.');
   return lines.join('\n');
+}
+
+export function isSoldOut(event: Event | EventListItem): boolean {
+  return pickPrimaryOccurrence(event)?.availability === 'sold_out';
+}
+
+export function formatAvailability(event: Event | EventListItem): string | null {
+  const occurrence = pickPrimaryOccurrence(event);
+  if (occurrence?.availability === 'sold_out') return 'Билеты на этот сеанс проданы';
+  if (occurrence?.availability === 'available') return 'Билеты в продаже';
+  return null;
 }
 
 export function formatEventCard(event: Event | EventListItem, now: Date = new Date()): string {
   const lines: string[] = [];
   const category = categoryNameOne(event.category) ?? 'Событие';
-
-  lines.push(`🎭 ${category}`);
-  lines.push(truncate(event.title, 200));
+  const header: string[] = [`🎭 ${bold(category)}`];
+  if (event.age_limit !== null) header.push(`${event.age_limit}+`);
+  const duration = formatDuration(event.duration_min);
+  if (duration) header.push(duration);
+  lines.push(header.join(' · '));
+  lines.push(bold(truncate(event.title, 200)));
   lines.push('');
 
   if (event.status === 'cancelled') {
-    lines.push('❌ Событие отменено');
+    lines.push(`❌ ${bold('Событие отменено')}`);
   }
 
   const occurrence = pickPrimaryOccurrence(event);
@@ -257,45 +365,66 @@ export function formatEventCard(event: Event | EventListItem, now: Date = new Da
   } else if (occurrence?.status === 'unknown') {
     lines.push('ℹ️ Статус сеанса не подтверждён организатором');
   }
+  if (isSoldOut(event)) {
+    lines.push('❌ Билеты на этот сеанс проданы');
+  }
 
-  lines.push(`📅 ${formatEventWhen(event, now)}`);
+  lines.push(`📅 ${bold(formatEventWhen(event, now))}`);
 
   const city = cityName(event.city_id) ?? event.city;
-  lines.push(`📍 ${city} · ${truncate(event.venue, 120)}`);
-  if (event.address) lines.push(`   ${truncate(event.address, 160)}`);
+  lines.push(`📍 ${bold(city)} · ${esc(truncate(event.venue, 120))}`);
+  if (event.address) lines.push(esc(`   ${truncate(event.address, 160)}`));
 
-  lines.push(`💰 ${formatPrice(event.price_min, event.price_max, event.is_free)} · ${formatAge(event.age_limit)}`);
+  const ticketLine = [`💰 ${esc(formatPrice(event.price_min, event.price_max, event.is_free))}`];
+  const availability = formatAvailability(event);
+  if (availability && !isSoldOut(event)) ticketLine.push(`🎟 ${esc(availability)}`);
+  lines.push(ticketLine.join(' · '));
 
-  const duration = formatDuration(event.duration_min);
   const extras: string[] = [];
-  if (duration) extras.push(`⏱ ${duration}`);
   if (event.language) extras.push(`Язык: ${event.language}`);
-  if (extras.length > 0) lines.push(extras.join(' · '));
+  if (extras.length > 0) lines.push(esc(extras.join(' · ')));
 
   if (event.tags.length > 0) {
-    lines.push(`🏷 ${event.tags.slice(0, 6).join(', ')}`);
+    lines.push(`🏷 ${esc(event.tags.slice(0, 6).join(', '))}`);
   }
   if (event.organizer) {
-    lines.push(`🏛 ${truncate(event.organizer, 120)}`);
-  }
-  if (event.synthetic) {
-    lines.push('🧪 Демонстрационное событие (synthetic)');
+    lines.push(`🏛 ${esc(truncate(event.organizer, 120))}`);
   }
 
   if (event.description.trim()) {
     lines.push('');
-    lines.push(truncate(event.description, 700));
+    lines.push(esc(truncate(event.description, 700)));
+  }
+
+  const sourceUrl = eventSourcePageUrl(event);
+  const sourceHost = urlHost(sourceUrl);
+  const verified = formatFreshness(event.verified_at, now);
+  const updated = verified ? null : formatFreshness(event.updated_at, now);
+  const meta: string[] = [];
+  if (sourceHost) meta.push(`источник: ${sourceHost}`);
+  if (verified) meta.push(`проверено ${verified}`);
+  else if (updated) meta.push(`обновлено ${updated}`);
+  if (meta.length > 0) {
+    lines.push('');
+    lines.push(`🗓 ${esc(meta.join(' · '))}`);
   }
 
   if (event.review?.disputed) {
     lines.push('');
     lines.push('⚠️ Данные события требуют проверки.');
   }
+  if (event.synthetic) {
+    lines.push('🧪 Демонстрационное событие — не для планирования.');
+  }
 
   return lines.join('\n');
 }
 
-function subscriptionParts(subscription: Subscription): { city: string; category: string; period: string } {
+function subscriptionParts(subscription: Subscription): {
+  city: string;
+  category: string;
+  period: string;
+} {
   return {
     city: subscription.city ? (cityName(subscription.city) ?? subscription.city) : 'Любой город',
     category: subscription.category
@@ -315,15 +444,15 @@ export function formatSubscription(subscription: Subscription): string {
 export function formatSubscriptionsList(subscriptions: Subscription[]): string {
   if (subscriptions.length === 0) {
     return [
-      '🔔 Подписок пока нет.',
+      `🔔 ${bold('Подписок пока нет')}`,
       '',
       'Оформите подписку на город, категорию или период — она сохранится в сервисе.',
     ].join('\n');
   }
 
-  const lines = [`🔔 Ваши подписки (${subscriptions.length})`, ''];
+  const lines = [`🔔 ${bold(`Ваши подписки (${subscriptions.length})`)}`, ''];
   subscriptions.slice(0, 20).forEach((subscription, index) => {
-    lines.push(`${index + 1}. ${formatSubscription(subscription)}`);
+    lines.push(`${index + 1}. ${esc(formatSubscription(subscription))}`);
   });
   if (subscriptions.length > 20) {
     lines.push('');
@@ -336,9 +465,9 @@ export function formatSubscriptionsList(subscriptions: Subscription[]): string {
 
 export function formatSubscriptionCreated(subscription: Subscription): string {
   return [
-    '✅ Подписка сохранена',
+    `✅ ${bold('Подписка сохранена')}`,
     '',
-    formatSubscription(subscription),
+    esc(formatSubscription(subscription)),
     '',
     'Она появилась в разделе «Мои подписки». Отписаться можно там же.',
   ].join('\n');
@@ -352,32 +481,61 @@ export interface SubscriptionDraftView {
 
 export function formatSubscriptionDraft(draft: SubscriptionDraftView): string {
   return [
-    '🔔 Новая подписка',
+    `🔔 ${bold('Новая подписка')}`,
     '',
-    `📍 Город: ${draft.city ? (cityName(draft.city) ?? draft.city) : 'Любой'}`,
-    `🎭 Категория: ${draft.category ? (categoryName(draft.category) ?? draft.category) : 'Любая'}`,
-    `🗓 Период: ${draft.period ? (datePresetLabel(draft.period) ?? draft.period) : 'Любой'}`,
+    `📍 Город: ${esc(draft.city ? (cityName(draft.city) ?? draft.city) : 'Любой')}`,
+    `🎭 Категория: ${esc(draft.category ? (categoryName(draft.category) ?? draft.category) : 'Любая')}`,
+    `🗓 Период: ${esc(draft.period ? (datePresetLabel(draft.period) ?? draft.period) : 'Любой')}`,
     '',
     'Выберите, что изменить, или сохраните подписку.',
   ].join('\n');
 }
 
-export function eventSourceUrl(event: Event): string | null {
-  const candidates = [event.org_link, event.source_url];
-  for (const candidate of candidates) {
-    const url = telegramSafeHttpUrl(candidate);
-    if (url) return url;
+/** Ссылка на страницу события у первоисточника. */
+export function eventSourcePageUrl(event: Event): string | null {
+  if (event.synthetic) return null;
+  return telegramSafeHttpUrl(event.source_url);
+}
+
+/** Ссылка организатора на покупку билетов. */
+export function eventTicketsUrl(event: Event): string | null {
+  if (event.synthetic) return null;
+  return telegramSafeHttpUrl(event.org_link);
+}
+
+/** Ссылка на карточку события на нашем сайте; id обязан быть UUID. */
+export function eventSiteUrl(publicWebUrl: string | null | undefined, id: string): string | null {
+  if (!publicWebUrl || !UUID_RE.test(id)) return null;
+  const base = telegramSafeHttpUrl(publicWebUrl);
+  if (!base) return null;
+  return telegramSafeHttpUrl(`${base}/events/${id}`);
+}
+
+export function urlHost(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 const PRIVATE_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]']);
+const PLACEHOLDER_HOSTS = new Set([
+  'example.com',
+  'example.org',
+  'example.net',
+  'example.edu',
+  'example.test',
+  'test.invalid',
+]);
+const PLACEHOLDER_SUFFIXES = ['.example.com', '.example.org', '.example.net', '.example'];
 
 function isPrivateIpv4(host: string): boolean {
   const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (!match) return false;
-  const [a = 0, b = 0, c = 0] = match.slice(1).map(Number);
   const octets = match.slice(1).map(Number);
+  const [a = 0, b = 0, c = 0] = octets;
   if (octets.some((octet) => octet < 0 || octet > 255)) return false;
   return (
     a === 0 ||
@@ -403,15 +561,25 @@ function isPrivateIpv6(host: string): boolean {
 
 /**
  * Telegram отклоняет inline-кнопки с localhost и приватными адресами.
- * Возвращает нормализованный URL или null, чтобы такая кнопка не попала в клавиатуру.
+ * Дополнительно отсекаем placeholder-домены и URL с логином/паролем.
+ * Возвращает нормализованный URL или null.
  */
 export function telegramSafeHttpUrl(value: string | null | undefined): string | null {
   if (!value) return null;
+  if (value.length > 2048) return null;
   try {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    const host = url.hostname.toLowerCase();
-    if (PRIVATE_HOSTS.has(host) || host.endsWith('.localhost') || host.endsWith('.local')) return null;
+    if (url.username || url.password) return null;
+    const host = url.hostname.toLowerCase().replace(/\.+$/, '');
+    if (!host) return null;
+    if (PRIVATE_HOSTS.has(host) || host.endsWith('.localhost') || host.endsWith('.local')) {
+      return null;
+    }
+    if (PLACEHOLDER_HOSTS.has(host) || PLACEHOLDER_SUFFIXES.some((suffix) => host.endsWith(suffix))) {
+      return null;
+    }
+    if (host.endsWith('.test') || host.endsWith('.invalid')) return null;
     if (isPrivateIpv4(host) || isPrivateIpv6(host)) return null;
     const normalized = url.toString();
     return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;

@@ -1,101 +1,89 @@
 import { describe, expect, it } from 'vitest';
 
-import { CB, parseCallback } from '../src/callbacks.js';
+import { CallbackStore } from '../src/callback-store.js';
+import type { Callback } from '../src/callbacks.js';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 
-describe('parseCallback', () => {
-  it('разбирает меню', () => {
-    expect(parseCallback('menu:search')).toEqual({ type: 'menu', target: 'search' });
-    expect(parseCallback('menu:home')).toEqual({ type: 'menu', target: 'home' });
+const ACTIONS: Callback[] = [
+  { type: 'menu', target: 'home' },
+  { type: 'menu', target: 'about' },
+  { type: 'search', action: 'category', id: 'concert' },
+  { type: 'search', action: 'city', id: 'ufa' },
+  { type: 'search', action: 'reset' },
+  { type: 'search', action: 'page', page: 999 },
+  { type: 'filter', action: 'open' },
+  { type: 'filter', action: 'dateMenu' },
+  { type: 'filter', action: 'setDate', date: '2026-11-20' },
+  { type: 'filter', action: 'setPrice', priceMax: 1000, freeOnly: false },
+  { type: 'filter', action: 'setCity', city: 'sterlitamak' },
+  { type: 'filter', action: 'setCategory', category: 'performance' },
+  { type: 'filter', action: 'clear', field: 'all' },
+  { type: 'event', id: ID, page: 2 },
+  { type: 'subscribe', action: 'quick', city: 'ufa', category: 'concert' },
+  { type: 'subscribe', action: 'add' },
+  { type: 'subscribe', action: 'pick', field: 'period' },
+  { type: 'subscribe', action: 'city', id: null },
+  { type: 'subscribe', action: 'period', id: 'weekend' },
+  { type: 'subscribe', action: 'save' },
+  { type: 'subscriptions', action: 'delete', id: ID },
+];
+
+describe('CallbackStore', () => {
+  it('выпускает короткий непрозрачный токен и возвращает действие', () => {
+    const store = new CallbackStore();
+    const action: Callback = { type: 'event', id: ID, page: 3 };
+    const token = store.issue(7, action);
+
+    expect(token).toMatch(/^v1_[A-Za-z0-9_-]{12}$/);
+    expect(Buffer.byteLength(token, 'utf8')).toBeLessThanOrEqual(64);
+    expect(token).not.toContain(ID);
+    expect(store.resolve(7, token)).toEqual(action);
   });
 
-  it('разбирает поиск по категории и городу', () => {
-    expect(parseCallback(CB.searchCategory('concert'))).toEqual({
-      type: 'search',
-      action: 'category',
-      id: 'concert',
-    });
-    expect(parseCallback(CB.searchCity('ufa'))).toEqual({
-      type: 'search',
-      action: 'city',
-      id: 'ufa',
-    });
+  it('не раскрывает ID события или подписки в callback_data', () => {
+    const store = new CallbackStore();
+    const token = store.issue(7, { type: 'subscriptions', action: 'delete', id: ID });
+    expect(token).not.toContain('11111111');
+    expect(token).not.toContain('delete');
+    expect(token.split(':')).toHaveLength(1);
   });
 
-  it('разбирает страницы и сброс', () => {
-    expect(parseCallback(CB.searchPage(2))).toEqual({ type: 'search', action: 'page', page: 2 });
-    expect(parseCallback(CB.searchReset())).toEqual({ type: 'search', action: 'reset' });
+  it('привязан к пользователю', () => {
+    const store = new CallbackStore();
+    const token = store.issue(1, { type: 'menu', target: 'home' });
+    expect(store.resolve(2, token)).toBeNull();
   });
 
-  it('разбирает карточку с номером страницы', () => {
-    expect(parseCallback(CB.event(ID, 3))).toEqual({ type: 'event', id: ID, page: 3 });
-    expect(parseCallback(CB.event(ID))).toEqual({ type: 'event', id: ID, page: null });
+  it('не принимает чужие, битые и просроченные токены', () => {
+    let now = 1_000_000;
+    const store = new CallbackStore({ ttlMs: 1000, now: () => now });
+    const token = store.issue(1, { type: 'menu', target: 'home' });
+
+    expect(store.resolve(1, 'ev:11111111-1111-4111-8111-111111111111')).toBeNull();
+    expect(store.resolve(1, 'v1_AAAAAAAAAAAA')).toBeNull();
+    expect(store.resolve(1, 'v1_short')).toBeNull();
+
+    now += 1001;
+    expect(store.resolve(1, token)).toBeNull();
   });
 
-  it('разбирает подписки', () => {
-    expect(parseCallback(CB.subscribeQuick('ufa', 'concert'))).toEqual({
-      type: 'subscribe',
-      action: 'quick',
-      city: 'ufa',
-      category: 'concert',
-    });
-    expect(parseCallback('sub:city:any')).toEqual({ type: 'subscribe', action: 'city', id: null });
-    expect(parseCallback('sub:cat:any')).toEqual({ type: 'subscribe', action: 'category', id: null });
-    expect(parseCallback('sub:period:any')).toEqual({ type: 'subscribe', action: 'period', id: null });
-    expect(parseCallback(CB.subscribePick('period'))).toEqual({
-      type: 'subscribe',
-      action: 'pick',
-      field: 'period',
-    });
-  });
-
-  it('разбирает удаление подписки', () => {
-    expect(parseCallback(CB.deleteSubscription(ID))).toEqual({
-      type: 'subscriptions',
-      action: 'delete',
-      id: ID,
-    });
-  });
-
-  it('отклоняет мусор и поддельные значения', () => {
-    expect(parseCallback('')).toBeNull();
-    expect(parseCallback('menu:unknown')).toBeNull();
-    expect(parseCallback('ev:not-a-uuid')).toBeNull();
-    expect(parseCallback('search:cat:not-a-category')).toBeNull();
-    expect(parseCallback('sub:city:atlantis')).toBeNull();
-    expect(parseCallback('search:page:0')).toBeNull();
-    expect(parseCallback('search:page:1001')).toBeNull();
-    expect(parseCallback(`sub:city:${'a'.repeat(80)}`)).toBeNull();
-  });
-
-  it('все генерируемые callback_data не длиннее 64 байт', () => {
-    const values = [
-      CB.menu('home'),
-      CB.menu('categories'),
-      CB.searchCategory('exhibition'),
-      CB.searchCity('sterlitamak'),
-      CB.searchReset(),
-      CB.searchPage(999),
-      CB.event(ID, 999),
-      CB.subscribeEvent(ID),
-      CB.subscribeQuick('sterlitamak', 'performance'),
-      CB.subscribeAdd(),
-      CB.subscribePick('category'),
-      CB.subscribeSummary(),
-      CB.subscribeCity(null),
-      CB.subscribeCity('sterlitamak'),
-      CB.subscribeCategory(null),
-      CB.subscribeCategory('performance'),
-      CB.subscribePeriod(null),
-      CB.subscribePeriod('weekend'),
-      CB.subscribeSave(),
-      CB.subscribeCancel(),
-      CB.deleteSubscription(ID),
-      CB.noop(),
-    ];
-    for (const value of values) {
-      expect(Buffer.byteLength(value, 'utf8')).toBeLessThanOrEqual(64);
+  it('переживает все типы действий и не выходит за 64 байта', () => {
+    const store = new CallbackStore();
+    for (const action of ACTIONS) {
+      const token = store.issue(42, action);
+      expect(Buffer.byteLength(token, 'utf8')).toBeLessThanOrEqual(64);
+      expect(store.resolve(42, token)).toEqual(action);
     }
+  });
+
+  it('ограничивает размер хранилища', () => {
+    const store = new CallbackStore({ maxEntries: 2, now: () => 1 });
+    const first = store.issue(1, { type: 'menu', target: 'home' });
+    store.issue(1, { type: 'menu', target: 'help' });
+    store.issue(1, { type: 'menu', target: 'about' });
+
+    expect(store.size).toBe(2);
+    expect(store.resolve(1, first)).toBeNull();
   });
 });

@@ -27,6 +27,7 @@ describe('loadConfig', () => {
         LOG_LEVEL: 'debug',
         PUBLIC_WEB_URL: 'http://localhost:3210/',
         SESSION_TTL_MINUTES: '30',
+        LOG_HASH_SECRET: '0123456789abcdef',
       }),
     );
     expect(config.apiBaseUrl).toBe('http://localhost:8000');
@@ -34,6 +35,10 @@ describe('loadConfig', () => {
     expect(config.logLevel).toBe('debug');
     expect(config.publicWebUrl).toBe('http://localhost:3210');
     expect(config.sessionTtlMs).toBe(30 * 60_000);
+    expect(config.rateLimitPerMinute).toBe(20);
+    expect(config.callbackTtlMs).toBe(720 * 60_000);
+    expect(config.brandImagePath).toContain('token-height.png');
+    expect(config.logHashSecret).toBe('0123456789abcdef');
   });
 
   it('подставляет значения по умолчанию', () => {
@@ -41,6 +46,19 @@ describe('loadConfig', () => {
     expect(config.apiTimeoutMs).toBe(10_000);
     expect(config.logLevel).toBe('info');
     expect(config.publicWebUrl).toBeNull();
+    expect(config.rateLimitPerMinute).toBe(20);
+  });
+
+  it('позволяет выключить жетон и лимит', () => {
+    const config = loadConfig(
+      validEnv({ BRAND_IMAGE_PATH: 'off', RATE_LIMIT_PER_MINUTE: '0' }),
+    );
+    expect(config.brandImagePath).toBeNull();
+    expect(config.rateLimitPerMinute).toBe(0);
+  });
+
+  it('требует достаточно длинный ключ для логов', () => {
+    expect(() => loadConfig(validEnv({ LOG_HASH_SECRET: 'short' }))).toThrow(ConfigError);
   });
 
   it('не печатает токен в тексте ошибки', () => {

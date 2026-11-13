@@ -1,10 +1,15 @@
-import type { CategoryId, CityId, DatePreset } from './dictionaries.js';
+import type { CategoryId, CityId, DatePreset, SearchDate } from './dictionaries.js';
 
 export interface SearchState {
   q: string | null;
   city: CityId | null;
   category: CategoryId | null;
-  date: DatePreset | null;
+  /** Пресет (`today`, `weekend`, …) или конкретный день `ГГГГ-ММ-ДД`. */
+  date: SearchDate | null;
+  /** Потолок цены за человека в рублях. */
+  priceMax: number | null;
+  /** Только события с явной пометкой «бесплатно». */
+  freeOnly: boolean;
   page: number;
   totalPages: number;
   queryTruncated: boolean;
@@ -36,6 +41,8 @@ export function createSearchState(partial: Partial<SearchState> = {}): SearchSta
     city: partial.city ?? null,
     category: partial.category ?? null,
     date: partial.date ?? null,
+    priceMax: partial.priceMax ?? null,
+    freeOnly: partial.freeOnly ?? false,
     page: partial.page ?? 1,
     totalPages: partial.totalPages ?? 0,
     queryTruncated: partial.queryTruncated ?? false,
