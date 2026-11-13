@@ -89,7 +89,7 @@ export function VenueBlock({ venue, className }: VenueBlockProps) {
               href={OSM_COPYRIGHT_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-6 items-center self-start rounded-xs text-[0.75rem] leading-[1.3] text-fg-muted underline decoration-line-strong decoration-1 underline-offset-[0.25em] transition-colors duration-(--duration-fast) ease-out hover:text-fg-soft pointer-coarse:min-h-11"
+              className="inline-flex min-h-6 items-center self-start rounded-xs text-[0.75rem] leading-[1.3] text-fg-soft underline decoration-line-strong decoration-1 underline-offset-[0.25em] transition-colors duration-(--duration-fast) ease-out hover:text-fg pointer-coarse:min-h-11"
             >
               {copy('mapCredit', lang)}
             </a>

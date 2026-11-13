@@ -46,10 +46,12 @@ export function PageShell({
   return (
     <>
       <GlowBackground intensity={glow} />
+      {/* tabIndex=-1: ссылка «Перейти к содержанию» переводит сюда сам фокус, а не только прокрутку. */}
       <main
         id="content"
+        tabIndex={-1}
         className={cn(
-          'relative z-(--z-content) mx-auto w-full px-(--gutter) pt-[calc(var(--header-h)+var(--space-2xl))] pb-24',
+          'relative z-(--z-content) mx-auto outline-none w-full px-(--gutter) pt-[calc(var(--header-h)+var(--space-2xl))] pb-24',
           width === 'text' ? 'max-w-[calc(760px+2*var(--gutter))]' : 'max-w-[calc(1400px+2*var(--gutter))]',
           className,
         )}

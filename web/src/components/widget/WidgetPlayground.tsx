@@ -151,7 +151,7 @@ export function WidgetPlayground({ origin, initial, initialMode, fallbackLang }:
         {/* ------------------------------------------------------ Код вставки */}
         <section className={`${styles.panel} ${styles.rise}`} aria-labelledby="widget-code-title" style={{ '--i': 0 } as CSSProperties}>
           <div className={styles.panelHead}>
-            <h2 id="widget-code-title" className="t-caps text-fg-muted">
+            <h2 id="widget-code-title" className="t-caps text-fg-soft">
               {t('widget.code')}
             </h2>
             <span className="t-caps text-copper-hi">{pick(WIDGET_COPY.oneLine, lang)}</span>
@@ -202,7 +202,7 @@ export function WidgetPlayground({ origin, initial, initialMode, fallbackLang }:
 
         {/* -------------------------------------------------------- Настройки */}
         <section className={`${styles.panel} ${styles.rise}`} aria-labelledby="widget-settings-title" style={{ '--i': 1 } as CSSProperties}>
-          <h2 id="widget-settings-title" className="t-caps text-fg-muted">
+          <h2 id="widget-settings-title" className="t-caps text-fg-soft">
             {t('widget.settings')}
           </h2>
           <form className={styles.settings} onSubmit={(event) => event.preventDefault()}>
@@ -316,7 +316,7 @@ export function WidgetPlayground({ origin, initial, initialMode, fallbackLang }:
       {/* ------------------------------------------------------------ Пример */}
       <section className={`${styles.panel} ${styles.rise}`} aria-labelledby="widget-preview-title" style={{ '--i': 2 } as CSSProperties}>
         <div className={styles.panelHead}>
-          <h2 id="widget-preview-title" className="t-caps text-fg-muted">
+          <h2 id="widget-preview-title" className="t-caps text-fg-soft">
             {t('widget.preview')}
           </h2>
           <div role="group" aria-label={pick(WIDGET_COPY.viewport, lang)} className="hidden gap-2 md:flex">
@@ -383,7 +383,7 @@ export function WidgetPlayground({ origin, initial, initialMode, fallbackLang }:
           </div>
         </figure>
 
-        <p className="t-body max-w-[60ch] text-fg-muted">{t('widget.previewNote')}</p>
+        <p className="t-body max-w-[60ch] text-fg-soft">{t('widget.previewNote')}</p>
       </section>
     </div>
   );

@@ -34,7 +34,8 @@ export function SiteFooter() {
     <footer className="relative z-(--z-content) mt-24 border-t border-line">
       <div className="mx-auto grid w-full max-w-[calc(1400px+2*var(--gutter))] gap-x-8 gap-y-12 px-(--gutter) pt-16 pb-12 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div>
-          <Link href={ROUTES.home} aria-label={t('common.brandFull')} className="inline-block">
+          {/* Подпись начинается с видимого текста знака: так ссылку находит и голосовое управление (WCAG 2.5.3). */}
+          <Link href={ROUTES.home} aria-label={`${t('footer.wordmark')}, ${t('common.brandFull')}`} className="inline-block">
             <Wordmark>{t('footer.wordmark')}</Wordmark>
           </Link>
           <p className="t-lead mt-4 max-w-[22ch] text-fg-soft">{t('footer.tagline')}</p>

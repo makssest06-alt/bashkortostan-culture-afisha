@@ -68,7 +68,7 @@ export function HomeStage({ only }: { only?: readonly string[] } = {}) {
       >
         {t('home.skipStory')}
       </Link>
-      <main id="content" className="relative z-(--z-content)">
+      <main id="content" tabIndex={-1} className="relative z-(--z-content) outline-none">
         {scenes.map((scene) => {
           const SceneComponent = SCENE_COMPONENTS[scene.id as SceneId];
           return SceneComponent ? <SceneComponent key={scene.id} /> : null;

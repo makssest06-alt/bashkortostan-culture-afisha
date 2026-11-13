@@ -107,7 +107,7 @@ export function EventCard({ event, today, now, order, eager = false }: EventCard
             {occurrence ? <StatusBadge occurrence={occurrence} size="sm" /> : null}
           </div>
 
-          <p className="text-[0.8125rem] leading-[1.35] text-fg-muted">
+          <p className="text-[0.8125rem] leading-[1.35] text-fg-soft">
             {event.source.name}. {t('event.checked', { ago: formatAgo(event.source.checked_at, new Date(now), lang) })}
           </p>
         </div>

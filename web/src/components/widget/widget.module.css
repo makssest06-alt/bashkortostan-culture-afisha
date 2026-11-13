@@ -56,7 +56,7 @@
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  color: var(--color-fg-muted);
+  color: var(--color-fg-soft);
   font-size: var(--fs-ui);
   font-weight: 500;
   transition: color var(--duration-fast) var(--ease-out);
@@ -99,7 +99,7 @@
   min-width: 12rem;
   max-width: 40ch;
   flex: 1;
-  color: var(--color-fg-muted);
+  color: var(--color-fg-soft);
   font-size: 0.875rem;
   line-height: 1.45;
 }

@@ -62,7 +62,7 @@
   display: flex;
   min-height: 44px;
   align-items: center;
-  color: var(--color-fg-muted);
+  color: var(--color-fg-soft);
   font-size: var(--fs-ui);
   font-weight: 500;
   line-height: 1.25;
@@ -106,7 +106,7 @@
 
   .tocTitle {
     margin-bottom: 8px;
-    color: var(--color-fg-muted);
+    color: var(--color-fg-soft);
   }
 }
 
@@ -465,7 +465,7 @@
   align-items: center;
   gap: 12px;
   padding: 0 148px 0 16px;
-  color: var(--color-fg-muted);
+  color: var(--color-fg-soft);
 }
 
 .codeSummary {
@@ -493,7 +493,7 @@
 }
 
 .codeMeta {
-  color: var(--color-fg-muted);
+  color: var(--color-fg-soft);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
@@ -549,7 +549,7 @@
 }
 
 .tkDim {
-  color: var(--color-fg-muted);
+  color: var(--color-fg-soft);
 }
 
 @media (hover: hover) and (pointer: fine) {
