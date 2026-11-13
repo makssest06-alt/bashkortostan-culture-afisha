@@ -6,7 +6,7 @@
  * подписи на выбранном языке и интерактив (раскрытие списков, «Поделиться», возврат в каталог).
  */
 
-import { Info } from '@phosphor-icons/react';
+import { Info, XCircle } from '@phosphor-icons/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -58,8 +58,29 @@ export type EventViewProps = {
   imageMeta: ImageMeta | null;
 };
 
+/**
+ * Пометка отменённого события (п. 6.1): событие пропало из выдачи, но по прямой ссылке
+ * открывается, и первое, что видит человек, это крупное «Отменено».
+ */
+function CancelledNotice({ backHref }: { backHref: string }) {
+  const { t } = useT();
+  return (
+    <div className="mb-6 flex flex-col gap-3 rounded-sm border-2 border-status-cancelled bg-status-cancelled/10 px-5 py-5 md:mb-8 md:px-6" data-event-cancelled="">
+      <p className="flex items-center gap-3 text-status-cancelled">
+        <XCircle size={36} weight="fill" aria-hidden="true" className="shrink-0" />
+        <span className="text-[clamp(1.75rem,4vw,2.75rem)] leading-none font-semibold tracking-tight uppercase">{t('event.cancelled.badge')}</span>
+      </p>
+      <p className="t-body max-w-[60ch] text-fg">{t('event.cancelled.text')}</p>
+      <Link href={backHref} className="self-start text-[0.9375rem] text-fg underline decoration-line-strong underline-offset-4 hover:decoration-fg">
+        {t('event.cancelled.catalog')}
+      </Link>
+    </div>
+  );
+}
+
 export function EventView({ event, today, backHref, more, imageMeta }: EventViewProps) {
   const { t, lang } = useT();
+  const cancelled = event.status === 'cancelled';
   const title = eventTitle(event, lang);
   const category = getCategory(event.category);
   const nearest = nearestSession(event.occurrences);
@@ -86,6 +107,7 @@ export function EventView({ event, today, backHref, more, imageMeta }: EventView
 
         <article className={styles.layout}>
           <header className={cn(styles.head, styles.reveal)} style={order(0)}>
+            {cancelled ? <CancelledNotice backHref={backHref} /> : null}
             <p className="flex flex-wrap items-center gap-x-4 gap-y-2">
               {category ? (
                 <Link
@@ -124,7 +146,7 @@ export function EventView({ event, today, backHref, more, imageMeta }: EventView
               <Sessions occurrences={event.occurrences} today={today} />
               <PriceBlock
                 event={event}
-                action={<BuyAction event={event} variant="panel" className={cn(styles.panelOnly, 'mt-5')} />}
+                action={cancelled ? null : <BuyAction event={event} variant="panel" className={cn(styles.panelOnly, 'mt-5')} />}
               />
               <ShareButton title={title} path={eventPath(event.id)} />
             </div>
@@ -161,17 +183,19 @@ export function EventView({ event, today, backHref, more, imageMeta }: EventView
           </div>
         </article>
 
-        <div className={styles.bar} data-event-bar="">
-          <p className="flex min-w-0 flex-col gap-0.5">
-            {nearest && nearestIsLive ? (
-              <time dateTime={nearest.start.local} className="t-caps truncate text-fg-muted">
-                {formatOccurrence(nearest, lang, today)}
-              </time>
-            ) : null}
-            <PriceTag price={event.price_summary} className="text-[1.0625rem] leading-[1.2]" />
-          </p>
-          <BuyAction event={event} variant="bar" className="shrink-0" />
-        </div>
+        {cancelled ? null : (
+          <div className={styles.bar} data-event-bar="">
+            <p className="flex min-w-0 flex-col gap-0.5">
+              {nearest && nearestIsLive ? (
+                <time dateTime={nearest.start.local} className="t-caps truncate text-fg-muted">
+                  {formatOccurrence(nearest, lang, today)}
+                </time>
+              ) : null}
+              <PriceTag price={event.price_summary} className="text-[1.0625rem] leading-[1.2]" />
+            </p>
+            <BuyAction event={event} variant="bar" className="shrink-0" />
+          </div>
+        )}
       </div>
 
       <MoreInCity city={event.venue.city} items={more} today={today} className="mt-16 md:mt-24" />

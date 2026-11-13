@@ -192,4 +192,15 @@ describe('правка и статусы', () => {
     expect(getAdminEvent(duplicate.event.id, NOW)).toMatchObject({ status: 'draft', review: { disputed: false, merged_into: target.id } });
     expect(resolveDisputed(duplicate.event.id, 'publish', null, 'модератор', NOW)).toMatchObject({ ok: false, status: 409 });
   });
+
+  it('демо-отмена: нет в выдаче, по прямой ссылке открывается, все сеансы отменены', () => {
+    const all = loadCatalog(NOW, { all: true }).events;
+    const cancelled = all.find((event) => event.status === 'cancelled')!;
+    expect(cancelled).toBeDefined();
+    expect(searchEvents({ page_size: 50 }, NOW).items.map((item) => item.id)).not.toContain(cancelled.id);
+    expect(searchEvents({ page_size: 50, status: ['cancelled'] }, NOW).items.map((item) => item.id)).not.toContain(cancelled.id);
+    const opened = findEvent(cancelled.id, NOW)!;
+    expect(opened.status).toBe('cancelled');
+    expect(opened.occurrences.every((occurrence) => occurrence.status === 'cancelled')).toBe(true);
+  });
 });

@@ -324,6 +324,18 @@ function buildEvent(mock: MockEvent, clock: Clock): AfishaEvent {
   return event;
 }
 
+/**
+ * Отменённое целиком событие отменяет и все свои сеансы: в списке сеансов, в виджете и в API
+ * не должно остаться «Состоится» рядом с пометкой «Отменено».
+ */
+function withEventStatus(event: AfishaEvent): AfishaEvent {
+  if (event.status !== 'cancelled') return event;
+  return {
+    ...event,
+    occurrences: event.occurrences.map((occurrence) => ({ ...occurrence, status: 'cancelled', status_is_verified: true })),
+  };
+}
+
 export interface LoadOptions {
   /**
    * Все статусы: черновики и отменённые. Нужно админке и карточке по прямой ссылке.
@@ -346,7 +358,7 @@ export function loadCatalog(now: Date = new Date(), options: LoadOptions = {}): 
     return patch ? applyPatch(event, patch) : event;
   });
   const records = Object.values(state.records).map((record) => materializeRecord(record, VENUES, floored));
-  const events = [...seeds, ...records];
+  const events = [...seeds, ...records].map(withEventStatus);
   return {
     events: options.all ? events : events.filter((event) => event.status === 'published'),
     today: clock.today,

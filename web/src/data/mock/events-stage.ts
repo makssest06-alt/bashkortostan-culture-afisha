@@ -59,6 +59,7 @@ export const STAGE_EVENTS: readonly MockEvent[] = [
     title: 'Комедия положений: вечерний спектакль',
     description: 'Лёгкая комедия в двух действиях с антрактом. Хороший выбор, если хочется посмеяться после работы.',
     category: 'performance',
+    status: 'cancelled',
     kind: 'performance_run',
     age_rating: '16+',
     image: '/images/events/theatre-3.webp',

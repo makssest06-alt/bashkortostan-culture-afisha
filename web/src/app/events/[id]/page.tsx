@@ -38,7 +38,8 @@ export async function generateMetadata({ params }: EventPageProps): Promise<Meta
   const event = await getEvent(id);
   if (!event) return { title: t('event.notFound.title'), robots: { index: false } };
 
-  const title = eventTitle(event, lang);
+  const cancelled = event.status === 'cancelled';
+  const title = cancelled ? `${t('event.cancelled.badge')}: ${eventTitle(event, lang)}` : eventTitle(event, lang);
   const description = metaDescription(event, lang, localNow(new Date()).date);
   const image = imageMetaOf(event.image);
   const path = eventPath(event.id);
@@ -68,7 +69,8 @@ export async function generateMetadata({ params }: EventPageProps): Promise<Meta
     },
     twitter: { card: event.image ? 'summary_large_image' : 'summary', title, description },
     // Условные события в поиске не нужны: по ним никто не должен планировать вечер.
-    ...(event.synthetic ? { robots: { index: false, follow: true } } : {}),
+    // Отменённое событие тоже: страница нужна по старой ссылке, но не в поиске.
+    ...(event.synthetic || cancelled ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
