@@ -21,6 +21,8 @@ import {
   valueDate,
 } from './time';
 import { ageLimitOf, dedupKey, normalizeTitle, sha256, timestampOf, uuidFromCode } from './identity';
+import { applyPatch, materializeRecord } from '../admin/records';
+import { readState } from '../admin/store';
 import { summarizePrice } from './price';
 import type { AfishaEvent, EventSource, Occurrence, Offer, TimeValue, Venue } from './types';
 
@@ -322,12 +324,31 @@ function buildEvent(mock: MockEvent, clock: Clock): AfishaEvent {
   return event;
 }
 
-/** Загружает весь каталог с датами, вычисленными от переданного момента. */
-export function loadCatalog(now: Date = new Date()): Catalog {
+export interface LoadOptions {
+  /**
+   * Все статусы: черновики и отменённые. Нужно админке и карточке по прямой ссылке.
+   * По умолчанию каталог публичный: только опубликованные события (п. 6.1).
+   */
+  all?: boolean;
+}
+
+/**
+ * Загружает каталог с датами, вычисленными от переданного момента: демо-события с правками
+ * модератора поверх и записи, введённые вручную или импортированные (lib/admin/store.ts).
+ */
+export function loadCatalog(now: Date = new Date(), options: LoadOptions = {}): Catalog {
   const floored = floorToMinute(now);
   const clock: Clock = { today: localNow(floored).date, nowMs: floored.getTime() };
+  const state = readState();
+  const seeds = MOCK_EVENTS.map((mock) => {
+    const event = buildEvent(mock, clock);
+    const patch = state.patches[event.id];
+    return patch ? applyPatch(event, patch) : event;
+  });
+  const records = Object.values(state.records).map((record) => materializeRecord(record, VENUES, floored));
+  const events = [...seeds, ...records];
   return {
-    events: MOCK_EVENTS.map((mock) => buildEvent(mock, clock)),
+    events: options.all ? events : events.filter((event) => event.status === 'published'),
     today: clock.today,
     now: floored,
   };
@@ -345,17 +366,23 @@ export function resolveEventId(id: string): string {
   return LEGACY_IDS.get(id) ?? id;
 }
 
-/** Событие по идентификатору (UUID или старый код) со всеми сеансами или null. */
-export function findEvent(id: string, now: Date = new Date()): AfishaEvent | null {
+/**
+ * Событие по идентификатору (UUID или старый код) со всеми сеансами или null.
+ * Отменённое событие находится (по прямой ссылке его видно с пометкой «Отменено»),
+ * черновик нет: его видит только админка (includeDrafts).
+ */
+export function findEvent(id: string, now: Date = new Date(), options: { includeDrafts?: boolean } = {}): AfishaEvent | null {
   const uuid = resolveEventId(id);
-  return loadCatalog(now).events.find((event) => event.id === uuid) ?? null;
+  const event = loadCatalog(now, { all: true }).events.find((item) => item.id === uuid) ?? null;
+  if (event?.status === 'draft' && !options.includeDrafts) return null;
+  return event;
 }
 
 export function countEvents(): number {
-  return MOCK_EVENTS.length;
+  return loadCatalog().events.length;
 }
 
 /** Идентификаторы всех событий: пригодится для generateStaticParams и карты сайта. */
 export function listEventIds(): string[] {
-  return MOCK_EVENTS.map((event) => uuidFromCode(event.id));
+  return loadCatalog().events.map((event) => event.id);
 }

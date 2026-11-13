@@ -17,4 +17,6 @@ export type { SelectProps } from './Select';
 export { Skeleton, SkeletonText } from './Skeleton';
 export type { SkeletonProps, SkeletonTextProps } from './Skeleton';
 export { StatusBadge } from './StatusBadge';
+export type { TextareaProps } from './Textarea';
+export { Textarea } from './Textarea';
 export type { StatusBadgeProps } from './StatusBadge';

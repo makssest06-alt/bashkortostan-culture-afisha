@@ -213,7 +213,7 @@ export function toApiEvent(event: AfishaEvent): ApiEvent {
     offers: event.offers.map(toApiOffer),
   };
   if (event.title_ba) result.title_ba = event.title_ba;
-  if (event.review) result.review = { disputed: event.review.disputed, reasons: [...event.review.reasons] };
+  if (event.review) result.review = { ...event.review, reasons: [...event.review.reasons] };
   return result;
 }
 
@@ -345,7 +345,7 @@ export function fromApiEvent(event: ApiEvent): AfishaEvent {
   if (event.title_ba) result.title_ba = event.title_ba;
   if (event.organizer) result.organizer = event.organizer;
   if (event.org_link) result.ticket_url = event.org_link;
-  if (event.review) result.review = { disputed: event.review.disputed, reasons: [...event.review.reasons] };
+  if (event.review) result.review = { ...event.review, reasons: [...event.review.reasons] };
   return result;
 }
 

@@ -162,6 +162,8 @@ export interface EventSource {
 export interface EventReview {
   disputed: boolean;
   reasons: string[];
+  /** Карточка признана дублем и сведена в другую (решение модератора merge). */
+  merged_into?: string;
 }
 
 /**
@@ -634,9 +636,10 @@ export interface ApiErrorBody {
   code: string;
   /** Понятный жителю текст по-русски: его можно показать как есть. */
   message: string;
-  details?: ApiErrorDetail[];
+  /** Ошибки по полям. Пустой массив, если ошибка не про конкретные поля. */
+  details: ApiErrorDetail[];
   /** Идентификатор запроса для сквозной трассировки; тот же в заголовке X-Request-Id. */
-  request_id?: string;
+  request_id: string;
 }
 
 export interface ApiEndpointInfo {

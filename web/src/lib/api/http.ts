@@ -93,8 +93,7 @@ export function errorResponse(
   options: { requestId?: string; headers?: Record<string, string> } = {},
 ): Response {
   const requestId = options.requestId ?? requestIdOf();
-  const body: ApiErrorBody = { code, message, request_id: requestId };
-  if (details && details.length > 0) body.details = details;
+  const body: ApiErrorBody = { code, message, details: details ?? [], request_id: requestId };
   return json(body, { status, requestId, headers: options.headers });
 }
 
