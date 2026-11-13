@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:afisha:event-identity-snapshot:v1",
   "title": "Afisha canonical event identity snapshot",
-  "description": "Research contract. It does not assert that any real source has been imported or evaluated.",
+  "description": "ВНЕ СКОУПА ХАКАТОНА (2026-11-13): исследовательская модель идентичности, заменена схемой события по п. 8.1. Действующий контракт v1: contracts/event.schema.json, contracts/api.openapi.yaml, contracts/agent_tools.json; см. docs/DECISIONS.md. Research contract. It does not assert that any real source has been imported or evaluated.",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -1,0 +1,2861 @@
+# Контракт v1. Сгенерирован один раз и дальше правится руками; при правке прогнать линтер из README.
+openapi: 3.1.0
+info:
+  title: Афиша культуры Башкортостана — API
+  version: 1.0.0
+  description: |-
+    Открытый контракт афиши, уровень 2 ТЗ (п. 6.3). Один API для сайта, Telegram-бота, виджета и ИИ-агента.
+
+    **Общие правила**
+
+    - Префикс `/api/v1`, JSON в UTF-8, имена полей в `snake_case`. В примерах curl `$API` — адрес вида `http://<хост>/api/v1`.
+    - Событие — `contracts/event.schema.json` (строго по п. 8.1). Правила полей — `docs/EVENT_SCHEMA.md`.
+    - Деньги — целые рубли. Даты — RFC 3339 с поясом, регион живёт по `Asia/Yekaterinburg` (+05:00).
+    - Публичный список отдаёт только `published`. `cancelled` открывается по прямой ссылке, `draft` публично даёт 404.
+    - Каждый ответ несёт `X-Request-Id`. Клиент может прислать свой, сервер его вернёт.
+    - Ошибки — единый формат `Error` без обёртки: `{ code, message, details, request_id }`. `message` пишется по-русски для жителя.
+    - Кеширование: `ETag` и `Cache-Control` у карточки (`max-age=60`) и справочников (`max-age=300`), `If-None-Match` → 304.
+    - Лимит частоты по IP на всех публичных методах, строже на `POST /feedback`: 429 и `Retry-After`. Значения лимитов задаёт бэк и пишет в README.
+    - CORS: публичные методы отдают `Access-Control-Allow-Origin: *`, сторонние cookies не нужны (виджет работает без них). На `OPTIONS` — 204.
+    - Админка (`/admin/*`) — Bearer-токен модератора.
+
+    **Версии.** Добавление необязательных полей и методов не меняет версию. Удаление, переименование поля или смена его типа — только через `/api/v2`.
+
+    Инструменты ИИ-агента (п. 7.2) вызывают эти методы: `contracts/agent_tools.json`. Исследовательский контракт сессий ассистента `contracts/public_api.openapi.json` в v1 не входит.
+servers:
+- url: /api/v1
+  description: 'Относительный адрес: тот же хост, что у сайта или бота.'
+tags:
+- name: events
+  description: События и расписание
+- name: dictionaries
+  description: Справочники городов, площадок и категорий
+- name: subscriptions
+  description: Подписки
+- name: feedback
+  description: Обратная связь и заявки организаторов
+- name: service
+  description: Здоровье и метрики
+- name: admin
+  description: 'Админка: импорт, правка, модерация, журнал'
+paths:
+  /events:
+    get:
+      operationId: listEvents
+      tags:
+      - events
+      summary: Список событий с фильтрами, пагинацией и сортировкой
+      security: []
+      description: 'Отдаёт только `status = published`. Неизвестная цена или возраст не считаются подходящими: такие события
+        не попадают в выдачу при фильтре `price_max`/`age` и считаются в `hidden_unknown_price`/`hidden_unknown_age`. При
+        пустой выдаче сервер не ослабляет условия сам, а предлагает варианты в `relaxations`.'
+      parameters:
+      - $ref: '#/components/parameters/City'
+      - $ref: '#/components/parameters/Category'
+      - $ref: '#/components/parameters/Date'
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/TimeFrom'
+      - $ref: '#/components/parameters/TimeTo'
+      - $ref: '#/components/parameters/PriceMax'
+      - $ref: '#/components/parameters/Free'
+      - $ref: '#/components/parameters/Age'
+      - $ref: '#/components/parameters/VenueIdQuery'
+      - $ref: '#/components/parameters/Language'
+      - $ref: '#/components/parameters/Q'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Страница событий.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventList'
+              examples:
+                found:
+                  summary: Найдено
+                  value:
+                    items:
+                    - id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf
+                      title: Демо-концерт «Ёлочные мелодии»
+                      normalized_title: демо-концерт елочные мелодии
+                      category: concert
+                      tags:
+                      - дети
+                      - синтетическое
+                      date_start: '2026-12-19T18:00:00+05:00'
+                      date_end: '2026-12-19T19:30:00+05:00'
+                      duration_min: 90
+                      city: Уфа
+                      venue: Демо-площадка «Зал № 1»
+                      address: ул. Примерная, 1 (демо-адрес)
+                      lat: 54.7388
+                      lon: 55.9721
+                      description: Синтетическое событие для проверки контракта. Такого концерта нет.
+                      price_min: 300
+                      price_max: 800
+                      is_free: false
+                      age_limit: 6
+                      language: ru
+                      org_link: https://example.invalid/demo/tickets/1
+                      source_url: https://example.invalid/demo/events/1
+                      source_type: import
+                      source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                      verified_at: '2026-11-13T10:00:00+05:00'
+                      confidence: 1
+                      status: published
+                      dedup_key: демо-концерт елочные мелодии|2026-12-19|demo-hall-1
+                      created_at: '2026-11-13T10:00:00+05:00'
+                      updated_at: '2026-11-13T10:00:00+05:00'
+                      city_id: ufa
+                      venue_id: demo-hall-1
+                      time_precision: minute
+                      kind: standalone
+                      popularity: 40
+                      organizer: Демо-организатор
+                      offers:
+                      - name: Входной билет
+                        price: 800
+                        is_free: false
+                      - name: Ранний билет
+                        price: 300
+                        audience: adult
+                        is_free: false
+                      - name: Детский
+                        price: 200
+                        audience: child
+                        is_free: false
+                      occurrences:
+                      - id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf-1
+                        date_start: '2026-12-19T18:00:00+05:00'
+                        date_end: '2026-12-19T19:30:00+05:00'
+                        time_precision: minute
+                        status: scheduled
+                        status_verified: true
+                        availability: available
+                        is_past: false
+                      sources:
+                      - source_url: https://example.invalid/demo/events/1
+                        source_type: import
+                        source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                        verified_at: '2026-11-13T10:00:00+05:00'
+                        title: Демо-источник
+                      - source_url: https://example.invalid/demo/partner/events/77
+                        source_type: manual
+                        source_hash: 850ff8531879ec2954c233eea09624d4671c787f248464f3811bc7719c29a98f
+                        verified_at: null
+                        title: Демо-источник партнёра
+                      review:
+                        disputed: false
+                        reasons: []
+                      image: null
+                      title_ba: null
+                      synthetic: true
+                    page: 1
+                    page_size: 12
+                    total: 1
+                    total_pages: 1
+                    facets:
+                      cities:
+                      - id: ufa
+                        name: Уфа
+                        count: 1
+                      categories:
+                      - id: concert
+                        name: Концерт
+                        count: 1
+                      age_limits:
+                      - value: 6
+                        count: 1
+                      price:
+                        free: 0
+                        paid: 1
+                        unknown: 0
+                      total: 1
+                    relaxations: []
+                    hidden_unknown_price: 0
+                    hidden_unknown_age: 0
+                    reference_date: '2026-11-13'
+                    timezone: Asia/Yekaterinburg
+                empty:
+                  summary: Пусто, есть варианты ослабить
+                  value:
+                    items: []
+                    page: 1
+                    page_size: 12
+                    total: 0
+                    total_pages: 0
+                    relaxations:
+                    - code: budget
+                      codes:
+                      - budget
+                      label: Без ограничения цены
+                      query:
+                        city: ufa
+                        date: weekend
+                      count: 3
+                    hidden_unknown_price: 2
+                    hidden_unknown_age: 0
+                    reference_date: '2026-11-13'
+                    timezone: Asia/Yekaterinburg
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/events?city=ufa&date=weekend&price_max=1000&age=7&page_size=5"
+  /events/{id}:
+    get:
+      operationId: getEvent
+      tags:
+      - events
+      summary: Карточка события
+      security: []
+      description: 'Отдаёт `published` и `cancelled` (отменённое — по прямой ссылке, интерфейс показывает пометку «Отменено»).
+        `draft` и несуществующий id → 404. Кешируется: `ETag`, `Cache-Control: public, max-age=60`, на `If-None-Match` — 304.'
+      parameters:
+      - $ref: '#/components/parameters/EventId'
+      - $ref: '#/components/parameters/IfNoneMatch'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Событие.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlCard'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+              examples:
+                published:
+                  summary: Опубликовано
+                  value:
+                    id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf
+                    title: Демо-концерт «Ёлочные мелодии»
+                    normalized_title: демо-концерт елочные мелодии
+                    category: concert
+                    tags:
+                    - дети
+                    - синтетическое
+                    date_start: '2026-12-19T18:00:00+05:00'
+                    date_end: '2026-12-19T19:30:00+05:00'
+                    duration_min: 90
+                    city: Уфа
+                    venue: Демо-площадка «Зал № 1»
+                    address: ул. Примерная, 1 (демо-адрес)
+                    lat: 54.7388
+                    lon: 55.9721
+                    description: Синтетическое событие для проверки контракта. Такого концерта нет.
+                    price_min: 300
+                    price_max: 800
+                    is_free: false
+                    age_limit: 6
+                    language: ru
+                    org_link: https://example.invalid/demo/tickets/1
+                    source_url: https://example.invalid/demo/events/1
+                    source_type: import
+                    source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                    verified_at: '2026-11-13T10:00:00+05:00'
+                    confidence: 1
+                    status: published
+                    dedup_key: демо-концерт елочные мелодии|2026-12-19|demo-hall-1
+                    created_at: '2026-11-13T10:00:00+05:00'
+                    updated_at: '2026-11-13T10:00:00+05:00'
+                    city_id: ufa
+                    venue_id: demo-hall-1
+                    time_precision: minute
+                    kind: standalone
+                    popularity: 40
+                    organizer: Демо-организатор
+                    offers:
+                    - name: Входной билет
+                      price: 800
+                      is_free: false
+                    - name: Ранний билет
+                      price: 300
+                      audience: adult
+                      is_free: false
+                    - name: Детский
+                      price: 200
+                      audience: child
+                      is_free: false
+                    occurrences:
+                    - id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf-1
+                      date_start: '2026-12-19T18:00:00+05:00'
+                      date_end: '2026-12-19T19:30:00+05:00'
+                      time_precision: minute
+                      status: scheduled
+                      status_verified: true
+                      availability: available
+                      is_past: false
+                    sources:
+                    - source_url: https://example.invalid/demo/events/1
+                      source_type: import
+                      source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                      verified_at: '2026-11-13T10:00:00+05:00'
+                      title: Демо-источник
+                    - source_url: https://example.invalid/demo/partner/events/77
+                      source_type: manual
+                      source_hash: 850ff8531879ec2954c233eea09624d4671c787f248464f3811bc7719c29a98f
+                      verified_at: null
+                      title: Демо-источник партнёра
+                    review:
+                      disputed: false
+                      reasons: []
+                    image: null
+                    title_ba: null
+                    synthetic: true
+                cancelled:
+                  summary: Отменено, цена и возраст не указаны
+                  value:
+                    id: 6b377726-8b93-4b02-87b4-815d694dd620
+                    title: Демо-выставка «Синтетический пейзаж»
+                    normalized_title: демо-выставка синтетический пейзаж
+                    category: exhibition
+                    tags: []
+                    date_start: '2026-11-28T00:00:00+05:00'
+                    date_end: null
+                    duration_min: null
+                    city: Стерлитамак
+                    venue: Демо-галерея
+                    address: null
+                    lat: null
+                    lon: null
+                    description: 'Синтетическое отменённое событие: цена и возраст источником не указаны.'
+                    price_min: null
+                    price_max: null
+                    is_free: false
+                    age_limit: null
+                    language: null
+                    org_link: null
+                    source_url: https://example.invalid/demo/events/2
+                    source_type: manual
+                    source_hash: e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46
+                    verified_at: null
+                    confidence: 1
+                    status: cancelled
+                    dedup_key: демо-выставка синтетический пейзаж|2026-11-28|demo-gallery
+                    created_at: '2026-11-13T10:00:00+05:00'
+                    updated_at: '2026-11-13T12:00:00+05:00'
+                    city_id: sterlitamak
+                    venue_id: demo-gallery
+                    time_precision: date
+                    review:
+                      disputed: true
+                      reasons:
+                      - price_unknown
+                    synthetic: true
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl -i "$API/events/37f67e9c-7aa5-463c-ab52-16b58ca0beaf"
+  /events/{id}/similar:
+    get:
+      operationId: listSimilarEvents
+      tags:
+      - events
+      summary: Похожие события
+      security: []
+      description: Для инструмента агента `find_similar`. Опубликованные события той же категории или с общими метками, без
+        самого события. По умолчанию город и период исходного события.
+      parameters:
+      - $ref: '#/components/parameters/EventId'
+      - $ref: '#/components/parameters/City'
+      - $ref: '#/components/parameters/Date'
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Похожие события.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventList'
+              example:
+                items: []
+                page: 1
+                page_size: 12
+                total: 0
+                total_pages: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/events/37f67e9c-7aa5-463c-ab52-16b58ca0beaf/similar?date=week"
+  /venues/{id}/schedule:
+    get:
+      operationId: getVenueSchedule
+      tags:
+      - events
+      summary: Расписание площадки
+      security: []
+      description: Для инструмента агента `get_venue_schedule`. Опубликованные события площадки за период по времени начала.
+        Период не длиннее 31 дня.
+      parameters:
+      - $ref: '#/components/parameters/VenueIdPath'
+      - name: date_from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: date_to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Расписание.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VenueSchedule'
+              example:
+                venue:
+                  id: demo-hall-1
+                  name: Демо-площадка «Зал № 1»
+                  city_id: ufa
+                  city: Уфа
+                  address: ул. Примерная, 1 (демо-адрес)
+                  lat: 54.7388
+                  lon: 55.9721
+                date_from: '2026-12-14'
+                date_to: '2026-12-20'
+                items:
+                - id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf
+                  title: Демо-концерт «Ёлочные мелодии»
+                  normalized_title: демо-концерт елочные мелодии
+                  category: concert
+                  tags:
+                  - дети
+                  - синтетическое
+                  date_start: '2026-12-19T18:00:00+05:00'
+                  date_end: '2026-12-19T19:30:00+05:00'
+                  duration_min: 90
+                  city: Уфа
+                  venue: Демо-площадка «Зал № 1»
+                  address: ул. Примерная, 1 (демо-адрес)
+                  lat: 54.7388
+                  lon: 55.9721
+                  description: Синтетическое событие для проверки контракта. Такого концерта нет.
+                  price_min: 300
+                  price_max: 800
+                  is_free: false
+                  age_limit: 6
+                  language: ru
+                  org_link: https://example.invalid/demo/tickets/1
+                  source_url: https://example.invalid/demo/events/1
+                  source_type: import
+                  source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                  verified_at: '2026-11-13T10:00:00+05:00'
+                  confidence: 1
+                  status: published
+                  dedup_key: демо-концерт елочные мелодии|2026-12-19|demo-hall-1
+                  created_at: '2026-11-13T10:00:00+05:00'
+                  updated_at: '2026-11-13T10:00:00+05:00'
+                  city_id: ufa
+                  venue_id: demo-hall-1
+                  time_precision: minute
+                  kind: standalone
+                  popularity: 40
+                  organizer: Демо-организатор
+                  offers:
+                  - name: Входной билет
+                    price: 800
+                    is_free: false
+                  - name: Ранний билет
+                    price: 300
+                    audience: adult
+                    is_free: false
+                  - name: Детский
+                    price: 200
+                    audience: child
+                    is_free: false
+                  occurrences:
+                  - id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf-1
+                    date_start: '2026-12-19T18:00:00+05:00'
+                    date_end: '2026-12-19T19:30:00+05:00'
+                    time_precision: minute
+                    status: scheduled
+                    status_verified: true
+                    availability: available
+                    is_past: false
+                  sources:
+                  - source_url: https://example.invalid/demo/events/1
+                    source_type: import
+                    source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                    verified_at: '2026-11-13T10:00:00+05:00'
+                    title: Демо-источник
+                  - source_url: https://example.invalid/demo/partner/events/77
+                    source_type: manual
+                    source_hash: 850ff8531879ec2954c233eea09624d4671c787f248464f3811bc7719c29a98f
+                    verified_at: null
+                    title: Демо-источник партнёра
+                  review:
+                    disputed: false
+                    reasons: []
+                  image: null
+                  title_ba: null
+                  synthetic: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/venues/demo-hall-1/schedule?date_from=2026-12-14&date_to=2026-12-20"
+  /cities:
+    get:
+      operationId: listCities
+      tags:
+      - dictionaries
+      summary: Справочник городов
+      security: []
+      description: 'Справочник. Кешируется: `ETag` и `Cache-Control: public, max-age=300`, на `If-None-Match` — 304.'
+      parameters:
+      - $ref: '#/components/parameters/IfNoneMatch'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Справочник.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlDict'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityList'
+              example:
+                items:
+                - id: ufa
+                  name: Уфа
+                  name_ba: Өфө
+                  lat: 54.7388
+                  lon: 55.9721
+                - id: sterlitamak
+                  name: Стерлитамак
+                  name_ba: null
+                  lat: 53.6306
+                  lon: 55.9306
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/cities"
+  /venues:
+    get:
+      operationId: listVenues
+      tags:
+      - dictionaries
+      summary: Справочник площадок
+      security: []
+      description: 'Справочник. Кешируется: `ETag` и `Cache-Control: public, max-age=300`, на `If-None-Match` — 304.'
+      parameters:
+      - name: city
+        in: query
+        required: false
+        description: Код города.
+        schema:
+          $ref: ./event.schema.json#/$defs/slug
+      - $ref: '#/components/parameters/IfNoneMatch'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Справочник.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlDict'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VenueList'
+              example:
+                items:
+                - id: demo-hall-1
+                  name: Демо-площадка «Зал № 1»
+                  city_id: ufa
+                  city: Уфа
+                  address: ул. Примерная, 1 (демо-адрес)
+                  lat: 54.7388
+                  lon: 55.9721
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/venues"
+  /categories:
+    get:
+      operationId: listCategories
+      tags:
+      - dictionaries
+      summary: Справочник категорий
+      security: []
+      description: 'Справочник. Кешируется: `ETag` и `Cache-Control: public, max-age=300`, на `If-None-Match` — 304.'
+      parameters:
+      - $ref: '#/components/parameters/IfNoneMatch'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Справочник.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlDict'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryList'
+              example:
+                items:
+                - id: concert
+                  name: Концерт
+                - id: performance
+                  name: Спектакль
+                - id: exhibition
+                  name: Выставка
+                - id: festival
+                  name: Фестиваль
+                - id: cinema
+                  name: Кино
+                - id: excursion
+                  name: Экскурсия
+                - id: other
+                  name: Другое
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/categories"
+  /subscriptions:
+    post:
+      operationId: createSubscription
+      tags:
+      - subscriptions
+      summary: Подписаться на город, категорию и период
+      security: []
+      description: Хранится только `user_ref` и фильтры, без телефонов и адресов. Такая же подписка уже есть → 409 `conflict`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionCreate'
+            example:
+              channel: telegram
+              user_ref: u_9f2c4e7a1b3d5f60
+              city: ufa
+              category: concert
+              period: weekend
+      responses:
+        '201':
+          description: Подписка создана.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+              example:
+                id: 4aae8858-6af9-4497-b466-efa2e7766c93
+                channel: telegram
+                user_ref: u_9f2c4e7a1b3d5f60
+                city: ufa
+                category: concert
+                period: weekend
+                created_at: '2026-11-13T12:00:00+05:00'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl -X POST "$API/subscriptions" -H ''Content-Type: application/json'' -d ''{"channel":"telegram","user_ref":"u_9f2c4e7a1b3d5f60","city":"ufa","category":"concert","period":"weekend"}'''
+      parameters:
+      - $ref: '#/components/parameters/RequestIdIn'
+    get:
+      operationId: listSubscriptions
+      tags:
+      - subscriptions
+      summary: Подписки пользователя
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/UserRef'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Подписки.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionList'
+              example:
+                items:
+                - id: 4aae8858-6af9-4497-b466-efa2e7766c93
+                  channel: telegram
+                  user_ref: u_9f2c4e7a1b3d5f60
+                  city: ufa
+                  category: concert
+                  period: weekend
+                  created_at: '2026-11-13T12:00:00+05:00'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/subscriptions?user_ref=u_9f2c4e7a1b3d5f60"
+  /subscriptions/{id}:
+    delete:
+      operationId: deleteSubscription
+      tags:
+      - subscriptions
+      summary: Отписаться
+      security: []
+      description: Удаляет запись подписки полностью (ТЗ п. 10).
+      parameters:
+      - $ref: '#/components/parameters/SubscriptionId'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '204':
+          description: Подписка удалена.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl -X DELETE "$API/subscriptions/4aae8858-6af9-4497-b466-efa2e7766c93"
+  /feedback:
+    post:
+      operationId: createFeedback
+      tags:
+      - feedback
+      summary: Обратная связь и заявка организатора
+      security: []
+      description: 'Защита от спама: honeypot `website` и лимит частоты по IP (429 + `Retry-After`). Имя и контакт нужны только
+        для ответа и не пишутся в логи.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackCreate'
+            example:
+              kind: correction
+              event_id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf
+              name: Демо Пользователь
+              contact: demo@example.invalid
+              organization: null
+              text: В карточке неверное время начала.
+              website: ''
+      responses:
+        '202':
+          description: Обращение принято.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackAccepted'
+              example:
+                id: ec52a363-83b8-4913-bb5e-624a21b42992
+                status: received
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl -X POST "$API/feedback" -H ''Content-Type: application/json'' -d ''{"kind":"question","name":"Демо","contact":"demo@example.invalid","text":"Есть
+          ли парковка?","website":""}'''
+      parameters:
+      - $ref: '#/components/parameters/RequestIdIn'
+  /health:
+    get:
+      operationId: getHealth
+      tags:
+      - service
+      summary: Состояние сервиса
+      security: []
+      description: 200 — сервис работает (`ok` или `degraded`). 503 — сервис не может отвечать, например нет связи с базой.
+      responses:
+        '200':
+          description: Состояние.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example:
+                status: degraded
+                checks:
+                  database: ok
+                  model: disabled
+                version: 1.0.0
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/health"
+      parameters:
+      - $ref: '#/components/parameters/RequestIdIn'
+  /metrics:
+    get:
+      operationId: getMetrics
+      tags:
+      - service
+      summary: Метрики Prometheus
+      security: []
+      description: 'Базовые метрики: число запросов, ошибок и задержка по маршрутам. Без ПДн и без значений параметров в метках.
+        Закрыть от внешнего мира на уровне прокси — решение бэка.'
+      responses:
+        '200':
+          description: Метрики в текстовом формате Prometheus.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # TYPE http_requests_total counter
+                http_requests_total{route="/api/v1/events",method="GET",status="200"} 1027
+                # TYPE http_request_duration_seconds histogram
+                http_request_duration_seconds_bucket{route="/api/v1/events",le="0.5"} 1001
+                http_request_duration_seconds_bucket{route="/api/v1/events",le="1.5"} 1025
+                http_request_duration_seconds_bucket{route="/api/v1/events",le="+Inf"} 1027
+                http_request_duration_seconds_sum{route="/api/v1/events"} 140.2
+                http_request_duration_seconds_count{route="/api/v1/events"} 1027
+        '429':
+          $ref: '#/components/responses/RateLimited'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: curl "$API/metrics"
+      parameters:
+      - $ref: '#/components/parameters/RequestIdIn'
+  /admin/imports:
+    post:
+      operationId: createImport
+      tags:
+      - admin
+      summary: Импорт CSV или JSON с отчётом
+      security:
+      - bearerAuth: []
+      description: 'Импорт идемпотентен: записи узнаются по `source_hash` и `dedup_key`, повтор того же файла даёт всё в `unchanged`.
+        Ошибка в одной записи не ломает импорт: запись попадает в `rejected`. Неподдерживаемый `Content-Type` → 400 `validation_error`.
+        Формат CSV — `docs/EVENT_SCHEMA.md`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventImportRecord'
+              minItems: 1
+              maxItems: 5000
+            example:
+            - title: Демо-концерт «Ёлочные мелодии»
+              category: concert
+              date_start: '2026-12-19T18:00:00+05:00'
+              city: Уфа
+              venue: Демо-площадка «Зал № 1»
+              source_url: https://example.invalid/demo/events/1
+              price_min: 300
+              price_max: 800
+              is_free: false
+              age_limit: 6
+              tags:
+              - дети
+              - синтетическое
+          text/csv:
+            schema:
+              type: string
+            example: |
+              title,category,date_start,city,venue,source_url,price_min,price_max,is_free,age_limit,tags
+              Демо-концерт «Ёлочные мелодии»,concert,2026-12-19T18:00:00+05:00,Уфа,Демо-площадка «Зал № 1»,https://example.invalid/demo/events/1,300,800,false,6,дети;синтетическое
+      responses:
+        '200':
+          description: Отчёт об импорте.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportReport'
+              examples:
+                first:
+                  summary: Первая загрузка
+                  value:
+                    import_id: 45b1b959-22ea-4ed2-9965-c3bf1254b40d
+                    format: csv
+                    received: 100
+                    added: 95
+                    updated: 2
+                    unchanged: 0
+                    rejected:
+                    - row: 17
+                      reason_code: invalid_date
+                      reason: Дата начала «32.11.2026» не существует.
+                    - row: 58
+                      reason_code: missing_field
+                      reason: Не указана площадка.
+                    - row: 73
+                      source_hash: e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46
+                      reason_code: invalid_category
+                      reason: 'Категория «театр» не из списка: concert, performance, exhibition, festival, cinema, excursion,
+                        other.'
+                    disputed:
+                    - id: 6b377726-8b93-4b02-87b4-815d694dd620
+                      reasons:
+                      - price_unknown
+                repeat:
+                  summary: Повтор того же файла
+                  value:
+                    import_id: ec52a363-83b8-4913-bb5e-624a21b42992
+                    format: csv
+                    received: 100
+                    added: 0
+                    updated: 0
+                    unchanged: 97
+                    rejected:
+                    - row: 17
+                      reason_code: invalid_date
+                      reason: Дата начала «32.11.2026» не существует.
+                    - row: 58
+                      reason_code: missing_field
+                      reason: Не указана площадка.
+                    - row: 73
+                      source_hash: e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46
+                      reason_code: invalid_category
+                      reason: 'Категория «театр» не из списка: concert, performance, exhibition, festival, cinema, excursion,
+                        other.'
+                    disputed: []
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl -X POST "$API/admin/imports" -H "Authorization: Bearer $ADMIN_TOKEN" -H ''Content-Type: text/csv'' --data-binary
+          @events.csv'
+      parameters:
+      - $ref: '#/components/parameters/RequestIdIn'
+  /admin/events:
+    get:
+      operationId: adminListEvents
+      tags:
+      - admin
+      summary: Все события, включая черновики и отменённые
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: ./event.schema.json#/properties/status
+      - name: disputed
+        in: query
+        required: false
+        description: '`true` — только спорные.'
+        schema:
+          type: boolean
+      - $ref: '#/components/parameters/Q'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Страница событий.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventList'
+              example:
+                items:
+                - id: 6b377726-8b93-4b02-87b4-815d694dd620
+                  title: Демо-выставка «Синтетический пейзаж»
+                  normalized_title: демо-выставка синтетический пейзаж
+                  category: exhibition
+                  tags: []
+                  date_start: '2026-11-28T00:00:00+05:00'
+                  date_end: null
+                  duration_min: null
+                  city: Стерлитамак
+                  venue: Демо-галерея
+                  address: null
+                  lat: null
+                  lon: null
+                  description: 'Синтетическое отменённое событие: цена и возраст источником не указаны.'
+                  price_min: null
+                  price_max: null
+                  is_free: false
+                  age_limit: null
+                  language: null
+                  org_link: null
+                  source_url: https://example.invalid/demo/events/2
+                  source_type: manual
+                  source_hash: e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46
+                  verified_at: null
+                  confidence: 1
+                  status: cancelled
+                  dedup_key: демо-выставка синтетический пейзаж|2026-11-28|demo-gallery
+                  created_at: '2026-11-13T10:00:00+05:00'
+                  updated_at: '2026-11-13T12:00:00+05:00'
+                  city_id: sterlitamak
+                  venue_id: demo-gallery
+                  time_precision: date
+                  review:
+                    disputed: true
+                    reasons:
+                    - price_unknown
+                  synthetic: true
+                page: 1
+                page_size: 12
+                total: 1
+                total_pages: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl "$API/admin/events?status=draft" -H "Authorization: Bearer $ADMIN_TOKEN"'
+  /admin/events/{id}:
+    get:
+      operationId: adminGetEvent
+      tags:
+      - admin
+      summary: Карточка события в любом статусе
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/EventId'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Событие.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+              example:
+                id: 6b377726-8b93-4b02-87b4-815d694dd620
+                title: Демо-выставка «Синтетический пейзаж»
+                normalized_title: демо-выставка синтетический пейзаж
+                category: exhibition
+                tags: []
+                date_start: '2026-11-28T00:00:00+05:00'
+                date_end: null
+                duration_min: null
+                city: Стерлитамак
+                venue: Демо-галерея
+                address: null
+                lat: null
+                lon: null
+                description: 'Синтетическое отменённое событие: цена и возраст источником не указаны.'
+                price_min: null
+                price_max: null
+                is_free: false
+                age_limit: null
+                language: null
+                org_link: null
+                source_url: https://example.invalid/demo/events/2
+                source_type: manual
+                source_hash: e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46
+                verified_at: null
+                confidence: 1
+                status: cancelled
+                dedup_key: демо-выставка синтетический пейзаж|2026-11-28|demo-gallery
+                created_at: '2026-11-13T10:00:00+05:00'
+                updated_at: '2026-11-13T12:00:00+05:00'
+                city_id: sterlitamak
+                venue_id: demo-gallery
+                time_precision: date
+                review:
+                  disputed: true
+                  reasons:
+                  - price_unknown
+                synthetic: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl -i "$API/admin/events/6b377726-8b93-4b02-87b4-815d694dd620" -H "Authorization: Bearer $ADMIN_TOKEN"'
+    patch:
+      operationId: adminUpdateEvent
+      tags:
+      - admin
+      summary: Правка полей и статуса
+      security:
+      - bearerAuth: []
+      description: 'Нужен `If-Match` с ETag карточки. Каждая правка пишется в журнал `GET /admin/audit`. Снятие отменённого:
+        `{"status": "cancelled"}` — событие сразу пропадает из выдачи.'
+      parameters:
+      - $ref: '#/components/parameters/EventId'
+      - $ref: '#/components/parameters/IfMatch'
+      - $ref: '#/components/parameters/RequestIdIn'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventPatch'
+            example:
+              status: cancelled
+      responses:
+        '200':
+          description: Обновлённое событие.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+              example:
+                id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf
+                title: Демо-концерт «Ёлочные мелодии»
+                normalized_title: демо-концерт елочные мелодии
+                category: concert
+                tags:
+                - дети
+                - синтетическое
+                date_start: '2026-12-19T18:00:00+05:00'
+                date_end: '2026-12-19T19:30:00+05:00'
+                duration_min: 90
+                city: Уфа
+                venue: Демо-площадка «Зал № 1»
+                address: ул. Примерная, 1 (демо-адрес)
+                lat: 54.7388
+                lon: 55.9721
+                description: Синтетическое событие для проверки контракта. Такого концерта нет.
+                price_min: 300
+                price_max: 800
+                is_free: false
+                age_limit: 6
+                language: ru
+                org_link: https://example.invalid/demo/tickets/1
+                source_url: https://example.invalid/demo/events/1
+                source_type: import
+                source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                verified_at: '2026-11-13T10:00:00+05:00'
+                confidence: 1
+                status: cancelled
+                dedup_key: демо-концерт елочные мелодии|2026-12-19|demo-hall-1
+                created_at: '2026-11-13T10:00:00+05:00'
+                updated_at: '2026-11-13T15:00:00+05:00'
+                city_id: ufa
+                venue_id: demo-hall-1
+                time_precision: minute
+                kind: standalone
+                popularity: 40
+                organizer: Демо-организатор
+                offers:
+                - name: Входной билет
+                  price: 800
+                  is_free: false
+                - name: Ранний билет
+                  price: 300
+                  audience: adult
+                  is_free: false
+                - name: Детский
+                  price: 200
+                  audience: child
+                  is_free: false
+                occurrences:
+                - id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf-1
+                  date_start: '2026-12-19T18:00:00+05:00'
+                  date_end: '2026-12-19T19:30:00+05:00'
+                  time_precision: minute
+                  status: scheduled
+                  status_verified: true
+                  availability: available
+                  is_past: false
+                sources:
+                - source_url: https://example.invalid/demo/events/1
+                  source_type: import
+                  source_hash: 4467dffc253fa27a44dba89f63abd5c9e0fa8113821ecc44fe21fdd9fbf73531
+                  verified_at: '2026-11-13T10:00:00+05:00'
+                  title: Демо-источник
+                - source_url: https://example.invalid/demo/partner/events/77
+                  source_type: manual
+                  source_hash: 850ff8531879ec2954c233eea09624d4671c787f248464f3811bc7719c29a98f
+                  verified_at: null
+                  title: Демо-источник партнёра
+                review:
+                  disputed: false
+                  reasons: []
+                image: null
+                title_ba: null
+                synthetic: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl -X PATCH "$API/admin/events/37f67e9c-7aa5-463c-ab52-16b58ca0beaf" -H "Authorization: Bearer $ADMIN_TOKEN"
+          -H ''If-Match: "ev-3c1f9a"'' -H ''Content-Type: application/json'' -d ''{"status":"cancelled"}'''
+  /admin/moderation:
+    get:
+      operationId: adminListModeration
+      tags:
+      - admin
+      summary: Очередь спорных карточек
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Очередь.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModerationList'
+              example:
+                items:
+                - event:
+                    id: 6b377726-8b93-4b02-87b4-815d694dd620
+                    title: Демо-выставка «Синтетический пейзаж»
+                    normalized_title: демо-выставка синтетический пейзаж
+                    category: exhibition
+                    tags: []
+                    date_start: '2026-11-28T00:00:00+05:00'
+                    date_end: null
+                    duration_min: null
+                    city: Стерлитамак
+                    venue: Демо-галерея
+                    address: null
+                    lat: null
+                    lon: null
+                    description: 'Синтетическое отменённое событие: цена и возраст источником не указаны.'
+                    price_min: null
+                    price_max: null
+                    is_free: false
+                    age_limit: null
+                    language: null
+                    org_link: null
+                    source_url: https://example.invalid/demo/events/2
+                    source_type: manual
+                    source_hash: e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46
+                    verified_at: null
+                    confidence: 1
+                    status: cancelled
+                    dedup_key: демо-выставка синтетический пейзаж|2026-11-28|demo-gallery
+                    created_at: '2026-11-13T10:00:00+05:00'
+                    updated_at: '2026-11-13T12:00:00+05:00'
+                    city_id: sterlitamak
+                    venue_id: demo-gallery
+                    time_precision: date
+                    review:
+                      disputed: true
+                      reasons:
+                      - price_unknown
+                    synthetic: true
+                  reasons:
+                  - price_unknown
+                  duplicate_candidates: []
+                page: 1
+                page_size: 12
+                total: 1
+                total_pages: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl "$API/admin/moderation" -H "Authorization: Bearer $ADMIN_TOKEN"'
+  /admin/moderation/{id}/resolve:
+    post:
+      operationId: adminResolveModeration
+      tags:
+      - admin
+      summary: Решение по спорной карточке
+      security:
+      - bearerAuth: []
+      description: '`publish` — в выдачу; `keep_draft` — оставить черновиком; `cancel` — отменить; `merge` — слить с `merge_into`,
+        источники переносятся в `sources` целевой карточки. Ответ — итоговая карточка (для `merge` — целевая).'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: UUID спорного события.
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/RequestIdIn'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationResolve'
+            example:
+              action: keep_draft
+      responses:
+        '200':
+          description: Итоговая карточка.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+              example:
+                id: 6b377726-8b93-4b02-87b4-815d694dd620
+                title: Демо-выставка «Синтетический пейзаж»
+                normalized_title: демо-выставка синтетический пейзаж
+                category: exhibition
+                tags: []
+                date_start: '2026-11-28T00:00:00+05:00'
+                date_end: null
+                duration_min: null
+                city: Стерлитамак
+                venue: Демо-галерея
+                address: null
+                lat: null
+                lon: null
+                description: 'Синтетическое отменённое событие: цена и возраст источником не указаны.'
+                price_min: null
+                price_max: null
+                is_free: false
+                age_limit: null
+                language: null
+                org_link: null
+                source_url: https://example.invalid/demo/events/2
+                source_type: manual
+                source_hash: e17bc6a16ff8dbe708fdd71433c4b85d7832375b0e69362734acced27b1b3a46
+                verified_at: null
+                confidence: 1
+                status: cancelled
+                dedup_key: демо-выставка синтетический пейзаж|2026-11-28|demo-gallery
+                created_at: '2026-11-13T10:00:00+05:00'
+                updated_at: '2026-11-13T12:00:00+05:00'
+                city_id: sterlitamak
+                venue_id: demo-gallery
+                time_precision: date
+                review:
+                  disputed: true
+                  reasons:
+                  - price_unknown
+                synthetic: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl -X POST "$API/admin/moderation/6b377726-8b93-4b02-87b4-815d694dd620/resolve" -H "Authorization: Bearer
+          $ADMIN_TOKEN" -H ''Content-Type: application/json'' -d ''{"action":"publish"}'''
+  /admin/audit:
+    get:
+      operationId: adminListAudit
+      tags:
+      - admin
+      summary: Журнал изменений
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Записи журнала, новые сверху.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditList'
+              example:
+                items:
+                - id: 3f98d35c-450f-4cb2-b909-3027dbc5a7a0
+                  at: '2026-11-13T15:00:00+05:00'
+                  actor: moderator:demo
+                  action: status_change
+                  entity_type: event
+                  entity_id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf
+                  changes:
+                  - field: status
+                    from: published
+                    to: cancelled
+                  import_id: null
+                page: 1
+                page_size: 12
+                total: 1
+                total_pages: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-codeSamples:
+      - lang: Shell
+        label: curl
+        source: 'curl "$API/admin/audit?entity_id=37f67e9c-7aa5-463c-ab52-16b58ca0beaf" -H "Authorization: Bearer $ADMIN_TOKEN"'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Токен модератора из переменной окружения бэка. Нет токена → 401, нет прав → 403.
+  parameters:
+    EventId:
+      name: id
+      in: path
+      required: true
+      description: UUID события. Невалидный UUID → 400 `validation_error`.
+      schema:
+        type: string
+        format: uuid
+    VenueIdPath:
+      name: id
+      in: path
+      required: true
+      description: Код площадки (`venue_id`) из `GET /venues`.
+      schema:
+        $ref: ./event.schema.json#/$defs/slug
+    SubscriptionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    City:
+      name: city
+      in: query
+      required: false
+      description: 'Коды городов из `GET /cities` через запятую: `ufa,sterlitamak`.'
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          $ref: ./event.schema.json#/$defs/slug
+        maxItems: 20
+    Category:
+      name: category
+      in: query
+      required: false
+      description: Категории через запятую.
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          $ref: ./event.schema.json#/$defs/category
+        maxItems: 7
+    Date:
+      name: date
+      in: query
+      required: false
+      description: Готовый период или конкретная дата `YYYY-MM-DD`. Вместе с `date_from`/`date_to` → 400 `validation_error`.
+        Считается от `reference_date` в поясе региона.
+      schema:
+        type: string
+        pattern: ^(today|tomorrow|weekend|week|[0-9]{4}-[0-9]{2}-[0-9]{2})$
+      example: weekend
+    DateFrom:
+      name: date_from
+      in: query
+      required: false
+      description: Начало периода включительно, местная дата.
+      schema:
+        type: string
+        format: date
+    DateTo:
+      name: date_to
+      in: query
+      required: false
+      description: Конец периода включительно, местная дата. Не раньше `date_from`.
+      schema:
+        type: string
+        format: date
+    TimeFrom:
+      name: time_from
+      in: query
+      required: false
+      description: Начало не раньше этого местного времени `HH:MM`. События с `time_precision = date` не проходят.
+      schema:
+        type: string
+        pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+    TimeTo:
+      name: time_to
+      in: query
+      required: false
+      description: Начало не позже этого местного времени `HH:MM`.
+      schema:
+        type: string
+        pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+    PriceMax:
+      name: price_max
+      in: query
+      required: false
+      description: Максимальная цена в рублях. Проходят события с известной ценой `price_min ≤ price_max`. События с неизвестной
+        ценой не проходят и считаются в `hidden_unknown_price`.
+      schema:
+        type: integer
+        minimum: 0
+    Free:
+      name: free
+      in: query
+      required: false
+      description: '`true` — только `is_free = true`.'
+      schema:
+        type: boolean
+    Age:
+      name: age
+      in: query
+      required: false
+      description: Возраст посетителя. Проходят события с `age_limit ≤ age`. События с неизвестным возрастом не проходят и
+        считаются в `hidden_unknown_age`.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 120
+    VenueIdQuery:
+      name: venue_id
+      in: query
+      required: false
+      description: Код площадки.
+      schema:
+        $ref: ./event.schema.json#/$defs/slug
+    Language:
+      name: language
+      in: query
+      required: false
+      description: 'Язык мероприятия, код ISO 639: `ru`, `ba`, `tt`.'
+      schema:
+        type: string
+        pattern: ^[a-z]{2,3}$
+    Q:
+      name: q
+      in: query
+      required: false
+      description: Текстовый поиск по названию, площадке и описанию.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: '`date` — по времени начала, `price` — по `price_min` (неизвестная цена в конце), `popularity` — по `popularity`
+        убыванию.'
+      schema:
+        type: string
+        enum:
+        - date
+        - price
+        - popularity
+        default: date
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Номер страницы с 1.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 12
+    UserRef:
+      name: user_ref
+      in: query
+      required: true
+      description: Непрозрачный идентификатор пользователя, см. схему `SubscriptionCreate`.
+      schema:
+        $ref: '#/components/schemas/UserRef'
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: ETag из прошлого ответа. Совпал → 304 без тела.
+      schema:
+        type: string
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag карточки из `GET /admin/events/{id}`. Нет заголовка → 409 `conflict`, не совпал → 412 `precondition_failed`.
+      schema:
+        type: string
+    RequestIdIn:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Идентификатор запроса от клиента для сквозной трассировки. Если не передан, сервер создаёт свой.
+      schema:
+        type: string
+        maxLength: 128
+  headers:
+    XRequestId:
+      description: Идентификатор запроса. Есть в каждом ответе, совпадает с `request_id` в теле ошибки.
+      schema:
+        type: string
+      example: req_01JDEMO0000000000000000000
+    ETag:
+      description: Версия ресурса для `If-None-Match` и `If-Match`.
+      schema:
+        type: string
+      example: '"ev-3c1f9a"'
+    CacheControlCard:
+      description: Для карточки события.
+      schema:
+        type: string
+      example: public, max-age=60
+    CacheControlDict:
+      description: Для справочников.
+      schema:
+        type: string
+      example: public, max-age=300
+    RetryAfter:
+      description: Через сколько секунд можно повторить запрос.
+      schema:
+        type: integer
+        minimum: 0
+      example: 30
+    Location:
+      description: Адрес созданного ресурса.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Неверные параметры или тело запроса (`validation_error`, `invalid_json`).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: validation_error
+            message: 'Проверьте условия поиска: дата указана в неверном формате.'
+            details:
+            - field: date
+              message: Ожидается today, tomorrow, weekend, week или дата ГГГГ-ММ-ДД.
+            request_id: req_01JDEMO0000000000000000000
+    Unauthorized:
+      description: Нет токена модератора или он недействителен.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: unauthorized
+            message: Нужно войти в админку.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    Forbidden:
+      description: Токен действителен, но прав не хватает.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: forbidden
+            message: Недостаточно прав для этого действия.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    NotFound:
+      description: Ресурс не найден. Черновик события публично тоже даёт 404.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: not_found
+            message: Событие не найдено. Возможно, ссылка устарела.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    Conflict:
+      description: 'Конфликт: повтор записи или нет `If-Match`.'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: conflict
+            message: Такая подписка уже есть.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    PreconditionFailed:
+      description: '`If-Match` не совпал: карточку уже изменили.'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: precondition_failed
+            message: Карточку только что изменил другой модератор. Обновите страницу и повторите правку.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    PayloadTooLarge:
+      description: Тело запроса слишком большое.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: payload_too_large
+            message: Файл слишком большой. Разделите его на части.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    Unprocessable:
+      description: Данные корректны по формату, но противоречат правилам.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: unprocessable
+            message: Минимальная цена больше максимальной.
+            details:
+            - field: price_min
+              message: Должна быть не больше price_max.
+            request_id: req_01JDEMO0000000000000000000
+    RateLimited:
+      description: Слишком много запросов.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: rate_limited
+            message: Слишком много запросов. Попробуйте через 30 секунд.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    InternalError:
+      description: Внутренняя ошибка. Подробности только в логах по `request_id`.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: internal_error
+            message: Что-то пошло не так. Мы уже разбираемся, попробуйте позже.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    Unavailable:
+      description: Сервис временно недоступен (например, нет связи с базой).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: unavailable
+            message: Сервис временно недоступен. Попробуйте через минуту.
+            details: []
+            request_id: req_01JDEMO0000000000000000000
+    NotModified:
+      description: Ресурс не изменился с прошлого запроса (`If-None-Match` совпал). Тела нет.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        ETag:
+          $ref: '#/components/headers/ETag'
+  schemas:
+    Event:
+      $ref: ./event.schema.json
+    Error:
+      type: object
+      description: 'Единый формат ошибки, без обёртки. `message` пишется по-русски для жителя, без технических деталей. Коды:
+        400 `validation_error`/`invalid_json`, 401 `unauthorized`, 403 `forbidden`, 404 `not_found`, 405 `method_not_allowed`,
+        409 `conflict`, 412 `precondition_failed`, 413 `payload_too_large`, 422 `unprocessable`, 429 `rate_limited`, 500 `internal_error`,
+        503 `unavailable`.'
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - details
+      - request_id
+      properties:
+        code:
+          type: string
+          enum:
+          - validation_error
+          - invalid_json
+          - unauthorized
+          - forbidden
+          - not_found
+          - method_not_allowed
+          - conflict
+          - precondition_failed
+          - payload_too_large
+          - unprocessable
+          - rate_limited
+          - internal_error
+          - unavailable
+        message:
+          type: string
+          minLength: 1
+        details:
+          type: array
+          description: Подробности по полям. Пустой массив, если их нет.
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+        request_id:
+          type: string
+          description: Совпадает с заголовком `X-Request-Id`.
+    ErrorDetail:
+      type: object
+      additionalProperties: false
+      required:
+      - message
+      properties:
+        field:
+          type: string
+          description: Имя параметра или поля.
+        message:
+          type: string
+          minLength: 1
+    EventList:
+      type: object
+      description: Страница событий. Обязательны `items`, `page`, `page_size`, `total`, `total_pages`. Остальное — необязательные
+        расширения ответа.
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      - total_pages
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0
+        facets:
+          $ref: '#/components/schemas/Facets'
+        relaxations:
+          type: array
+          description: Как ослабить условия, если `total = 0`. У каждого варианта посчитанное число событий. Сервер сам условия
+            не ослабляет.
+          items:
+            $ref: '#/components/schemas/Relaxation'
+        hidden_unknown_price:
+          type: integer
+          minimum: 0
+          description: Сколько событий подошло бы, но цена у них не указана.
+        hidden_unknown_age:
+          type: integer
+          minimum: 0
+          description: Сколько событий подошло бы, но возраст у них не указан.
+        reference_date:
+          type: string
+          format: date
+          description: Текущая дата в поясе региона, от неё считались `today` и `weekend`.
+        timezone:
+          type: string
+          example: Asia/Yekaterinburg
+    Facets:
+      type: object
+      description: Расширение. Счётчики для фильтров. Счётчик измерения считается без условия этого измерения.
+      required:
+      - cities
+      - categories
+      - age_limits
+      - price
+      - total
+      properties:
+        cities:
+          type: array
+          items:
+            $ref: '#/components/schemas/FacetEntry'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/FacetEntry'
+        age_limits:
+          type: array
+          items:
+            type: object
+            required:
+            - value
+            - count
+            properties:
+              value:
+                $ref: ./event.schema.json#/properties/age_limit
+              count:
+                type: integer
+                minimum: 0
+        price:
+          type: object
+          required:
+          - free
+          - paid
+          - unknown
+          properties:
+            free:
+              type: integer
+              minimum: 0
+            paid:
+              type: integer
+              minimum: 0
+            unknown:
+              type: integer
+              minimum: 0
+        total:
+          type: integer
+          minimum: 0
+    FacetEntry:
+      type: object
+      required:
+      - id
+      - name
+      - count
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        count:
+          type: integer
+          minimum: 0
+    Relaxation:
+      type: object
+      required:
+      - code
+      - codes
+      - label
+      - count
+      properties:
+        code:
+          type: string
+          enum:
+          - date
+          - time
+          - budget
+          - city
+          - venue
+          - category
+          - age
+          - query
+          description: Главное ослабленное условие.
+        codes:
+          type: array
+          items:
+            type: string
+            enum:
+            - date
+            - time
+            - budget
+            - city
+            - venue
+            - category
+            - age
+            - query
+          description: Все ослабленные условия.
+        label:
+          type: string
+          description: 'Подпись без числа: «Без ограничения цены».'
+        query:
+          type: object
+          description: Параметры `GET /events` с уже ослабленным условием.
+          additionalProperties:
+            type:
+            - string
+            - integer
+            - boolean
+        count:
+          type: integer
+          minimum: 1
+    City:
+      type: object
+      required:
+      - id
+      - name
+      - lat
+      - lon
+      properties:
+        id:
+          $ref: ./event.schema.json#/$defs/slug
+        name:
+          type: string
+        name_ba:
+          type:
+          - string
+          - 'null'
+        lat:
+          type:
+          - number
+          - 'null'
+        lon:
+          type:
+          - number
+          - 'null'
+    Venue:
+      type: object
+      required:
+      - id
+      - name
+      - city_id
+      - city
+      - address
+      - lat
+      - lon
+      properties:
+        id:
+          $ref: ./event.schema.json#/$defs/slug
+        name:
+          type: string
+        city_id:
+          $ref: ./event.schema.json#/$defs/slug
+        city:
+          type: string
+        address:
+          type:
+          - string
+          - 'null'
+        lat:
+          type:
+          - number
+          - 'null'
+        lon:
+          type:
+          - number
+          - 'null'
+    Category:
+      type: object
+      required:
+      - id
+      - name
+      properties:
+        id:
+          $ref: ./event.schema.json#/$defs/category
+        name:
+          type: string
+        name_ba:
+          type:
+          - string
+          - 'null'
+    CityList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/City'
+    VenueList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Venue'
+    CategoryList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+          minItems: 7
+          maxItems: 7
+    VenueSchedule:
+      type: object
+      required:
+      - venue
+      - date_from
+      - date_to
+      - items
+      properties:
+        venue:
+          $ref: '#/components/schemas/Venue'
+        date_from:
+          type: string
+          format: date
+        date_to:
+          type: string
+          format: date
+        items:
+          type: array
+          description: Опубликованные события площадки за период по времени начала.
+          items:
+            $ref: '#/components/schemas/Event'
+    UserRef:
+      type: string
+      description: Непрозрачный идентификатор пользователя. Бот передаёт HMAC от chat_id с серверной солью, сайт — случайный
+        идентификатор браузера. Телефон, username и другие ПДн сюда не кладутся.
+      pattern: ^[A-Za-z0-9_-]{16,128}$
+    SubscriptionCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - channel
+      - user_ref
+      properties:
+        channel:
+          type: string
+          enum:
+          - telegram
+          - web
+        user_ref:
+          $ref: '#/components/schemas/UserRef'
+        city:
+          anyOf:
+          - $ref: ./event.schema.json#/$defs/slug
+          - type: 'null'
+        category:
+          anyOf:
+          - $ref: ./event.schema.json#/$defs/category
+          - type: 'null'
+        period:
+          description: 'Период подписки: те же готовые значения, что у параметра `date`, без конкретной даты.'
+          enum:
+          - today
+          - tomorrow
+          - weekend
+          - week
+          - null
+    Subscription:
+      type: object
+      required:
+      - id
+      - channel
+      - user_ref
+      - city
+      - category
+      - period
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum:
+          - telegram
+          - web
+        user_ref:
+          $ref: '#/components/schemas/UserRef'
+        city:
+          anyOf:
+          - $ref: ./event.schema.json#/$defs/slug
+          - type: 'null'
+        category:
+          anyOf:
+          - $ref: ./event.schema.json#/$defs/category
+          - type: 'null'
+        period:
+          description: 'Период подписки: те же готовые значения, что у параметра `date`, без конкретной даты.'
+          enum:
+          - today
+          - tomorrow
+          - weekend
+          - week
+          - null
+        created_at:
+          $ref: ./event.schema.json#/$defs/dateTime
+    SubscriptionList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subscription'
+    FeedbackCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      - name
+      - contact
+      - text
+      - website
+      properties:
+        kind:
+          type: string
+          enum:
+          - organizer_application
+          - correction
+          - question
+        event_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        contact:
+          type: string
+          minLength: 3
+          maxLength: 200
+          description: Как связаться для ответа. Только для ответа организатору, в логи не пишется.
+        organization:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        website:
+          type: string
+          description: 'Honeypot: поле скрыто от людей и должно быть пустым. Если заполнено, сервер отвечает 202 как обычно,
+            но обращение не сохраняет.'
+    FeedbackAccepted:
+      type: object
+      required:
+      - id
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: received
+    Health:
+      type: object
+      required:
+      - status
+      - checks
+      - version
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          description: '`degraded` — сервис отвечает, но часть зависимостей недоступна (например, модель выключена и агент
+            в резервном режиме).'
+        checks:
+          type: object
+          description: 'Состояние зависимостей: `database`, `model`, источники.'
+          additionalProperties:
+            type: string
+            enum:
+            - ok
+            - degraded
+            - fail
+            - disabled
+        version:
+          type: string
+    EventImportRecord:
+      type: object
+      description: 'Запись импорта: те же поля, что у события. Сервер сам вычисляет `id`, `normalized_title`, `dedup_key`,
+        `created_at`, `updated_at`, а также `source_hash`, если его нет. Неизвестные поля сохраняются в сырой записи и в карточку
+        не попадают.'
+      required:
+      - title
+      - category
+      - date_start
+      - city
+      - venue
+      - source_url
+      properties:
+        title:
+          $ref: ./event.schema.json#/properties/title
+        category:
+          $ref: ./event.schema.json#/properties/category
+        tags:
+          $ref: ./event.schema.json#/properties/tags
+        date_start:
+          $ref: ./event.schema.json#/properties/date_start
+        date_end:
+          $ref: ./event.schema.json#/properties/date_end
+        duration_min:
+          $ref: ./event.schema.json#/properties/duration_min
+        city:
+          $ref: ./event.schema.json#/properties/city
+        venue:
+          $ref: ./event.schema.json#/properties/venue
+        address:
+          $ref: ./event.schema.json#/properties/address
+        lat:
+          $ref: ./event.schema.json#/properties/lat
+        lon:
+          $ref: ./event.schema.json#/properties/lon
+        description:
+          $ref: ./event.schema.json#/properties/description
+        price_min:
+          $ref: ./event.schema.json#/properties/price_min
+        price_max:
+          $ref: ./event.schema.json#/properties/price_max
+        is_free:
+          $ref: ./event.schema.json#/properties/is_free
+        age_limit:
+          $ref: ./event.schema.json#/properties/age_limit
+        language:
+          $ref: ./event.schema.json#/properties/language
+        org_link:
+          $ref: ./event.schema.json#/properties/org_link
+        source_url:
+          $ref: ./event.schema.json#/properties/source_url
+        source_type:
+          $ref: ./event.schema.json#/properties/source_type
+        source_hash:
+          $ref: ./event.schema.json#/properties/source_hash
+        verified_at:
+          $ref: ./event.schema.json#/properties/verified_at
+        confidence:
+          $ref: ./event.schema.json#/properties/confidence
+        status:
+          $ref: ./event.schema.json#/properties/status
+        city_id:
+          $ref: ./event.schema.json#/properties/city_id
+        venue_id:
+          $ref: ./event.schema.json#/properties/venue_id
+        time_precision:
+          $ref: ./event.schema.json#/properties/time_precision
+        offers:
+          $ref: ./event.schema.json#/properties/offers
+        occurrences:
+          $ref: ./event.schema.json#/properties/occurrences
+        organizer:
+          $ref: ./event.schema.json#/properties/organizer
+        kind:
+          $ref: ./event.schema.json#/properties/kind
+        image:
+          $ref: ./event.schema.json#/properties/image
+        title_ba:
+          $ref: ./event.schema.json#/properties/title_ba
+        synthetic:
+          $ref: ./event.schema.json#/properties/synthetic
+    ImportReport:
+      type: object
+      description: Отчёт об импорте. Всегда `received = added + updated + unchanged + len(rejected)`. Повтор того же файла
+        даёт всё в `unchanged`.
+      additionalProperties: false
+      required:
+      - import_id
+      - format
+      - received
+      - added
+      - updated
+      - unchanged
+      - rejected
+      - disputed
+      properties:
+        import_id:
+          type: string
+          format: uuid
+        format:
+          type: string
+          enum:
+          - csv
+          - json
+        received:
+          type: integer
+          minimum: 0
+        added:
+          type: integer
+          minimum: 0
+        updated:
+          type: integer
+          minimum: 0
+        unchanged:
+          type: integer
+          minimum: 0
+        rejected:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - row
+            - reason_code
+            - reason
+            properties:
+              row:
+                type: integer
+                minimum: 1
+                description: 'Номер записи с 1: строка данных CSV без заголовка или позиция в JSON-массиве.'
+              source_hash:
+                $ref: ./event.schema.json#/$defs/sha256
+              reason_code:
+                type: string
+                description: Например `missing_field`, `invalid_date`, `invalid_category`, `invalid_price`, `invalid_age_limit`,
+                  `invalid_url`.
+              reason:
+                type: string
+                description: Понятная модератору причина по-русски.
+        disputed:
+          type: array
+          description: 'Принятые, но спорные карточки: ушли в очередь модерации.'
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - id
+            - reasons
+            properties:
+              id:
+                type: string
+                format: uuid
+              reasons:
+                type: array
+                items:
+                  type: string
+    EventPatch:
+      type: object
+      description: Частичная правка карточки. Передаются только меняемые поля. `normalized_title` и `dedup_key` сервер пересчитывает
+        сам. Нельзя менять `id`, `source_hash`, `created_at`, `updated_at`.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          $ref: ./event.schema.json#/properties/title
+        category:
+          $ref: ./event.schema.json#/properties/category
+        tags:
+          $ref: ./event.schema.json#/properties/tags
+        date_start:
+          $ref: ./event.schema.json#/properties/date_start
+        date_end:
+          $ref: ./event.schema.json#/properties/date_end
+        duration_min:
+          $ref: ./event.schema.json#/properties/duration_min
+        city:
+          $ref: ./event.schema.json#/properties/city
+        venue:
+          $ref: ./event.schema.json#/properties/venue
+        address:
+          $ref: ./event.schema.json#/properties/address
+        lat:
+          $ref: ./event.schema.json#/properties/lat
+        lon:
+          $ref: ./event.schema.json#/properties/lon
+        description:
+          $ref: ./event.schema.json#/properties/description
+        price_min:
+          $ref: ./event.schema.json#/properties/price_min
+        price_max:
+          $ref: ./event.schema.json#/properties/price_max
+        is_free:
+          $ref: ./event.schema.json#/properties/is_free
+        age_limit:
+          $ref: ./event.schema.json#/properties/age_limit
+        language:
+          $ref: ./event.schema.json#/properties/language
+        org_link:
+          $ref: ./event.schema.json#/properties/org_link
+        source_url:
+          $ref: ./event.schema.json#/properties/source_url
+        status:
+          $ref: ./event.schema.json#/properties/status
+        city_id:
+          $ref: ./event.schema.json#/properties/city_id
+        venue_id:
+          $ref: ./event.schema.json#/properties/venue_id
+        time_precision:
+          $ref: ./event.schema.json#/properties/time_precision
+        offers:
+          $ref: ./event.schema.json#/properties/offers
+        occurrences:
+          $ref: ./event.schema.json#/properties/occurrences
+        review:
+          $ref: ./event.schema.json#/properties/review
+        organizer:
+          $ref: ./event.schema.json#/properties/organizer
+        kind:
+          $ref: ./event.schema.json#/properties/kind
+        image:
+          $ref: ./event.schema.json#/properties/image
+        title_ba:
+          $ref: ./event.schema.json#/properties/title_ba
+    ModerationItem:
+      type: object
+      required:
+      - event
+      - reasons
+      - duplicate_candidates
+      properties:
+        event:
+          $ref: '#/components/schemas/Event'
+        reasons:
+          type: array
+          items:
+            type: string
+          description: Почему карточка спорная.
+        duplicate_candidates:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Возможные дубли для действия `merge`.
+    ModerationList:
+      type: object
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      - total_pages
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModerationItem'
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0
+    ModerationResolve:
+      type: object
+      additionalProperties: false
+      required:
+      - action
+      properties:
+        action:
+          type: string
+          enum:
+          - publish
+          - keep_draft
+          - cancel
+          - merge
+        merge_into:
+          type: string
+          format: uuid
+          description: Куда слить карточку. Обязательно при `merge`.
+      if:
+        properties:
+          action:
+            const: merge
+        required:
+        - action
+      then:
+        required:
+        - merge_into
+    AuditEntry:
+      type: object
+      required:
+      - id
+      - at
+      - actor
+      - action
+      - entity_type
+      - entity_id
+      - changes
+      properties:
+        id:
+          type: string
+          format: uuid
+        at:
+          $ref: ./event.schema.json#/$defs/dateTime
+        actor:
+          type: string
+          description: 'Кто изменил: `moderator:<логин>`, `import`, `system`. Без ПДн.'
+        action:
+          type: string
+          description: Например `create`, `update`, `status_change`, `merge`, `import`.
+        entity_type:
+          type: string
+          description: Например `event`, `subscription`.
+        entity_id:
+          type: string
+        changes:
+          type: array
+          items:
+            type: object
+            required:
+            - field
+            - from
+            - to
+            properties:
+              field:
+                type: string
+              from: {}
+              to: {}
+        import_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    AuditList:
+      type: object
+      required:
+      - items
+      - page
+      - page_size
+      - total
+      - total_pages
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0

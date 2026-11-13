@@ -1,0 +1,678 @@
+{
+  "$comment": "Инструменты ИИ-агента, контракт v1 (ТЗ п. 7.2). Пояснения: docs/AGENT_TOOLS.md. input_schema самодостаточны (без $ref), их можно отдавать модели как есть. output_schema описывает поле data в конверте результата и ссылается на api.openapi.yaml и event.schema.json: инструмент возвращает ответ API без изменений. Диалект схем — JSON Schema 2020-12. Ссылки вида #/$defs/... считаются от корня этого файла.",
+  "title": "Инструменты ИИ-агента афиши",
+  "version": "1.0.0",
+  "api_contract": "api.openapi.yaml",
+  "limits": {
+    "max_tool_calls_per_answer": 5,
+    "dialog_memory_turns_min": 5,
+    "cards_per_answer": {
+      "min": 3,
+      "max": 5
+    },
+    "tool_timeout_ms": 3000,
+    "confirmation_ttl_s": 600,
+    "$comment": "max_tool_calls_per_answer, dialog_memory_turns_min и cards_per_answer — из ТЗ п. 7.1 и 7.3. tool_timeout_ms и confirmation_ttl_s — рекомендации, владелец агента может поменять."
+  },
+  "result_envelope": {
+    "description": "Любой результат инструмента. ok=true — data по output_schema инструмента. ok=false — ошибка, агент сообщает о ней и не подменяет результат догадкой.",
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "data": {}
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "const": false
+          },
+          "error": {
+            "$ref": "#/$defs/ToolError"
+          }
+        }
+      }
+    ]
+  },
+  "error_mapping": {
+    "$comment": "Код ошибки API (Error.code) → код ошибки инструмента. Сетевой таймаут → timeout. Шестой вызов за ответ → step_limit_exceeded, вызов не выполняется.",
+    "validation_error": "invalid_arguments",
+    "invalid_json": "invalid_arguments",
+    "unprocessable": "invalid_arguments",
+    "not_found": "not_found",
+    "conflict": "already_exists",
+    "rate_limited": "rate_limited",
+    "unavailable": "unavailable",
+    "internal_error": "internal_error",
+    "unauthorized": "internal_error",
+    "forbidden": "internal_error",
+    "payload_too_large": "invalid_arguments",
+    "method_not_allowed": "internal_error",
+    "precondition_failed": "internal_error"
+  },
+  "model_view": {
+    "$comment": "Какие поля события runtime передаёт модели. Остальные поля остаются в трассе. description — недоверенный текст источника: обрезается до 300 символов и передаётся внутри явных границ как данные, а не инструкции.",
+    "event_fields": [
+      "id",
+      "title",
+      "category",
+      "tags",
+      "date_start",
+      "date_end",
+      "time_precision",
+      "duration_min",
+      "city",
+      "venue",
+      "venue_id",
+      "address",
+      "price_min",
+      "price_max",
+      "is_free",
+      "age_limit",
+      "language",
+      "status",
+      "source_url",
+      "org_link",
+      "description"
+    ],
+    "description_max_chars": 300
+  },
+  "tools": [
+    {
+      "name": "search_events",
+      "description": "Поиск опубликованных событий по фильтрам. Город, категорию и период передавай кодами. Неизвестная цена или возраст не проходят фильтры price_max и age: смотри hidden_unknown_price и hidden_unknown_age. Если ничего не найдено, скажи об этом прямо и предложи варианты из relaxations.",
+      "endpoint": {
+        "method": "GET",
+        "path": "/events",
+        "operation_id": "listEvents"
+      },
+      "mutates_data": false,
+      "requires_confirmation": false,
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "city": {
+            "description": "Коды городов из справочника, например ufa, sterlitamak.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+            },
+            "maxItems": 5
+          },
+          "category": {
+            "description": "Категории.",
+            "type": "array",
+            "items": {
+              "enum": [
+                "concert",
+                "performance",
+                "exhibition",
+                "festival",
+                "cinema",
+                "excursion",
+                "other"
+              ]
+            },
+            "maxItems": 7
+          },
+          "date": {
+            "description": "Готовый период или дата YYYY-MM-DD. Не вместе с date_from и date_to.",
+            "type": "string",
+            "pattern": "^(today|tomorrow|weekend|week|[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+          },
+          "date_from": {
+            "description": "Начало периода, местная дата YYYY-MM-DD.",
+            "type": "string",
+            "format": "date"
+          },
+          "date_to": {
+            "description": "Конец периода, местная дата YYYY-MM-DD.",
+            "type": "string",
+            "format": "date"
+          },
+          "time_from": {
+            "description": "Начало не раньше HH:MM.",
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "time_to": {
+            "description": "Начало не позже HH:MM.",
+            "type": "string",
+            "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "price_max": {
+            "description": "Максимальная цена одного билета в рублях.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "free": {
+            "description": "Только бесплатные.",
+            "type": "boolean"
+          },
+          "age": {
+            "description": "Возраст посетителя, например ребёнка.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120
+          },
+          "venue_id": {
+            "description": "Код площадки.",
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "language": {
+            "description": "Язык мероприятия: ru, ba, tt.",
+            "type": "string",
+            "pattern": "^[a-z]{2,3}$"
+          },
+          "q": {
+            "description": "Текст для поиска по названию и описанию: только то, что не выразилось фильтрами.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sort": {
+            "enum": [
+              "date",
+              "price",
+              "popularity"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "page_size": {
+            "description": "Сколько событий вернуть. Для ответа агента 3–5.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5
+          }
+        }
+      },
+      "output_schema": {
+        "$ref": "api.openapi.yaml#/components/schemas/EventList"
+      },
+      "examples": [
+        {
+          "comment": "«Концерт в Стерлитамаке в пятницу после 19:00 до 1500 рублей» при reference_date 2026-11-13 (пятница)",
+          "input": {
+            "city": [
+              "sterlitamak"
+            ],
+            "category": [
+              "concert"
+            ],
+            "date": "2026-11-13",
+            "time_from": "19:00",
+            "price_max": 1500,
+            "page_size": 5
+          }
+        },
+        {
+          "comment": "«Бесплатные выставки в Уфе до конца месяца»",
+          "input": {
+            "city": [
+              "ufa"
+            ],
+            "category": [
+              "exhibition"
+            ],
+            "free": true,
+            "date_from": "2026-11-13",
+            "date_to": "2026-11-30"
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_event",
+      "description": "Полная карточка события по id. Отдаёт и отменённые события (status = cancelled): такие показывай только с пометкой «Отменено», никогда как актуальные.",
+      "endpoint": {
+        "method": "GET",
+        "path": "/events/{id}",
+        "operation_id": "getEvent"
+      },
+      "mutates_data": false,
+      "requires_confirmation": false,
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "description": "UUID события из результата другого инструмента.",
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "output_schema": {
+        "$ref": "event.schema.json"
+      },
+      "examples": [
+        {
+          "input": {
+            "id": "37f67e9c-7aa5-463c-ab52-16b58ca0beaf"
+          }
+        }
+      ]
+    },
+    {
+      "name": "find_similar",
+      "description": "Похожие опубликованные события: та же категория или общие метки. По умолчанию город и период исходного события.",
+      "endpoint": {
+        "method": "GET",
+        "path": "/events/{id}/similar",
+        "operation_id": "listSimilarEvents"
+      },
+      "mutates_data": false,
+      "requires_confirmation": false,
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "description": "UUID исходного события.",
+            "type": "string",
+            "format": "uuid"
+          },
+          "city": {
+            "description": "Коды городов, если нужен другой город.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+            },
+            "maxItems": 5
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^(today|tomorrow|weekend|week|[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date"
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5
+          }
+        }
+      },
+      "output_schema": {
+        "$ref": "api.openapi.yaml#/components/schemas/EventList"
+      },
+      "examples": [
+        {
+          "comment": "«А что ещё есть похожее?»",
+          "input": {
+            "id": "37f67e9c-7aa5-463c-ab52-16b58ca0beaf",
+            "date": "week"
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_venue_schedule",
+      "description": "Расписание площадки за период, не длиннее 31 дня. venue_id бери из найденных событий.",
+      "endpoint": {
+        "method": "GET",
+        "path": "/venues/{id}/schedule",
+        "operation_id": "getVenueSchedule"
+      },
+      "mutates_data": false,
+      "requires_confirmation": false,
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "venue_id",
+          "date_from",
+          "date_to"
+        ],
+        "properties": {
+          "venue_id": {
+            "description": "Код площадки, поле venue_id события.",
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "output_schema": {
+        "$ref": "api.openapi.yaml#/components/schemas/VenueSchedule"
+      },
+      "examples": [
+        {
+          "input": {
+            "venue_id": "demo-hall-1",
+            "date_from": "2026-12-14",
+            "date_to": "2026-12-20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "subscribe",
+      "description": "Подписка на новые события по городу, категории и периоду. Меняет данные: сам вызов ничего не сохраняет, а возвращает confirmation_required. Подписка создаётся только после того, как пользователь нажмёт кнопку подтверждения. Канал и идентификатор пользователя подставляет runtime, ты их не передаёшь.",
+      "endpoint": {
+        "method": "POST",
+        "path": "/subscriptions",
+        "operation_id": "createSubscription"
+      },
+      "mutates_data": true,
+      "requires_confirmation": true,
+      "runtime_fields": [
+        "channel",
+        "user_ref"
+      ],
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "city": {
+            "description": "Код города.",
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "category": {
+            "enum": [
+              "concert",
+              "performance",
+              "exhibition",
+              "festival",
+              "cinema",
+              "excursion",
+              "other"
+            ]
+          },
+          "period": {
+            "enum": [
+              "today",
+              "tomorrow",
+              "weekend",
+              "week"
+            ]
+          }
+        }
+      },
+      "output_schema": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ConfirmationRequired"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "subscription"
+            ],
+            "properties": {
+              "status": {
+                "const": "done"
+              },
+              "subscription": {
+                "$ref": "api.openapi.yaml#/components/schemas/Subscription"
+              }
+            }
+          }
+        ]
+      },
+      "examples": [
+        {
+          "comment": "Первый шаг: подтверждение ещё не получено",
+          "input": {
+            "city": "ufa",
+            "category": "concert",
+            "period": "weekend"
+          },
+          "output": {
+            "ok": true,
+            "data": {
+              "status": "confirmation_required",
+              "confirmation_id": "cnf_7c2e1a9b4d",
+              "summary": "Подписка: Уфа, концерты, выходные",
+              "expires_at": "2026-11-13T12:10:00+05:00"
+            }
+          }
+        },
+        {
+          "comment": "После нажатия кнопки «Подтвердить»",
+          "input": {
+            "city": "ufa",
+            "category": "concert",
+            "period": "weekend"
+          },
+          "output": {
+            "ok": true,
+            "data": {
+              "status": "done",
+              "subscription": {
+                "id": "4aae8858-6af9-4497-b466-efa2e7766c93",
+                "channel": "telegram",
+                "user_ref": "u_9f2c4e7a1b3d5f60",
+                "city": "ufa",
+                "category": "concert",
+                "period": "weekend",
+                "created_at": "2026-11-13T12:00:00+05:00"
+              }
+            }
+          }
+        },
+        {
+          "comment": "Такая подписка уже есть",
+          "input": {
+            "city": "ufa",
+            "category": "concert",
+            "period": "weekend"
+          },
+          "output": {
+            "ok": false,
+            "error": {
+              "code": "already_exists",
+              "message": "Такая подписка уже есть.",
+              "retryable": false,
+              "http_status": 409,
+              "request_id": "req_01JDEMO0000000000000000000"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "save_feedback",
+      "description": "Заявка или вопрос организатору по событию. Меняет данные: сам вызов возвращает confirmation_required, обращение отправляется только после нажатия кнопки подтверждения. Имя и контакт ты не передаёшь: их запрашивает форма подтверждения.",
+      "endpoint": {
+        "method": "POST",
+        "path": "/feedback",
+        "operation_id": "createFeedback"
+      },
+      "mutates_data": true,
+      "requires_confirmation": true,
+      "runtime_fields": [
+        "name",
+        "contact",
+        "organization",
+        "website"
+      ],
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "organizer_application",
+              "correction",
+              "question"
+            ],
+            "default": "question"
+          },
+          "event_id": {
+            "description": "UUID события, если обращение о нём.",
+            "type": "string",
+            "format": "uuid"
+          },
+          "text": {
+            "description": "Текст обращения своими словами пользователя.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "output_schema": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ConfirmationRequired"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "feedback"
+            ],
+            "properties": {
+              "status": {
+                "const": "done"
+              },
+              "feedback": {
+                "$ref": "api.openapi.yaml#/components/schemas/FeedbackAccepted"
+              }
+            }
+          }
+        ]
+      },
+      "examples": [
+        {
+          "input": {
+            "kind": "question",
+            "event_id": "37f67e9c-7aa5-463c-ab52-16b58ca0beaf",
+            "text": "Можно ли прийти с коляской?"
+          },
+          "output": {
+            "ok": true,
+            "data": {
+              "status": "confirmation_required",
+              "confirmation_id": "cnf_19ab33f0e2",
+              "summary": "Вопрос организатору события «Демо-концерт «Ёлочные мелодии»»",
+              "expires_at": "2026-11-13T12:10:00+05:00"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "ToolError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_arguments",
+            "not_found",
+            "already_exists",
+            "rate_limited",
+            "unavailable",
+            "timeout",
+            "internal_error",
+            "step_limit_exceeded",
+            "confirmation_declined",
+            "confirmation_expired"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "request_id": {
+          "type": "string"
+        }
+      }
+    },
+    "ConfirmationRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "confirmation_id",
+        "summary",
+        "expires_at"
+      ],
+      "properties": {
+        "status": {
+          "const": "confirmation_required"
+        },
+        "confirmation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "description": "Что именно будет сделано, для текста кнопки подтверждения.",
+          "type": "string",
+          "minLength": 1
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
