@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:afisha:widget-protocol:v1",
   "title": "Afisha read-only widget postMessage protocol",
-  "description": "Research contract. event.origin must exactly match an allowlisted origin and event.source must be the expected window; senders use an exact targetOrigin, never '*'. These transport checks and occurrence_ids membership checks happen outside JSON Schema. No secrets, credentials, arbitrary URLs, navigation commands or write verbs are permitted. Direction is normative and must be checked by the receiver in addition to schema: parent→widget only init/ping; widget→parent only ready/request_resize/open_occurrence/error. A schema-valid message from the wrong direction is rejected without mutation.",
+  "description": "ВНЕ СКОУПА ХАКАТОНА (2026-11-13): виджет по ТЗ п. 6.3 — iframe или скрипт с параметрами без обмена сообщениями. Действующий контракт v1: contracts/event.schema.json, contracts/api.openapi.yaml, contracts/agent_tools.json; см. docs/DECISIONS.md. Research contract. event.origin must exactly match an allowlisted origin and event.source must be the expected window; senders use an exact targetOrigin, never '*'. These transport checks and occurrence_ids membership checks happen outside JSON Schema. No secrets, credentials, arbitrary URLs, navigation commands or write verbs are permitted. Direction is normative and must be checked by the receiver in addition to schema: parent→widget only init/ping; widget→parent only ready/request_resize/open_occurrence/error. A schema-valid message from the wrong direction is rejected without mutation.",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -1,5 +1,7 @@
 # Нейросеть Jev (TypeSafe AI): контур типизированных решений System 1
 
+> **Вне скоупа хакатона (2026-11-13, D-013).** ТЗ не требует контура System 1. Базовая реализация агента: LLM с инструментами п. 7.2 поверх детерминированного API и резервный режим п. 7.5 — [`docs/AGENT_TOOLS.md`](AGENT_TOOLS.md). Jev можно вернуть отдельным решением команды, когда уровень 3 проходит метрики. Подробнее — [`docs/DECISIONS.md`](DECISIONS.md).
+
 Дата: 2026-11-12  
 Статус: архитектурная спецификация для реализации на хакатоне  
 Связанные материалы: `contracts/jev_decisions.schema.json`, `docs/AI_ASSISTANT_IDEAS.md`, `docs/EVENT_IDENTITY.md`, `docs/SEARCH_QUALITY.md`, `docs/UX_FLOWS.md`, `docs/CHANNELS_API.md`, `docs/SECURITY_THREAT_MODEL.md`
