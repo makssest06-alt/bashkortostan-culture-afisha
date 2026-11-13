@@ -22,7 +22,8 @@
 
 - **Контракт v1 готов**: схема события по п. 8.1, OpenAPI 3.1, инструменты агента п. 7.2 (см. ниже).
 - **Сайт** (`web/`, влит из [PR #17](https://github.com/makssest06-alt/bashkortostan-culture-afisha/pull/17)): каталог с фильтрами в адресе, карточка с блоком «Источники», `/ask` с резервным поиском, виджет, `/developers`, `/about` с формой заявки, админка `/admin`, РУС/БАШ. Событие по сети ходит в форме контракта v1. Без бэка сайт работает на своих моках с синтетическими событиями (`synthetic: true`), бэк подключается переменной окружения (см. «Как подключить бэк к сайту»).
-- **Нет**: бэкенда, базы и миграций, Telegram-бота, агента с моделью, корневых `docker-compose.yml` и `.env.example`. У сайта свои `web/compose.yaml` и `web/.env.example`.
+- **Telegram-бот** (`bot/`, ветка `feat/telegram-bot`): отдельный сервис на Node.js 22, канал к REST API v1 без доступа к базе. Закрывает уровень 1 ТЗ: `/start`, поиск, карточка, «Показать ещё», подписки, `/help`, `/cancel`. Запуск и проверка — в [`bot/README.md`](bot/README.md).
+- **Нет**: бэкенда, базы и миграций, агента с моделью, корневых `docker-compose.yml` и `.env.example`. У сайта свои `web/compose.yaml` и `web/.env.example`.
 
 ## Запуск
 
@@ -66,6 +67,20 @@ docker compose up --build      # http://localhost:3210, сайт на моках
 ```
 
 Значения переменных можно положить в `web/.env` рядом с `compose.yaml`. Образ собирается из `web/Dockerfile` (standalone-сборка Next.js, запуск не от root, правки админки на моках хранятся в томе `/data`).
+
+### Telegram-бот локально
+
+Нужен Node.js 22+ и запущенный API.
+
+```bash
+cd bot
+npm ci
+cp .env.example .env      # вписать TELEGRAM_BOT_TOKEN и при необходимости API_BASE_URL
+npm run build
+npm start
+```
+
+Для разработки — `npm run dev`. Проверки: `npm run typecheck && npm test && npm run build`. Подробности, переменные окружения и результаты живой проверки — в [`bot/README.md`](bot/README.md).
 
 ### Проверка контрактов
 
@@ -209,12 +224,13 @@ curl -s 'http://localhost:3210/api/v1/events?page_size=1'
 ├── evals/            # Наборы запросов и сценариев с валидаторами
 ├── scripts/          # Служебные скрипты дизайн-кита
 ├── security/         # Машиночитаемые политики безопасности
+├── bot/              # Telegram-бот: отдельный сервис к REST API v1
 ├── web/              # Сайт на Next.js: каталог, карточка, /ask, виджет, админка; свои Dockerfile и compose.yaml
 ├── CONTRIBUTING.md
 └── README.md
 ```
 
-Каталоги бэкенда и бота появятся вместе с кодом, названия выберут их владельцы.
+Каталог бэкенда появится вместе с кодом, название выберет его владелец.
 
 ## Модель и стоимость диалога
 
