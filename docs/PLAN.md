@@ -1,6 +1,6 @@
 # План работы
 
-Статус: обновлено 2026-11-13 по официальному ТЗ ([`docs/TZ.pdf`](TZ.pdf)). Предложен уровень 3 «Агент», его нужно согласовать (D-015 в [`docs/DECISIONS.md`](DECISIONS.md)). Что уже есть и чего нет по каждому пункту — [`docs/TZ_COMPLIANCE.md`](TZ_COMPLIANCE.md).
+Статус: обновлено 2026-11-13 по официальному ТЗ ([`docs/TZ.pdf`](TZ.pdf)). Выбран уровень 3 «Агент» (D-015 в [`docs/DECISIONS.md`](DECISIONS.md)). Что уже есть и чего нет по каждому пункту — [`docs/TZ_COMPLIANCE.md`](TZ_COMPLIANCE.md).
 
 ## Владельцы
 
