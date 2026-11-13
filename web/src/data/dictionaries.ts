@@ -35,9 +35,9 @@ export const CATEGORIES: readonly CategoryEntry[] = [
   { id: 'performance', name: { ru: 'Спектакли', ba: 'Спектаклдәр' }, name_one: { ru: 'Спектакль', ba: 'Спектакль' } },
   { id: 'exhibition', name: { ru: 'Выставки', ba: 'Күргәҙмәләр' }, name_one: { ru: 'Выставка', ba: 'Күргәҙмә' } },
   { id: 'festival', name: { ru: 'Фестивали', ba: 'Фестивалдәр' }, name_one: { ru: 'Фестиваль', ba: 'Фестиваль' } },
-  { id: 'cinema', name: { ru: 'Кино', ba: 'Кино' }, name_one: { ru: 'Кинопоказ', ba: 'Кино күрһәтеү' } },
+  { id: 'cinema', name: { ru: 'Кино', ba: 'Кино' }, name_one: { ru: 'Кинопоказ', ba: 'Кино' } },
   { id: 'excursion', name: { ru: 'Экскурсии', ba: 'Экскурсиялар' }, name_one: { ru: 'Экскурсия', ba: 'Экскурсия' } },
-  { id: 'other', name: { ru: 'Другое', ba: 'Башҡалар' }, name_one: { ru: 'Другое', ba: 'Башҡа' } },
+  { id: 'other', name: { ru: 'Другое', ba: 'Башҡа' }, name_one: { ru: 'Другое', ba: 'Башҡа' } },
 ];
 
 /** Метка аудитории «детям» в tags (п. 8.1: «дети»). */

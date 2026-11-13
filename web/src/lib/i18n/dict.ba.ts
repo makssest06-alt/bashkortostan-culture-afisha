@@ -6,7 +6,7 @@
  * Примеры запросов к ИИ-подбору оставлены на русском: ассистент пока понимает только его.
  *
  * Перевод сделан без носителя языка. Строки под сомнением перечислены в отчёте агента
- * и помечены здесь словом «проверить»: их нужно показать носителю до защиты.
+ * и помечены здесь словом «проверить»: их нужно показать носителю до защиты. Список: docs/BA_REVIEW.md.
  */
 
 import type { DictKey } from './dict.ru';
@@ -17,7 +17,7 @@ export const ba: Record<DictKey, string> = {
   'nav.events': 'Саралар',
   'nav.ask': 'ЯИ-һайлау', // проверить: принятое сокращение «яһалма интеллект»
   'nav.widget': 'Виджет',
-  'nav.api': 'Эшләүселәргә', // проверить: «разработчикам»
+  'nav.api': 'Программистарға',
   'nav.about': 'Проект тураһында',
   'nav.menu': 'Меню',
   'nav.openMenu': 'Менюны асыу',
@@ -31,7 +31,7 @@ export const ba: Record<DictKey, string> = {
   'common.brandFull': 'Башҡортостан мәҙәниәте афишаһы',
   'common.demoData': 'Демо-мәғлүмәттәр',
   'preload.caption': 'Башҡортостан мәҙәниәте афишаһы',
-  'preload.loading': 'Сәхнәләр йөкләнә', // проверить
+  'preload.loading': 'Йөкләнә',
   'common.demoDataHint': 'Саралар шартлы: улар афишаның нисек эшләгәнен күрһәтә.',
   'common.telegram': 'Telegram-бот',
   'common.telegramOpen': 'Telegram-да асыу',
@@ -63,9 +63,9 @@ export const ba: Record<DictKey, string> = {
   'home.metaTitle': 'Башҡортостан мәҙәниәте афишаһы: театрҙар, концерттар, музейҙар',
   'home.metaDescription':
     'Республиканың тикшерелгән саралары бер афишала. Көн, ҡала, хаҡ һәм йәш буйынса фильтрҙар, ирекле һөйләм буйынса һайлау.',
-  'home.scrollHint': 'Артабан ҡарағыҙ', // проверить: «листайте дальше»
+  'home.scrollHint': 'Артабан ҡарағыҙ',
   'home.skipStory': 'Туранан-тура сараларға',
-  'home.progress': 'Битте ҡарау барышы', // проверить: «прогресс прокрутки»
+  'home.progress': 'Битте ҡарау барышы',
 
   // -------------------------------------------------------------- Каталог
   'events.title': 'Саралар',
@@ -91,26 +91,26 @@ export const ba: Record<DictKey, string> = {
   'events.hiddenUnknownAge.one': 'Тағы {count} сараның йәш билдәһе юҡ: йәш фильтрына улар инмәне',
   'events.hiddenUnknownAge.few': 'Тағы {count} сараның йәш билдәһе юҡ: йәш фильтрына улар инмәне',
   'events.hiddenUnknownAge.many': 'Тағы {count} сараның йәш билдәһе юҡ: йәш фильтрына улар инмәне',
-  'events.hidden.show': 'Күрһәтеү', // проверить
-  'events.hidden.hide': 'Йәшереү', // проверить
+  'events.hidden.show': 'Күрһәтеү',
+  'events.hidden.hide': 'Йәшереү',
   'events.loadMore': 'Тағы күрһәтеү',
   'events.page': 'Бит {page} / {total}',
   'events.prev': 'Артҡа',
   'events.next': 'Алға',
   'events.loading': 'Саралар һайлана…',
   'events.error': 'Каталог йөкләнмәне.',
-  'event.cancelled.badge': 'Юҡҡа сығарылды', // проверить
+  'event.cancelled.badge': 'Юҡҡа сығарылған',
   'event.cancelled.text':
-    'Сара юҡҡа сығарылды. Исемлектә ул юҡ, ә бит иҫке һылтанма буш урынға алып бармаһын өсөн ҡалдырылды. Билет алған булһағыҙ, аҡсаны ҡайтарыу тураһында ойоштороусынан белешегеҙ.', // проверить
-  'event.cancelled.catalog': 'Башҡа сара табырға', // проверить
-  'events.invalid.title': 'Һылтанмала афиша аңламаған шарттар бар', // проверить
-  'events.invalid.city': 'Афишала бындай ҡала юҡ.', // проверить
-  'events.invalid.category': 'Афишала бындай категория юҡ.', // проверить
-  'events.invalid.date': 'Һылтанмала көн йәки ваҡыт дөрөҫ күрһәтелмәгән.', // проверить
-  'events.invalid.price': 'Һылтанмала хаҡ дөрөҫ күрһәтелмәгән.', // проверить
-  'events.invalid.age': 'Һылтанмала йәш дөрөҫ күрһәтелмәгән.', // проверить
-  'events.invalid.other': 'Һылтанмалағы шарттарҙың береһе дөрөҫ түгел.', // проверить
-  'events.invalid.hint': 'Фильтрҙарҙы ташлағыҙ, афиша бөтә сараларҙы күрһәтер.', // проверить
+    'Сара юҡҡа сығарылды, ул исемлектә күрһәтелмәй. Иҫке һылтанма эшләһен өсөн был бит ҡалдырылды. Билет алған булһағыҙ, аҡсаны ҡайтарыу тураһында ойоштороусынан белешегеҙ.', // проверить: длинный текст, см. docs/BA_REVIEW.md
+  'event.cancelled.catalog': 'Башҡа сара табыу',
+  'events.invalid.title': 'Һылтанмала афиша аңламаған шарттар бар',
+  'events.invalid.city': 'Афишала бындай ҡала юҡ.',
+  'events.invalid.category': 'Афишала бындай категория юҡ.',
+  'events.invalid.date': 'Һылтанмала көн йәки ваҡыт дөрөҫ күрһәтелмәгән.',
+  'events.invalid.price': 'Һылтанмала хаҡ дөрөҫ күрһәтелмәгән.',
+  'events.invalid.age': 'Һылтанмала йәш дөрөҫ күрһәтелмәгән.',
+  'events.invalid.other': 'Һылтанмалағы шарттарҙың береһе дөрөҫ түгел.',
+  'events.invalid.hint': 'Фильтрҙарҙы таҙартығыҙ, һәм афиша бөтә сараларҙы күрһәтер.',
   'events.nearest': 'Яҡындағы саралар',
   'events.popular': 'Популяр',
   'events.card.more': 'Тулыраҡ',
@@ -128,7 +128,7 @@ export const ba: Record<DictKey, string> = {
   'filters.date.weekend': 'Ял көндәре',
   'filters.date.week': 'Ошо аҙна',
   'filters.date.calendar': 'Көндәрҙе һайлау',
-  'filters.date.from': 'Башы', // проверить: подписи полей «с» и «по»
+  'filters.date.from': 'Башы',
   'filters.date.to': 'Аҙағы',
   'filters.city': 'Ҡала',
   'filters.city.all': 'Бөтә республика',
@@ -274,7 +274,7 @@ export const ba: Record<DictKey, string> = {
   'ask.chips': 'Ошолай аңланым',
   'ask.chipRemove': 'Шартты алып ташлау: {label}',
   'ask.chipEdit': 'Шартты үҙгәртеү: {label}',
-  'ask.assumptions': 'Фараздар', // проверить: «допущения»
+  'ask.assumptions': 'Фараздар',
   'ask.why': 'Ни өсөн тап килә',
   'ask.caveats': 'Иғтибар итегеҙ',
   'ask.quickReplies': 'Тиҙ яуаптар',
@@ -286,7 +286,7 @@ export const ba: Record<DictKey, string> = {
   'ask.assistant': 'Афиша',
   'ask.error': 'Яуап алып булманы. Ҡабатлап ҡарағыҙ.',
   'ask.stubNote':
-    'Хәҙер һорауҙы нейрочелтәрһеҙ, ҡағиҙәләргә нигеҙләнгән демо-алгоритм тикшерә. Яуап форматы ЯИ-ассистенттыҡы менән бер үк.',
+    'Хәҙер һорауҙы яһалма интеллект түгел, ҡағиҙәләргә нигеҙләнгән демо-алгоритм тикшерә. Яуап форматы ЯИ-ассистенттыҡы менән бер үк.',
   'ask.cannotBuy': 'Билеттар бында һатылмай: уларҙы ойоштороусы сайтында һатып алалар.',
   'ask.langNote': 'Ассистент әлегә русса һорауҙарҙы ғына аңлай.',
 
@@ -296,7 +296,7 @@ export const ba: Record<DictKey, string> = {
   'widget.metaTitle': 'Афиша виджеты',
   'widget.preview': 'Виджет министрлыҡ битендә ошолай күренә',
   'widget.previewNote': 'Тирәләге бит макет. Эсендәге виджет ысын: ул сараларҙы шул уҡ API-нан ала.',
-  'widget.code': 'Ҡуйыу коды', // проверить: «код вставки»
+  'widget.code': 'Ҡуйыу коды',
   'widget.code.script': 'Скрипт',
   'widget.code.iframe': 'Iframe',
   'widget.code.scriptHint': 'Юлды афиша күренергә тейешле урынға ҡуйығыҙ.',
@@ -332,7 +332,7 @@ export const ba: Record<DictKey, string> = {
   'developers.title': 'Афишаның REST API-һы',
   'developers.subtitle':
     'Сайттағы менән бер үк мәғлүмәттәр: саралар, сеанстар, белешмәләр һәм һөйләм буйынса һайлау. Асҡыс кәрәкмәй.',
-  'developers.metaTitle': 'Эшләүселәргә: афишаның REST API-һы',
+  'developers.metaTitle': 'Программистарға: афишаның REST API-һы',
   'developers.baseUrl': 'Төп адрес',
   'developers.endpoints': 'Методтар',
   'developers.endpoint.events': 'Фильтрлы саралар исемлеге',
@@ -352,7 +352,7 @@ export const ba: Record<DictKey, string> = {
   'developers.tryResult': 'Сервер яуабы',
   'developers.errors': 'Хаталар',
   'developers.errors.text':
-    'Хата HTTP коды һәм {"error": {"code", "message"}} есеме менән килә. Хәбәр кеше өсөн яҙылған: уны үҙгәртмәйенсә күрһәтергә мөмкин.',
+    'Хата HTTP коды һәм {"code", "message", "details", "request_id"} есеме менән килә. Хәбәр кеше өсөн яҙылған: уны үҙгәртмәйенсә күрһәтергә мөмкин.',
   'developers.cors': 'CORS асыҡ',
   'developers.cors.text':
     'API Access-Control-Allow-Origin: * башлығы менән яуап бирә. Уны теләһә ниндәй сайттан браузер аша саҡырырға мөмкин.',
@@ -382,7 +382,7 @@ export const ba: Record<DictKey, string> = {
     'Һәр яҙма төп сығанаҡ менән даими сағыштырыла. Карточкала һуңғы тикшереү ваҡыты һәм сеанс статусы күренә: буласаҡ, күсерелгән йәки юҡҡа сығарылған.',
   'about.verify.unknown':
     'Сығанаҡ хаҡты, йәште йәки статусты хәбәр итмәһә, афиша «күрһәтелмәгән» тип яҙа. Билдәһеҙ хаҡ «бушлай»ға, ә билдәһеҙ статус «буласаҡ»ҡа әйләнмәй.',
-  'about.dedup.title': 'Ҡабатланыуҙар нисек бөтөрөлә', // проверить: «дедупликация»
+  'about.dedup.title': 'Ҡабатланыуҙар нисек бөтөрөлә',
   'about.dedup.text':
     'Бер үк сараны йыш ҡына бер нисә сығанаҡ баҫтыра. Афиша ундай яҙмаларҙы бер карточкаға берләштерә һәм уның нисә сығанаҡтан йыйылғанын күрһәтә.',
   'about.dedup.step1': 'Исемдәрҙе, даталарҙы, ваҡытты һәм майҙансыҡтарҙы бер төрлө рәүешкә килтерәбеҙ.',
@@ -408,7 +408,7 @@ export const ba: Record<DictKey, string> = {
   'footer.wordmark': 'АФИША-102',
   'footer.tagline': 'Республиканың бөтә мәҙәниәте. Бер афишала.',
   'footer.sections': 'Бүлектәр',
-  'footer.developers': 'Эшләүселәргә',
+  'footer.developers': 'Программистарға',
   'footer.channels': 'Тағы ҡайҙа ҡарарға',
   'footer.language': 'Тел',
   'footer.telegram': 'Афиша Telegram-да',

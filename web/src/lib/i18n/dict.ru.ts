@@ -348,7 +348,7 @@ export const ru = {
   'developers.tryResult': 'Ответ сервера',
   'developers.errors': 'Ошибки',
   'developers.errors.text':
-    'Ошибка приходит с кодом HTTP и телом {"error": {"code", "message"}}. Сообщение написано для человека: его можно показать как есть.',
+    'Ошибка приходит с кодом HTTP и телом {"code", "message", "details", "request_id"}. Сообщение написано для человека: его можно показать как есть.',
   'developers.cors': 'CORS открыт',
   'developers.cors.text':
     'API отвечает с заголовком Access-Control-Allow-Origin: *. Его можно вызывать из браузера с любого сайта.',
