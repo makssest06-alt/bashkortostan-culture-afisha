@@ -19,6 +19,7 @@ import { SORTS } from '@/data/dictionaries';
 import { parseEventsQuery } from '@/lib/api/params';
 import type { EventsListResponse, EventsQuery, Relaxation, SortKey } from '@/lib/api/types';
 import { useT } from '@/lib/i18n';
+import type { TKey } from '@/lib/i18n';
 import { useMediaQuery } from '@/lib/motion';
 
 import { ActiveFilters } from './ActiveFilters';
@@ -37,6 +38,19 @@ import type { CatalogEntry, UnknownKind } from './store';
 const DESKTOP_QUERY = '(min-width: 1024px)';
 const UNKNOWN_KINDS: readonly UnknownKind[] = ['price', 'age'];
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled])';
+
+/**
+ * Неверное условие в ссылке объясняется словами жителя, без технических значений параметров
+ * (п. 6.1: сообщения понятны жителю, а не разработчику).
+ */
+function invalidKey(field: string): TKey {
+  if (field === 'city') return 'events.invalid.city';
+  if (field === 'category') return 'events.invalid.category';
+  if (/^(date|time)/.test(field)) return 'events.invalid.date';
+  if (field === 'price_max' || field === 'free_only' || field === 'free') return 'events.invalid.price';
+  if (field === 'age' || field === 'age_rating' || field === 'audience') return 'events.invalid.age';
+  return 'events.invalid.other';
+}
 
 export type CatalogProps = {
   /** Первая страница выдачи, собранная на сервере. null: параметры адреса не прошли проверку. */
@@ -209,13 +223,15 @@ export function Catalog({ initial, initialKey, renderedAt }: CatalogProps) {
             <div className="pt-3">
               {!parsed.ok ? (
                 <div role="alert" className="flex max-w-[60ch] flex-col gap-4 pt-6" data-invalid-state="">
+                  <p className="t-ui text-fg">{t('events.invalid.title')}</p>
                   <ul className="flex flex-col gap-2">
-                    {parsed.issues.map((issue) => (
-                      <li key={`${issue.field}-${issue.message}`} className="t-body text-fg-soft">
-                        {issue.message}
+                    {[...new Set(parsed.issues.map((issue) => invalidKey(issue.field)))].map((key) => (
+                      <li key={key} className="t-body text-fg-soft">
+                        {t(key)}
                       </li>
                     ))}
                   </ul>
+                  <p className="t-body text-fg-soft">{t('events.invalid.hint')}</p>
                   <Button variant="ghost" onClick={() => commit({})} className="self-start">
                     {t('filters.reset')}
                   </Button>

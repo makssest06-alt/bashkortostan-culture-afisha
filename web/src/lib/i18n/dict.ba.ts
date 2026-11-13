@@ -99,6 +99,14 @@ export const ba: Record<DictKey, string> = {
   'events.next': 'Алға',
   'events.loading': 'Саралар һайлана…',
   'events.error': 'Каталог йөкләнмәне.',
+  'events.invalid.title': 'Һылтанмала афиша аңламаған шарттар бар', // проверить
+  'events.invalid.city': 'Афишала бындай ҡала юҡ.', // проверить
+  'events.invalid.category': 'Афишала бындай категория юҡ.', // проверить
+  'events.invalid.date': 'Һылтанмала көн йәки ваҡыт дөрөҫ күрһәтелмәгән.', // проверить
+  'events.invalid.price': 'Һылтанмала хаҡ дөрөҫ күрһәтелмәгән.', // проверить
+  'events.invalid.age': 'Һылтанмала йәш дөрөҫ күрһәтелмәгән.', // проверить
+  'events.invalid.other': 'Һылтанмалағы шарттарҙың береһе дөрөҫ түгел.', // проверить
+  'events.invalid.hint': 'Фильтрҙарҙы ташлағыҙ, афиша бөтә сараларҙы күрһәтер.', // проверить
   'events.nearest': 'Яҡындағы саралар',
   'events.popular': 'Популяр',
   'events.card.more': 'Тулыраҡ',
