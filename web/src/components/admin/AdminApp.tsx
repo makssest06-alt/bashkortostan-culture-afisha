@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn';
 
 import { adminFetch } from './api';
 import { Notice } from './bits';
+import { ApplicationsTab } from './ApplicationsTab';
 import { AuditList } from './AuditList';
 import { EventsTab } from './EventsTab';
 import { ImportTab } from './ImportTab';
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'events', label: 'События' },
   { id: 'import', label: 'Импорт' },
   { id: 'moderation', label: 'Спорные' },
+  { id: 'applications', label: 'Заявки' },
   { id: 'audit', label: 'Журнал' },
 ] as const;
 
@@ -149,6 +151,7 @@ export function AdminApp() {
         {tab === 'events' ? <EventsTab /> : null}
         {tab === 'import' ? <ImportTab onOpenModeration={() => openTab('moderation')} /> : null}
         {tab === 'moderation' ? <ModerationTab onCount={setDisputedCount} /> : null}
+        {tab === 'applications' ? <ApplicationsTab /> : null}
         {tab === 'audit' ? (
           <section aria-labelledby="audit-heading" className="flex flex-col gap-5">
             <h2 id="audit-heading" className="t-subtitle">

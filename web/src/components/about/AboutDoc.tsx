@@ -27,10 +27,12 @@ import type { Lang, LocalizedText } from '@/lib/i18n/lang';
 
 import styles from './about.module.css';
 import { ABOUT } from './copy';
+import { OrganizerForm } from '@/components/feedback/OrganizerForm';
+
 import { Credits } from './Credits';
 import type { CreditsResult } from './manifest';
 
-const SECTION_IDS = ['principles', 'model', 'collect', 'verify', 'dedup', 'ai', 'prototype', 'demo', 'credits', 'team'] as const;
+const SECTION_IDS = ['principles', 'model', 'collect', 'verify', 'dedup', 'ai', 'prototype', 'demo', 'organizers', 'credits', 'team'] as const;
 
 const DEDUP_STEPS: readonly TKey[] = ['about.dedup.step1', 'about.dedup.step2', 'about.dedup.step3', 'about.dedup.step4'];
 
@@ -255,6 +257,12 @@ export function AboutDoc({ lang, credits }: AboutDocProps) {
             {p(ABOUT.demo.apiLink)}
           </Button>
         </div>
+      </DocSection>
+
+      {/* -------------------------------------------------- Организаторам */}
+      <DocSection id="organizers" title={p(ABOUT.toc.organizers)}>
+        <Prose>{p(ABOUT.organizers.text)}</Prose>
+        <OrganizerForm defaultKind="organizer_application" className="mt-6" />
       </DocSection>
 
       {/* ------------------------------------------------- Фото и графика */}

@@ -33,6 +33,8 @@ import { MoreInCity } from './MoreInCity';
 import { PriceBlock } from './PriceBlock';
 import { Sessions } from './Sessions';
 import { ShareButton } from './ShareButton';
+import { OrganizerForm } from '@/components/feedback/OrganizerForm';
+
 import { SourcesBlock } from './SourcesBlock';
 import { TrustBlock } from './TrustBlock';
 import { VenueBlock } from './VenueBlock';
@@ -178,6 +180,13 @@ export function EventView({ event, today, backHref, more, imageMeta }: EventView
 
             <TrustBlock event={event} />
             <SourcesBlock sources={event.sources} />
+            <details className="group rounded-sm border border-line px-5 py-4" data-event-feedback="">
+              <summary className="flex min-h-11 cursor-pointer list-none flex-col justify-center gap-0.5">
+                <span className="t-ui text-fg underline decoration-line-strong underline-offset-4 group-open:no-underline">{copy('feedbackTitle', lang)}</span>
+                <span className="text-[0.875rem] text-fg-soft">{copy('feedbackLead', lang)}</span>
+              </summary>
+              <OrganizerForm defaultKind="correction" eventId={event.id} className="mt-5" />
+            </details>
           </div>
 
           <div className={cn(styles.venue, styles.reveal)} style={order(4)}>
