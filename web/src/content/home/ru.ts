@@ -70,7 +70,7 @@ export const HOME_RU: HomeCopy = {
     cardCta: 'Смотреть',
     cards: galleryCards({
       concert: { label: 'Концерты', note: 'Орган, джаз, оркестр' },
-      museum: { label: 'Музеи', note: 'Экскурсии и экспозиции' },
+      excursion: { label: 'Экскурсии', note: 'Музеи и город' },
       exhibition: { label: 'Выставки', note: 'Живопись, графика, фото' },
       festival: { label: 'Фестивали', note: 'Музыка, ремёсла, театр' },
       kids: { label: 'Детям', note: 'Сказки и мастер-классы' },
@@ -84,7 +84,7 @@ export const HOME_RU: HomeCopy = {
     body: 'Первым стоит сеанс, на который ещё можно успеть. Прошедшие и отменённые сеансы в список не попадают.',
     query: HOME_QUERIES.fullscreen,
     eventCta: 'Открыть событие',
-    cta: { label: 'Все спектакли', href: `${ROUTES.events}?category=theatre` },
+    cta: { label: 'Все спектакли', href: `${ROUTES.events}?category=performance` },
     empty: 'Ближайших спектаклей в каталоге пока нет.',
   },
 

@@ -12,6 +12,7 @@ import {
   AGE_PREFIXES,
   AMOUNT_WORDS,
   AMOUNT_WORD_PATTERN,
+  CATEGORY_ALIASES,
   CATEGORY_PATTERNS,
   CITY_PATTERNS,
   NOT_IN_DEMO_CITIES,
@@ -332,8 +333,15 @@ const NEGATION_BEFORE_CATEGORY = /(?:^|[^a-zа-я0-9])(?:кроме|только
 const DISLIKE_BEFORE_CATEGORY = /(?:^|[^a-zа-я0-9])не\s+(?:очень\s+|особо\s+)?(?:люблю|любим|хочу|хочется)\s+$/;
 const CATEGORY_UNSET = 'люб(?:ая|ую)\\s+категори[а-я]+|что\\s+угодно|неважно\\s+что|забудь\\s+про\\s+категори[а-я]+';
 
-export function parseCategories(scanner: Scanner): ParsedCategories & { unset: boolean } {
-  const result: ParsedCategories & { unset: boolean } = { any: [], exclude: [], avoid: [], words: [], unset: false };
+export function parseCategories(scanner: Scanner): ParsedCategories & { unset: boolean; kids: boolean } {
+  const result: ParsedCategories & { unset: boolean; kids: boolean } = {
+    any: [],
+    exclude: [],
+    avoid: [],
+    words: [],
+    unset: false,
+    kids: false,
+  };
   if (take(scanner, word(CATEGORY_UNSET))) {
     result.unset = true;
     return result;
@@ -354,8 +362,22 @@ export function parseCategories(scanner: Scanner): ParsedCategories & { unset: b
     }
   }
 
-  // «Детский спектакль» в каталоге лежит в разделе «Детям», а не в театре.
-  if (result.any.includes('kids')) result.any = ['kids'];
+  // «Детский спектакль»: «детский» говорит об аудитории, категорией остаётся спектакль.
+  result.kids = result.any.includes('kids');
+  result.any = expandCategoryAliases(result.any.filter((id) => id !== 'kids'));
+  result.exclude = expandCategoryAliases(result.exclude.filter((id) => id !== 'kids'));
+  result.avoid = expandCategoryAliases(result.avoid.filter((id) => id !== 'kids'));
+  return result;
+}
+
+/** «Музей» раскрывается в выставки и экскурсии: такой категории в п. 8.1 нет. */
+function expandCategoryAliases(ids: readonly string[]): string[] {
+  const result: string[] = [];
+  for (const id of ids) {
+    for (const expanded of CATEGORY_ALIASES[id] ?? [id]) {
+      if (!result.includes(expanded)) result.push(expanded);
+    }
+  }
   return result;
 }
 

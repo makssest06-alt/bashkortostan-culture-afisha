@@ -5,7 +5,7 @@
  * по категории: кольцо кускар, значок и название раздела.
  */
 
-import { Balloon, Bank, Confetti, FrameCorners, MaskHappy, MusicNotes } from '@phosphor-icons/react';
+import { Bank, Confetti, FilmSlate, FrameCorners, MaskHappy, MusicNotes, Sparkle } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
 import Image from 'next/image';
 import { useState } from 'react';
@@ -21,12 +21,13 @@ import styles from './event.module.css';
 import type { ImageMeta } from './model';
 
 const CATEGORY_ICONS: Record<CategoryId, Icon> = {
-  theatre: MaskHappy,
   concert: MusicNotes,
-  museum: Bank,
+  performance: MaskHappy,
   exhibition: FrameCorners,
   festival: Confetti,
-  kids: Balloon,
+  cinema: FilmSlate,
+  excursion: Bank,
+  other: Sparkle,
 };
 
 export type EventMediaProps = {

@@ -188,13 +188,16 @@
     return TEXT[lang].weekdays[weekday] + ', ' + text;
   }
 
-  /** Части подписи сеанса: [день, время] или [период] для выставки без времени начала. */
+  /**
+   * Части подписи сеанса: [день, время] или [период] для выставки без времени начала.
+   * Сеанс приходит в форме контракта: date_start с поясом и time_precision (minute или date).
+   */
   function occurrenceParts(occurrence, lang, today) {
-    var start = occurrence.start || {};
-    var from = String(start.local || '').slice(0, 10);
+    var startText = String(occurrence.date_start || '');
+    var from = startText.slice(0, 10);
     if (!from) return [];
-    if (start.precision === 'minute') return [formatDay(from, lang, true), String(start.local).slice(11, 16)];
-    var to = occurrence.end ? String(occurrence.end.local || '').slice(0, 10) : '';
+    if (occurrence.time_precision !== 'date') return [formatDay(from, lang, true), startText.slice(11, 16)];
+    var to = occurrence.date_end ? String(occurrence.date_end).slice(0, 10) : '';
     if (!to) return [formatDay(from, lang, false)];
     if (today && from <= today) {
       return [lang === 'ba' ? formatDay(to, lang, false) + ' тиклем' : 'до ' + formatDay(to, lang, false)];
@@ -224,12 +227,18 @@
     return days + NBSP + pluralRu(days, ['день', 'дня', 'дней']) + ' назад';
   }
 
+  /** Вид цены по полям п. 8.1: is_free, price_min (рубли, null: не указана). */
+  function priceKind(event) {
+    if (event.is_free) return 'free';
+    return typeof event.price_min === 'number' ? 'from' : 'unknown';
+  }
+
   /** Цена: «Бесплатно», «от 500 ₽» и «Цена не указана» это три разных состояния. */
-  function formatPrice(summary, lang) {
-    var kind = summary && summary.kind;
+  function formatPrice(event, lang) {
+    var kind = priceKind(event);
     if (kind === 'free') return TEXT[lang].free;
-    if (kind !== 'from' || typeof summary.amount_minor !== 'number') return TEXT[lang].priceUnknown;
-    var amount = groupDigits(summary.amount_minor / 100);
+    if (kind !== 'from') return TEXT[lang].priceUnknown;
+    var amount = groupDigits(event.price_min);
     return lang === 'ba' ? amount + NBSP + 'һумдан' : 'от' + NBSP + amount + NBSP + '₽';
   }
 
@@ -237,7 +246,7 @@
   function displayStatus(occurrence) {
     if (occurrence.status === 'cancelled') return 'cancelled';
     if (occurrence.status === 'postponed') return 'postponed';
-    if (occurrence.status === 'unknown' || occurrence.status_is_verified === false) return 'unverified';
+    if (occurrence.status === 'unknown' || occurrence.status_verified === false) return 'unverified';
     if (occurrence.availability === 'sold_out') return 'sold_out';
     if (occurrence.status === 'rescheduled') return 'rescheduled';
     return 'scheduled';
@@ -339,7 +348,7 @@
       var parts = occurrenceParts(occurrence, config.lang, today);
       if (parts.length) {
         var time = el('time', 'aw__caps aw__date');
-        time.setAttribute('datetime', String(occurrence.start.local));
+        time.setAttribute('datetime', String(occurrence.date_start));
         for (var p = 0; p < parts.length; p += 1) time.appendChild(el('span', '', parts[p]));
         item.appendChild(time);
       }
@@ -350,14 +359,12 @@
     name.appendChild(externalLink(config.base + '/events/' + encodeURIComponent(event.id), 'aw__link', title, t.newTab));
     item.appendChild(name);
 
-    var venue = event.venue || {};
-    var cityName = venue.city_name ? venue.city_name[config.lang] || venue.city_name.ru : '';
-    var place = [venue.name, cityName].filter(Boolean).join(', ');
+    var place = [event.venue, event.city].filter(Boolean).join(', ');
     if (place) item.appendChild(el('p', 'aw__place', place));
 
     var facts = el('p', 'aw__facts');
-    var price = el('span', 'aw__price', formatPrice(event.price_summary, config.lang));
-    price.setAttribute('data-kind', (event.price_summary && event.price_summary.kind) || 'unknown');
+    var price = el('span', 'aw__price', formatPrice(event, config.lang));
+    price.setAttribute('data-kind', priceKind(event));
     facts.appendChild(price);
     if (occurrence) {
       var status = displayStatus(occurrence);
@@ -365,7 +372,7 @@
       badge.setAttribute('data-status', status);
       facts.appendChild(badge);
     }
-    var ago = event.source ? formatAgo(event.source.checked_at, config.lang) : '';
+    var ago = event.verified_at ? formatAgo(event.verified_at, config.lang) : '';
     if (ago) facts.appendChild(el('span', 'aw__checked', t.checked.replace('{ago}', ago)));
     item.appendChild(facts);
 
@@ -554,7 +561,7 @@
             return;
           }
           // 400: в настройках виджета неизвестный город или категория. Сообщение API написано для человека.
-          var message = result.status === 400 && result.body && result.body.error ? String(result.body.error.message || '') : '';
+          var message = result.status === 400 && result.body ? String(result.body.message || '') : '';
           showNote('error', t.error, message || t.errorHint, !message);
         })
         .catch(function () {

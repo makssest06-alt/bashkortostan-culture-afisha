@@ -4,12 +4,12 @@
  */
 
 import { DICTIONARIES } from '../../../../data/dictionaries';
-import { internalError, json, methodNotAllowed, preflight } from '../../../../lib/api/http';
+import { CACHE_DICTIONARY, internalError, jsonWithEtag, methodNotAllowed, preflight } from '../../../../lib/api/http';
 
-export function GET(): Response {
+export function GET(request: Request): Response {
   try {
-    // Справочники меняются редко: их можно держать в кэше браузера пять минут.
-    return json(DICTIONARIES, { cache: 'public, max-age=300' });
+    // Справочники меняются редко: пять минут в кэше и ETag для дешёвой перепроверки.
+    return jsonWithEtag(request, DICTIONARIES, CACHE_DICTIONARY);
   } catch (error) {
     return internalError(error);
   }

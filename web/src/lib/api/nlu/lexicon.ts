@@ -46,11 +46,15 @@ export const NOT_IN_DEMO_CITIES: readonly { name: string; pattern: string }[] = 
   { name: 'Дюртюли', pattern: 'дюртюл[а-я]+' },
 ];
 
-/** Слова, по которым узнаётся категория. Порядок важен: «детский спектакль» это раздел «Детям». */
+/**
+ * Слова, по которым узнаётся категория. id это категория п. 8.1 ТЗ или служебный код:
+ * `kids` не категория, а аудитория «детям» (её разбирает parseCategories),
+ * `museum` раскрывается в выставки и экскурсии (CATEGORY_ALIASES).
+ */
 export const CATEGORY_PATTERNS: readonly { id: string; pattern: string }[] = [
   { id: 'kids', pattern: 'детск[а-я]+|кукольн[а-я]+|сказк[а-я]+|сказок|мультфильм[а-я]*|для\\s+малышей|малышам' },
   {
-    id: 'theatre',
+    id: 'performance',
     pattern:
       'театр[а-я]*|спектакл[а-я]*|постановк[а-я]+|пьес[а-я]+|балет[а-я]*|опер[аыуе]|оперн[а-я]+|мюзикл[а-я]*|драм[аыу]|комеди[а-я]+',
   },
@@ -59,30 +63,36 @@ export const CATEGORY_PATTERNS: readonly { id: string; pattern: string }[] = [
     pattern:
       'концерт[а-я]*|филармони[а-я]+|органн[а-я]+|орган|джаз[а-я]*|симфони[а-я]+|оркестр[а-я]*|музык[а-я]+',
   },
-  { id: 'museum', pattern: 'музе[а-я]+|экспозици[а-я]+|экскурси[а-я]+' },
-  { id: 'exhibition', pattern: 'выставк[а-я]+|выставок|галере[а-я]+|вернисаж[а-я]*|фотовыставк[а-я]+' },
+  { id: 'excursion', pattern: 'экскурси[а-я]+' },
+  { id: 'museum', pattern: 'музе[а-я]+' },
+  { id: 'exhibition', pattern: 'выставк[а-я]+|выставок|экспозици[а-я]+|галере[а-я]+|вернисаж[а-я]*|фотовыставк[а-я]+' },
   { id: 'festival', pattern: 'фестивал[а-я]+|праздник[а-я]*|ярмарк[а-я]+|сабантуй[а-я]*' },
+  { id: 'cinema', pattern: 'кино[а-я]*|фильм[а-я]*|киносеанс[а-я]*' },
+  { id: 'other', pattern: 'мастер-класс[а-я]*|мастерск[а-я]+' },
   // Категорий ниже в афише нет: запрос по ним честно вернёт пустую выдачу.
-  { id: 'cinema', pattern: 'кино[а-я]*|фильм[а-я]*' },
   { id: 'quest', pattern: 'квест[а-я]*|квэст[а-я]*' },
   { id: 'lecture', pattern: 'лекци[а-я]+' },
 ];
 
+/** Служебные коды, которые раскрываются в несколько категорий каталога. */
+export const CATEGORY_ALIASES: Readonly<Record<string, readonly CategoryId[]>> = {
+  museum: ['exhibition', 'excursion'],
+};
+
 export const CATALOG_CATEGORY_IDS: readonly CategoryId[] = [
-  'theatre',
   'concert',
-  'museum',
+  'performance',
   'exhibition',
   'festival',
-  'kids',
+  'cinema',
+  'excursion',
+  'other',
 ];
 
 /** Подписи категорий, которых нет в справочнике афиши. */
 export const EXTRA_CATEGORY_LABELS: Record<string, string> = {
-  cinema: 'Кино',
   quest: 'Квесты',
   lecture: 'Лекции',
-  workshop: 'Мастер-классы',
   ballet: 'Балет',
 };
 

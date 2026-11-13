@@ -8,6 +8,7 @@
  * Записи неизменяемые: любое обновление кладёт в карту новый объект и будит подписчиков.
  */
 
+import { KIDS_TAG } from '@/data/dictionaries';
 import { ApiClientError, listEvents } from '@/lib/api/client';
 import type { EventListItem, EventsListResponse, EventsQuery } from '@/lib/api/types';
 
@@ -214,7 +215,7 @@ export function revealUnknown(query: EventsQuery, kind: UnknownKind): void {
   const kidsPassAnyway = query.audience === 'kids' && query.age === undefined && !query.age_rating?.length;
   const priceUnknown = (item: EventListItem) => item.price_summary.kind === 'unknown';
   const ageUnknown = (item: EventListItem) =>
-    item.age_rating === null && !(kidsPassAnyway && item.category === 'kids');
+    item.age_rating === null && !(kidsPassAnyway && item.tags.includes(KIDS_TAG));
 
   const fetchAll = async (relaxed: EventsQuery, keep: (item: EventListItem) => boolean) => {
     const found: EventListItem[] = [];

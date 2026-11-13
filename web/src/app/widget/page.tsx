@@ -30,7 +30,7 @@ const FEATURE_KEYS = [
 
 /**
  * Виджет: код вставки одной строкой, настройки и живой пример в макете страницы министерства.
- * Настройки читаются из адреса (?city=ufa&category=theatre&limit=5&theme=dark&lang=ba&mode=iframe),
+ * Настройки читаются из адреса (?city=ufa&category=performance&limit=5&theme=dark&lang=ba&mode=iframe),
  * поэтому первая версия кода приходит с сервера уже нужной.
  */
 export default async function WidgetPage({ searchParams }: { searchParams: Promise<SearchParams> }) {

@@ -14,6 +14,7 @@ import type {
   FilterPill,
   FilterPillId,
   GalleryCard,
+  GalleryTopicId,
   HomeLink,
   HomeSceneId,
   QuickPick,
@@ -45,7 +46,7 @@ export const HOME_SCENE_IDS: readonly HomeSceneId[] = [
  */
 export const HOME_QUERIES: Readonly<Record<'fullscreen' | 'thermal' | 'popular', EventsQuery>> = {
   /** Один ближайший спектакль для раскрытой карточки «Театр». */
-  fullscreen: { category: ['theatre'], sort: 'date', page_size: 1 },
+  fullscreen: { category: ['performance'], sort: 'date', page_size: 1 },
   /** Три самых популярных события на сегодня. */
   thermal: { date: 'today', sort: 'popularity', page_size: 3 },
   /** Четыре события для широких панелей ленты. */
@@ -87,24 +88,25 @@ export function quickPicks(labels: Record<QuickPickId, string>): QuickPick[] {
 // ---------------------------------------------------------------------------
 
 /** Театр стоит последним: его карточка раскрывается в сцену fullscreen. */
-const GALLERY_ORDER: readonly CategoryId[] = ['concert', 'museum', 'exhibition', 'festival', 'kids', 'theatre'];
+const GALLERY_ORDER: readonly GalleryTopicId[] = ['concert', 'excursion', 'exhibition', 'festival', 'kids', 'theatre'];
 
-const GALLERY_IMAGES: Record<CategoryId, string> = {
-  concert: '/images/events/concert-1.webp',
-  museum: '/images/events/museum-1.webp',
-  exhibition: '/images/events/exhibition-2.webp',
-  festival: '/images/events/festival-1.webp',
-  kids: '/images/events/kids-1.webp',
-  theatre: '/images/events/theatre-1.webp',
+const GALLERY_TOPICS: Record<GalleryTopicId, { image: string; category: CategoryId | null; query: EventsQuery }> = {
+  concert: { image: '/images/events/concert-1.webp', category: 'concert', query: { category: ['concert'] } },
+  excursion: { image: '/images/events/museum-1.webp', category: 'excursion', query: { category: ['excursion'] } },
+  exhibition: { image: '/images/events/exhibition-2.webp', category: 'exhibition', query: { category: ['exhibition'] } },
+  festival: { image: '/images/events/festival-1.webp', category: 'festival', query: { category: ['festival'] } },
+  kids: { image: '/images/events/kids-1.webp', category: null, query: { audience: 'kids' } },
+  theatre: { image: '/images/events/theatre-1.webp', category: 'performance', query: { category: ['performance'] } },
 };
 
-export function galleryCards(labels: Record<CategoryId, { label: string; note: string }>): GalleryCard[] {
+export function galleryCards(labels: Record<GalleryTopicId, { label: string; note: string }>): GalleryCard[] {
   return GALLERY_ORDER.map((id) => ({
     id,
+    category: GALLERY_TOPICS[id].category,
     label: labels[id].label,
     note: labels[id].note,
-    href: eventsHref({ category: [id] }),
-    image: GALLERY_IMAGES[id],
+    href: eventsHref(GALLERY_TOPICS[id].query),
+    image: GALLERY_TOPICS[id].image,
   }));
 }
 
@@ -117,7 +119,7 @@ const FILTER_PILL_HREFS: Record<FilterPillId, string> = {
   city: eventsHref({ city: ['ufa'] }),
   price: eventsHref({ price_max: 1000 }),
   age: eventsHref({ age: 6 }),
-  category: eventsHref({ category: ['theatre'] }),
+  category: eventsHref({ category: ['performance'] }),
 };
 
 const FILTER_PILL_ORDER: readonly FilterPillId[] = ['date', 'city', 'price', 'age', 'category'];

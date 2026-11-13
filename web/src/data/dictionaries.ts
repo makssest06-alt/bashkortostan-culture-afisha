@@ -26,14 +26,22 @@ import type {
   StatusEntry,
 } from '../lib/api/types';
 
+/**
+ * Семь категорий из п. 8.1 ТЗ: концерт, спектакль, выставка, фестиваль, кино, экскурсия, другое.
+ * «Детям» не категория, а аудитория: фильтр audience=kids и метка «дети» в tags.
+ */
 export const CATEGORIES: readonly CategoryEntry[] = [
-  { id: 'theatre', name: { ru: 'Театр', ba: 'Театр' }, name_one: { ru: 'Театр', ba: 'Театр' } },
   { id: 'concert', name: { ru: 'Концерты', ba: 'Концерттар' }, name_one: { ru: 'Концерт', ba: 'Концерт' } },
-  { id: 'museum', name: { ru: 'Музеи', ba: 'Музейҙар' }, name_one: { ru: 'Музей', ba: 'Музей' } },
+  { id: 'performance', name: { ru: 'Спектакли', ba: 'Спектаклдәр' }, name_one: { ru: 'Спектакль', ba: 'Спектакль' } },
   { id: 'exhibition', name: { ru: 'Выставки', ba: 'Күргәҙмәләр' }, name_one: { ru: 'Выставка', ba: 'Күргәҙмә' } },
   { id: 'festival', name: { ru: 'Фестивали', ba: 'Фестивалдәр' }, name_one: { ru: 'Фестиваль', ba: 'Фестиваль' } },
-  { id: 'kids', name: { ru: 'Детям', ba: 'Балаларға' }, name_one: { ru: 'Детям', ba: 'Балаларға' } },
+  { id: 'cinema', name: { ru: 'Кино', ba: 'Кино' }, name_one: { ru: 'Кинопоказ', ba: 'Кино күрһәтеү' } },
+  { id: 'excursion', name: { ru: 'Экскурсии', ba: 'Экскурсиялар' }, name_one: { ru: 'Экскурсия', ba: 'Экскурсия' } },
+  { id: 'other', name: { ru: 'Другое', ba: 'Башҡалар' }, name_one: { ru: 'Другое', ba: 'Башҡа' } },
 ];
+
+/** Метка аудитории «детям» в tags (п. 8.1: «дети»). */
+export const KIDS_TAG = 'дети';
 
 /** Координаты: центр города с точностью до сотых градуса, для карты уровня города. */
 export const CITIES: readonly CityEntry[] = [

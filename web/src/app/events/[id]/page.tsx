@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 
 import { EventView } from '@/components/event/EventView';
 import { EVENT_GLOW, MORE_LIMIT, catalogHrefFromParam, eventPath, eventTitle, metaDescription, pickMore } from '@/components/event/model';
@@ -80,6 +80,13 @@ export default async function EventPage({ params, searchParams }: EventPageProps
   const [{ id }, search] = await Promise.all([params, searchParams]);
   const found = await getEvent(id);
   if (!found) notFound();
+  // Старые ссылки вида /events/evt_demo_t4 ведут на постоянный адрес с UUID (п. 8.1).
+  if (found.id !== id) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(search)) if (typeof value === 'string') query.set(key, value);
+    const tail = query.toString();
+    permanentRedirect(`${eventPath(found.id)}${tail ? `?${tail}` : ''}`);
+  }
 
   const debug = debugModeOf(search.debug);
   const event = await applyDebug(found, debug);

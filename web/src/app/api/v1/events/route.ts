@@ -3,17 +3,20 @@
  * Список событий с фильтрами, сортировкой, счётчиками и вариантами ослабить условия.
  */
 
-import { internalError, json, methodNotAllowed, preflight, validationError } from '../../../../lib/api/http';
+import { internalError, json, methodNotAllowed, preflight, requestIdOf, validationError } from '../../../../lib/api/http';
 import { parseEventsQuery } from '../../../../lib/api/params';
 import { searchEvents } from '../../../../lib/api/search';
+import { toApiEventsList } from '../../../../lib/api/wire';
 
 export function GET(request: Request): Response {
+  const requestId = requestIdOf(request);
   try {
     const parsed = parseEventsQuery(new URL(request.url).searchParams);
-    if (!parsed.ok) return validationError(parsed.issues);
-    return json(searchEvents(parsed.value));
+    if (!parsed.ok) return validationError(parsed.issues, requestId);
+    // Событие уходит в форме контракта п. 8.1 (см. lib/api/wire.ts).
+    return json(toApiEventsList(searchEvents(parsed.value)), { requestId });
   } catch (error) {
-    return internalError(error);
+    return internalError(error, requestId);
   }
 }
 

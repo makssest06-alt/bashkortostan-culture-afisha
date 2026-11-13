@@ -17,7 +17,17 @@ export type { Lang, LocalizedText };
 // Справочные идентификаторы
 // ---------------------------------------------------------------------------
 
-export type CategoryId = 'theatre' | 'concert' | 'museum' | 'exhibition' | 'festival' | 'kids';
+/** Семь категорий п. 8.1 ТЗ: концерт, спектакль, выставка, фестиваль, кино, экскурсия, другое. */
+export type CategoryId = 'concert' | 'performance' | 'exhibition' | 'festival' | 'cinema' | 'excursion' | 'other';
+
+/** Статус события п. 8.1: опубликовано, черновик, отменено. */
+export type EventStatus = 'published' | 'draft' | 'cancelled';
+
+/** Откуда взято событие (п. 8.1 source_type). */
+export type SourceType = 'manual' | 'import' | 'rss' | 'api' | 'page';
+
+/** Возрастное ограничение п. 8.1: только эти значения. */
+export type AgeLimit = 0 | 6 | 12 | 16 | 18;
 
 export type CityId =
   | 'ufa'
@@ -138,16 +148,70 @@ export interface SourceInfo {
   sources_count: number;
 }
 
+/** Один источник карточки после дедупликации (п. 6.3: «в карточке виден список источников»). */
+export interface EventSource {
+  source_url: string;
+  source_type: SourceType;
+  source_hash: string;
+  verified_at: string | null;
+  /** Подпись источника для человека. */
+  title?: string;
+}
+
+/** Пометка спорной карточки (п. 6.1: «спорные помечены»). */
+export interface EventReview {
+  disputed: boolean;
+  reasons: string[];
+}
+
+/**
+ * Событие внутри сайта. Поля п. 8.1 ТЗ лежат на верхнем уровне с теми же именами;
+ * рядом остаются поля, на которых построен интерфейс (venue, offers, occurrences).
+ * По сети событие ходит в форме контракта: см. ApiEvent в ./wire.
+ */
 export interface AfishaEvent {
+  /** UUID (п. 8.1). */
   id: string;
   title: string;
+  /** Название для дедупликации и поиска: нижний регистр, ё→е, без кавычек. */
+  normalized_title: string;
   /** Название на башкирском, если оно есть в источнике. */
   title_ba?: string;
   description: string;
   category: CategoryId;
+  /** Метки п. 8.1: «джаз», «дети», «бесплатно», «башкирский язык». */
+  tags: string[];
+  /** Язык мероприятия, если указан: ru, ba. */
+  language: string | null;
+  status: EventStatus;
   kind: EventKind;
-  /** null: возрастное ограничение неизвестно. Это не то же самое, что 0+. */
+  /** Возрастное ограничение числом п. 8.1. null: неизвестно, это не 0. */
+  age_limit: AgeLimit | null;
+  /** То же ограничение меткой для интерфейса: «6+». */
   age_rating: AgeRating | null;
+  /** Начало ближайшего актуального сеанса (п. 8.1 date_start). null: актуальных сеансов нет. */
+  date_start: string | null;
+  date_end: string | null;
+  duration_min: number | null;
+  /** minute: время известно; date: только дата. */
+  time_precision: TimePrecision;
+  /** Цена в рублях п. 8.1. 0: бесплатно. null: цена не указана, это не «бесплатно». */
+  price_min: number | null;
+  price_max: number | null;
+  is_free: boolean;
+  source_url: string;
+  source_type: SourceType;
+  /** Хеш исходной записи для идемпотентного импорта. */
+  source_hash: string;
+  verified_at: string | null;
+  /** Уверенность извлечения 0–1. */
+  confidence: number;
+  dedup_key: string;
+  created_at: string;
+  updated_at: string;
+  /** Все источники после дедупликации. Первый совпадает с source_url. */
+  sources: EventSource[];
+  review?: EventReview;
   /** Путь к картинке или null, если картинки нет. */
   image: string | null;
   organizer?: string;
@@ -161,8 +225,8 @@ export interface AfishaEvent {
   source: SourceInfo;
   /** Куда ведёт кнопка «Купить билет». Отсутствует, если ссылки нет. */
   ticket_url?: string;
-  /** Признак демонстрационной записи. В боевом API поле исчезнет. */
-  synthetic: true;
+  /** Признак демонстрационной записи. У импортированных и введённых вручную событий false. */
+  synthetic: boolean;
 }
 
 /** Событие в списке: к карточке добавлены сеансы, которые прошли условия запроса. */
@@ -565,12 +629,14 @@ export interface ApiErrorDetail {
   message: string;
 }
 
+/** Единый формат ошибки API: { code, message, details, request_id }. */
 export interface ApiErrorBody {
-  error: {
-    code: string;
-    message: string;
-    details?: ApiErrorDetail[];
-  };
+  code: string;
+  /** Понятный жителю текст по-русски: его можно показать как есть. */
+  message: string;
+  details?: ApiErrorDetail[];
+  /** Идентификатор запроса для сквозной трассировки; тот же в заголовке X-Request-Id. */
+  request_id?: string;
 }
 
 export interface ApiEndpointInfo {

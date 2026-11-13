@@ -13,6 +13,7 @@ import type {
   CategoryId,
   CityId,
   EventKind,
+  EventStatus,
   OccurrenceStatus,
   OfferAudience,
 } from '../../lib/api/types';
@@ -81,11 +82,22 @@ export interface MockVenue {
 }
 
 export interface MockEvent {
+  /** Короткий код записи. Публичный id события это UUID, выведенный из этого кода. */
   id: string;
   title: string;
   title_ba?: string;
   description: string;
   category: CategoryId;
+  /** Метки п. 8.1. «бесплатно» добавляется само по явной пометке в цене. */
+  tags?: string[];
+  /** Язык мероприятия, если указан: ru, ba. */
+  language?: string;
+  /** По умолчанию published. */
+  status?: EventStatus;
+  /** Спорная карточка: попадает в очередь модерации. */
+  review?: { reasons: string[] };
+  /** Уверенность извлечения 0–1. По умолчанию 0.95. */
+  confidence?: number;
   kind: EventKind;
   age_rating: AgeRating | null;
   image: string | null;

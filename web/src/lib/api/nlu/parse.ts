@@ -215,6 +215,7 @@ export function parseMessage(message: string, context: ParseContext): ParsedMess
   if (categories.any.length > 0) result.hard.categories_any = categories.any;
   if (categories.exclude.length > 0) result.hard.categories_exclude = categories.exclude;
   if (categories.avoid.length > 0) result.soft.avoid_categories = categories.avoid;
+  if (categories.kids) result.soft.audience = 'children';
 
   const preferences = parsePreferences(scanner);
   if (preferences.ids.length > 0) result.soft.preferences = preferences.ids;

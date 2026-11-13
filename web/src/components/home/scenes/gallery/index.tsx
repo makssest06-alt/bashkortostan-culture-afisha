@@ -331,8 +331,8 @@ function GalleryStage({ copy, facets }: StageProps) {
     scrollToTarget(trigger.start + (trigger.end - trigger.start) * galleryTiming(env.mobile).cardRest(index));
   };
 
-  const countOf = (id: CategoryId): number | null => {
-    if (facets.status !== 'ready') return null;
+  const countOf = (id: CategoryId | null): number | null => {
+    if (id === null || facets.status !== 'ready') return null;
     return facets.data.categories.find((entry) => entry.id === id)?.count ?? null;
   };
 
@@ -354,7 +354,7 @@ function GalleryStage({ copy, facets }: StageProps) {
 
       <nav className={styles.links} aria-label={t('event.category')}>
         {cards.map((card, index) => {
-          const count = countOf(card.id);
+          const count = countOf(card.category);
           return (
             <Link key={card.id} href={card.href} className={styles.link} data-g="link" onFocus={onLinkFocus(index)}>
               <span className={styles.bar}>

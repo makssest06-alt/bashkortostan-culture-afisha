@@ -6,7 +6,7 @@
  * из возрастной метки, «в бюджете» из цены.
  */
 
-import { ageRatingMin, getCategory, getCity } from '../../../data/dictionaries';
+import { KIDS_TAG, ageRatingMin, getCategory, getCity } from '../../../data/dictionaries';
 import { partyTotalMinor } from '../filters';
 import type { SearchMatch } from '../filters';
 import {
@@ -342,8 +342,8 @@ export function buildReasons(match: SearchMatch, occurrence: Occurrence, constra
   }
   if (hard.categories_any?.includes(event.category)) {
     reasons.push(`раздел «${categoryLabel(event.category)}»`);
-  } else if (age !== null && event.category === 'kids') {
-    reasons.push('раздел «Детям»');
+  } else if (age !== null && event.tags.includes(KIDS_TAG)) {
+    reasons.push('для детей');
   }
 
   for (const id of soft.preferences ?? []) {
@@ -384,7 +384,7 @@ export function scoreMatch(match: SearchMatch, occurrence: Occurrence, constrain
   let score = event.popularity / 100;
 
   const hasChildren = (hard.participants?.children_count ?? 0) > 0 || soft.audience === 'children';
-  if (hasChildren && event.category === 'kids') score += 0.5;
+  if (hasChildren && event.tags.includes(KIDS_TAG)) score += 0.5;
 
   for (const id of soft.preferences ?? []) {
     const preference = PREFERENCES.find((entry) => entry.id === id);

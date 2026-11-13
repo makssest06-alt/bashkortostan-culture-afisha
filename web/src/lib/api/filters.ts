@@ -7,7 +7,7 @@
  * Такие события не теряются молча: они считаются в hidden_unknown_*.
  */
 
-import { DEFAULT_STATUSES, ageRatingMin, getCategory, getCity } from '../../data/dictionaries';
+import { DEFAULT_STATUSES, KIDS_TAG, ageRatingMin, getCategory, getCity } from '../../data/dictionaries';
 import type { Catalog } from './db';
 import { startMs } from './db';
 import { matchesAllTokens } from './text';
@@ -199,7 +199,7 @@ function checkAge(event: AfishaEvent, filters: SearchFilters): Verdict {
     else verdicts.push(filters.age_ratings.includes(rating) ? 'ok' : 'fail');
   }
   if (filters.audience === 'kids') {
-    if (event.category === 'kids' || rating === '0+' || rating === '6+') verdicts.push('ok');
+    if (event.tags.includes(KIDS_TAG) || rating === '0+' || rating === '6+') verdicts.push('ok');
     else verdicts.push(rating === null ? 'unknown' : 'fail');
   }
   return worst(...verdicts);
@@ -214,6 +214,7 @@ function searchableText(event: AfishaEvent): string {
     event.description,
     event.venue.name,
     event.organizer ?? '',
+    event.tags.join(' '),
     city ? `${city.name.ru} ${city.name.ba} ${city.name_in.ru}` : '',
     category ? `${category.name.ru} ${category.name_one.ru} ${category.name.ba}` : '',
   ].join(' ');

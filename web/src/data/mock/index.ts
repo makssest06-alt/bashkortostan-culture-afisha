@@ -7,6 +7,7 @@
  * форма ответов API не изменится.
  */
 
+import { CINEMA_EVENTS } from './events-cinema';
 import { FAMILY_EVENTS } from './events-family';
 import { MUSEUM_EVENTS } from './events-museum';
 import { STAGE_EVENTS } from './events-stage';
@@ -15,7 +16,7 @@ import type { MockEvent } from './types';
 export { MOCK_VENUES } from './venues';
 export type { MockEvent, MockOffer, MockSchedule, MockVenue, MockWeekday, MockWeekdaySession } from './types';
 
-export const MOCK_EVENTS: readonly MockEvent[] = [...STAGE_EVENTS, ...MUSEUM_EVENTS, ...FAMILY_EVENTS];
+export const MOCK_EVENTS: readonly MockEvent[] = [...STAGE_EVENTS, ...MUSEUM_EVENTS, ...FAMILY_EVENTS, ...CINEMA_EVENTS];
 
 /** Источник у всех демонстрационных записей один. */
 export const MOCK_SOURCE = {

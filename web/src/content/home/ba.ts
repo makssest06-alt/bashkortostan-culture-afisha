@@ -71,7 +71,7 @@ export const HOME_BA: HomeCopy = {
     cardCta: 'Ҡарау',
     cards: galleryCards({
       concert: { label: 'Концерттар', note: 'Орган, джаз, оркестр' },
-      museum: { label: 'Музейҙар', note: 'Экскурсиялар һәм экспозициялар' },
+      excursion: { label: 'Экскурсиялар', note: 'Музейҙар һәм ҡала' }, // проверить
       exhibition: { label: 'Күргәҙмәләр', note: 'Һынлы сәнғәт, графика, фото' },
       festival: { label: 'Фестивалдәр', note: 'Музыка, һөнәрҙәр, театр' },
       kids: { label: 'Балаларға', note: 'Әкиәттәр һәм оҫталыҡ дәрестәре' },
@@ -85,7 +85,7 @@ export const HOME_BA: HomeCopy = {
     body: 'Беренсе булып әле өлгөрөргә мөмкин булған сеанс тора. Үткән һәм юҡҡа сығарылған сеанстар исемлеккә инмәй.',
     query: HOME_QUERIES.fullscreen,
     eventCta: 'Сараны асыу',
-    cta: { label: 'Бөтә спектаклдәр', href: `${ROUTES.events}?category=theatre` },
+    cta: { label: 'Бөтә спектаклдәр', href: `${ROUTES.events}?category=performance` },
     empty: 'Каталогта яҡын арала спектаклдәр әлегә юҡ.',
   },
 

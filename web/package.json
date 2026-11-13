@@ -9,7 +9,8 @@
     "start": "next start -p 3210",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "shots": "node scripts/shots.mjs"
+    "shots": "node scripts/shots.mjs",
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=20.9.0"
@@ -38,6 +39,7 @@
     "eslint-config-next": "^16.4.6",
     "playwright": "^1.65.0",
     "tailwindcss": "^4.3.5",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.7"
   }
 }

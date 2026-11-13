@@ -20,7 +20,9 @@ import {
   timedValue,
   valueDate,
 } from './time';
-import type { AfishaEvent, Occurrence, Offer, PriceSummary, TimeValue, Venue } from './types';
+import { ageLimitOf, dedupKey, normalizeTitle, sha256, timestampOf, uuidFromCode } from './identity';
+import { summarizePrice } from './price';
+import type { AfishaEvent, EventSource, Occurrence, Offer, TimeValue, Venue } from './types';
 
 const MS_MINUTE = 60_000;
 const MS_HOUR = 3_600_000;
@@ -83,22 +85,7 @@ function buildOffers(event: MockEvent): Offer[] {
   });
 }
 
-/**
- * Сводная цена для карточки. Считается по общим билетам (без пометки или «взрослый»);
- * детские и льготные тарифы на сводку не влияют. «Бесплатно» появляется только
- * из явной пометки, из неизвестной цены оно не выводится.
- */
-export function summarizePrice(offers: readonly Offer[]): PriceSummary {
-  const general = offers.filter((offer) => offer.audience === undefined || offer.audience === 'adult');
-  const considered = general.length > 0 ? general : offers;
-  if (considered.length === 0) return { kind: 'unknown' };
-  if (considered.every((offer) => offer.is_free)) return { kind: 'free' };
-  const amounts = considered
-    .filter((offer) => !offer.is_free && offer.amount_minor !== null)
-    .map((offer) => offer.amount_minor as number);
-  if (amounts.length === 0) return { kind: 'unknown' };
-  return { kind: 'from', amount_minor: Math.min(...amounts) };
-}
+export { summarizePrice };
 
 // ---------------------------------------------------------------------------
 // Сеансы
@@ -145,7 +132,7 @@ function buildOccurrence(event: MockEvent, spec: MockSchedule, index: number, cl
   const status = spec.status ?? 'scheduled';
   const base = {
     id: `${event.id.replace('evt_', 'occ_')}_${index + 1}`,
-    event_id: event.id,
+    event_id: uuidFromCode(event.id),
     venue_id: event.venue_id,
     status,
     status_is_verified: status === 'unknown' ? false : (spec.status_is_verified ?? true),
@@ -208,31 +195,127 @@ function buildOccurrences(event: MockEvent, clock: Clock): Occurrence[] {
 // События
 // ---------------------------------------------------------------------------
 
+function isoUtc(ms: number): string {
+  return new Date(ms).toISOString().replace('.000Z', 'Z');
+}
+
+/**
+ * Ближайший актуальный сеанс: не прошедший и не отменённый. Если таких нет,
+ * берётся ближайший не прошедший, иначе последний. Его даты становятся date_start и date_end события.
+ */
+export function primaryOccurrenceOf(occurrences: readonly Occurrence[]): Occurrence | null {
+  return (
+    occurrences.find((item) => !item.is_past && item.status !== 'cancelled') ??
+    occurrences.find((item) => !item.is_past) ??
+    occurrences[occurrences.length - 1] ??
+    null
+  );
+}
+
+/** Цена п. 8.1 по общим билетам: price_min, price_max и is_free. Неизвестная цена остаётся null. */
+export function priceFields(offers: readonly Offer[]): Pick<AfishaEvent, 'price_min' | 'price_max' | 'is_free'> {
+  const summary = summarizePrice(offers);
+  if (summary.kind === 'free') return { price_min: 0, price_max: 0, is_free: true };
+  if (summary.kind === 'unknown') return { price_min: null, price_max: null, is_free: false };
+  const general = offers.filter((offer) => offer.audience === undefined || offer.audience === 'adult');
+  const amounts = (general.length > 0 ? general : offers)
+    .filter((offer) => !offer.is_free && offer.amount_minor !== null)
+    .map((offer) => Math.round((offer.amount_minor as number) / 100));
+  return { price_min: Math.min(...amounts), price_max: Math.max(...amounts), is_free: false };
+}
+
+/** Даты события п. 8.1 по ближайшему актуальному сеансу. */
+export function dateFields(
+  occurrences: readonly Occurrence[],
+): Pick<AfishaEvent, 'date_start' | 'date_end' | 'duration_min' | 'time_precision'> {
+  const primary = primaryOccurrenceOf(occurrences);
+  if (!primary) return { date_start: null, date_end: null, duration_min: null, time_precision: 'minute' };
+  const end = primary.end ?? null;
+  const duration =
+    primary.start.precision === 'minute' && end?.precision === 'minute' && primary.start.utc && end.utc
+      ? Math.round((Date.parse(end.utc) - Date.parse(primary.start.utc)) / MS_MINUTE)
+      : null;
+  return {
+    date_start: timestampOf(primary.start),
+    date_end: end ? timestampOf(end) : null,
+    duration_min: duration,
+    time_precision: primary.start.precision,
+  };
+}
+
+/** Подписи демо-источников: сведённые дубли видны в блоке «Источники», и все честно помечены как демо. */
+const DEMO_SOURCE_TITLES: readonly { title: string; type: EventSource['source_type'] }[] = [
+  { title: `${MOCK_SOURCE.name}: афиша площадки`, type: 'manual' },
+  { title: `${MOCK_SOURCE.name}: страница организатора`, type: 'page' },
+  { title: `${MOCK_SOURCE.name}: открытые данные`, type: 'api' },
+  { title: `${MOCK_SOURCE.name}: лента новостей площадки`, type: 'rss' },
+];
+
+function demoSources(mock: MockEvent, verifiedAt: string): EventSource[] {
+  const count = Math.max(1, mock.sources_count);
+  return Array.from({ length: count }, (_, index) => {
+    const entry = DEMO_SOURCE_TITLES[index % DEMO_SOURCE_TITLES.length];
+    return {
+      source_url: MOCK_SOURCE.url,
+      source_type: entry.type,
+      source_hash: sha256(`${mock.id}:${index}`),
+      verified_at: verifiedAt,
+      title: entry.title,
+    };
+  });
+}
+
 function buildEvent(mock: MockEvent, clock: Clock): AfishaEvent {
   const venue = VENUES.get(mock.venue_id);
   if (!venue) throw new Error(`Событие ${mock.id}: неизвестная площадка ${mock.venue_id}`);
   const offers = buildOffers(mock);
+  const occurrences = buildOccurrences(mock, clock);
+  const verifiedAt = isoUtc(clock.nowMs - mock.checked_hours_ago * MS_HOUR);
+  const prices = priceFields(offers);
+  const dates = dateFields(occurrences);
+  const normalized = normalizeTitle(mock.title);
+  const tags = [...(mock.tags ?? [])];
+  if (prices.is_free && !tags.includes('бесплатно')) tags.push('бесплатно');
+  const sources = demoSources(mock, verifiedAt);
+
   const event: AfishaEvent = {
-    id: mock.id,
+    id: uuidFromCode(mock.id),
     title: mock.title,
+    normalized_title: normalized,
     description: mock.description,
     category: mock.category,
+    tags,
+    language: mock.language ?? null,
+    status: mock.status ?? 'published',
     kind: mock.kind,
+    age_limit: ageLimitOf(mock.age_rating),
     age_rating: mock.age_rating,
+    ...dates,
+    ...prices,
+    source_url: sources[0].source_url,
+    source_type: sources[0].source_type,
+    source_hash: sources[0].source_hash,
+    verified_at: verifiedAt,
+    confidence: mock.confidence ?? 0.95,
+    dedup_key: dedupKey(normalized, dates.date_start?.slice(0, 10) ?? null, mock.venue_id),
+    created_at: isoUtc(clock.nowMs - (mock.checked_hours_ago + 24 * 7) * MS_HOUR),
+    updated_at: verifiedAt,
+    sources,
     image: mock.image,
     popularity: mock.popularity,
-    occurrences: buildOccurrences(mock, clock),
+    occurrences,
     venue,
     offers,
     price_summary: summarizePrice(offers),
     source: {
-      name: MOCK_SOURCE.name,
-      url: MOCK_SOURCE.url,
-      checked_at: new Date(clock.nowMs - mock.checked_hours_ago * MS_HOUR).toISOString().replace('.000Z', 'Z'),
-      sources_count: mock.sources_count,
+      name: sources[0].title ?? MOCK_SOURCE.name,
+      url: sources[0].source_url,
+      checked_at: verifiedAt,
+      sources_count: sources.length,
     },
     synthetic: true,
   };
+  if (mock.review) event.review = { disputed: true, reasons: [...mock.review.reasons] };
   if (mock.title_ba) event.title_ba = mock.title_ba;
   if (mock.organizer) event.organizer = mock.organizer;
   if (mock.has_ticket_link) event.ticket_url = MOCK_TICKET_URL;
@@ -254,9 +337,18 @@ export function loadEvents(now: Date = new Date()): AfishaEvent[] {
   return loadCatalog(now).events;
 }
 
-/** Событие по идентификатору со всеми сеансами или null. */
+/** Код демо-записи → UUID. Старые ссылки вида evt_demo_t4 продолжают находить событие. */
+const LEGACY_IDS: ReadonlyMap<string, string> = new Map(MOCK_EVENTS.map((mock) => [mock.id, uuidFromCode(mock.id)]));
+
+/** UUID события по любому идентификатору: UUID как есть, старый код переводится. */
+export function resolveEventId(id: string): string {
+  return LEGACY_IDS.get(id) ?? id;
+}
+
+/** Событие по идентификатору (UUID или старый код) со всеми сеансами или null. */
 export function findEvent(id: string, now: Date = new Date()): AfishaEvent | null {
-  return loadCatalog(now).events.find((event) => event.id === id) ?? null;
+  const uuid = resolveEventId(id);
+  return loadCatalog(now).events.find((event) => event.id === uuid) ?? null;
 }
 
 export function countEvents(): number {
@@ -265,5 +357,5 @@ export function countEvents(): number {
 
 /** Идентификаторы всех событий: пригодится для generateStaticParams и карты сайта. */
 export function listEventIds(): string[] {
-  return MOCK_EVENTS.map((event) => event.id);
+  return MOCK_EVENTS.map((event) => uuidFromCode(event.id));
 }

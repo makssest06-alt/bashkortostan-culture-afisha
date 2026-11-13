@@ -83,8 +83,13 @@ export interface AiCopy {
   quick: QuickPick[];
 }
 
+/** Карточки ленты. Это темы, а не категории: «Детям» это аудитория, «Театр» это категория «спектакль». */
+export type GalleryTopicId = 'concert' | 'excursion' | 'exhibition' | 'festival' | 'kids' | 'theatre';
+
 export interface GalleryCard {
-  id: CategoryId;
+  id: GalleryTopicId;
+  /** Категория для счётчика из facets. null: у темы нет одной категории (например, «Детям»). */
+  category: CategoryId | null;
   label: string;
   note: string;
   href: string;

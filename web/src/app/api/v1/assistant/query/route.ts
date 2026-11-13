@@ -14,6 +14,7 @@ import {
   validationError,
 } from '../../../../../lib/api/http';
 import { parseAssistantRequest } from '../../../../../lib/api/nlu/request';
+import { toApiAssistantResponse } from '../../../../../lib/api/wire';
 
 /** Тело запроса с условиями и фразой укладывается в несколько килобайт. */
 const MAX_BODY_LENGTH = 20_000;
@@ -34,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const parsed = parseAssistantRequest(body);
     if (!parsed.ok) return validationError(parsed.issues);
-    return json(runAssistant(parsed.value));
+    return json(toApiAssistantResponse(runAssistant(parsed.value)));
   } catch (error) {
     return internalError(error);
   }

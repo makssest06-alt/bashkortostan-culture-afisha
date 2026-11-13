@@ -10,6 +10,8 @@
  */
 
 import { eventsQueryToParams } from './params';
+import { fromApiAssistantResponse, fromApiEvent, fromApiEventsList } from './wire';
+import type { ApiAssistantResponse, ApiEvent, ApiEventsListResponse } from './wire';
 import type {
   AfishaEvent,
   ApiErrorBody,
@@ -49,8 +51,8 @@ export class ApiClientError extends Error {
 
 function isErrorBody(value: unknown): value is ApiErrorBody {
   if (typeof value !== 'object' || value === null) return false;
-  const error = (value as { error?: unknown }).error;
-  return typeof error === 'object' && error !== null && typeof (error as { message?: unknown }).message === 'string';
+  const body = value as { code?: unknown; message?: unknown };
+  return typeof body.code === 'string' && typeof body.message === 'string';
 }
 
 /** Нужно ли обойтись без сети: код выполняется на сервере и чужой адрес не задан. */
@@ -88,7 +90,7 @@ async function request<T>(path: string, options: ClientOptions, setup: RequestSe
 
   if (!response.ok) {
     if (isErrorBody(body)) {
-      throw new ApiClientError(response.status, body.error.code, body.error.message, body.error.details);
+      throw new ApiClientError(response.status, body.code, body.message, body.details);
     }
     throw new ApiClientError(response.status, 'http_error', 'Афиша ответила ошибкой. Попробуйте ещё раз.');
   }
@@ -103,14 +105,14 @@ function withQuery(path: string, query: EventsQuery): string {
 /** Список событий с фильтрами, счётчиками и вариантами ослабить условия. */
 export async function listEvents(query: EventsQuery = {}, options: ClientOptions = {}): Promise<EventsListResponse> {
   if (runsOnServer(options)) return (await import('./server')).listEvents(query);
-  return request<EventsListResponse>(withQuery('/events', query), options);
+  return fromApiEventsList(await request<ApiEventsListResponse>(withQuery('/events', query), options));
 }
 
 /** Событие со всеми сеансами. null, если события нет (ответ 404). */
 export async function getEvent(id: string, options: ClientOptions = {}): Promise<AfishaEvent | null> {
   if (runsOnServer(options)) return (await import('./server')).getEvent(id);
   try {
-    return await request<AfishaEvent>(`/events/${encodeURIComponent(id)}`, options);
+    return fromApiEvent(await request<ApiEvent>(`/events/${encodeURIComponent(id)}`, options));
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 404) return null;
     throw error;
@@ -135,11 +137,12 @@ export async function askAssistant(
   options: ClientOptions = {},
 ): Promise<AssistantResponse> {
   if (runsOnServer(options)) return (await import('./server')).askAssistant(payload);
-  return request<AssistantResponse>('/assistant/query', options, {
+  const response = await request<ApiAssistantResponse>('/assistant/query', options, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  return fromApiAssistantResponse(response);
 }
 
 /** Проверка, что API отвечает. */
