@@ -1,0 +1,710 @@
+/*
+  Общая вёрстка сцен fullscreen и thermal («макет А» референса): картинка зала на весь экран,
+  слева матовая панель с текстами, справа снизу крупная дата. Обе сцены рисуют одну и ту же основу,
+  поэтому склейка между ними незаметна: меняются палитра и тексты.
+
+  Геометрия рамки и сдвига: ../gallery/frame.module.css (класс .vars на корне сцены).
+  Крупное движение (окно, сдвиг, палитра) ведёт таймлайн по прокрутке через числовые переменные.
+  Тексты входят и выходят по времени: корень получает data-phase = pre | in | out на порогах прогресса.
+*/
+
+.root {
+  position: absolute;
+  inset: 0;
+  color: var(--color-fg);
+}
+
+/* «Меньше движения»: кадр не сдвигался, горячая точка стоит там же, где герой в рамке */
+.root[data-unsettled] {
+  --hot-x: 50vw;
+}
+
+/* Всё, что гасится целиком в конце thermal (слоем становится только на наезде: GSAP пишет translate3d) */
+.all {
+  position: absolute;
+  inset: 0;
+}
+
+/* ------------------------------------------------------------------- Окно */
+
+/* Окно-обрезка: при --ct = --cr = --cb = --cl = 1 совпадает с фото в рамке галереи, при нулях весь экран */
+.window {
+  --ct: 1;
+  --cr: 1;
+  --cb: 1;
+  --cl: 1;
+  position: absolute;
+  inset: 0;
+  clip-path: inset(
+    calc(var(--pt) * var(--ct)) calc(var(--pr) * var(--cr)) calc(var(--pb) * var(--cb)) calc(var(--pl) * var(--cl))
+  );
+}
+
+.windowOpen {
+  --ct: 0;
+  --cr: 0;
+  --cb: 0;
+  --cl: 0;
+}
+
+/*
+  Сдвиг сцены: --sp = 1 герой в центре рамки, --sp = 0 герой в центре правой области. Масштаб не меняется.
+  Сдвиг двумерный: картинка стоит в трёх сценах, и постоянный слой больше экрана в каждой держал бы память.
+  Отдельным слоем сдвиг становится только в активной сцене fullscreen, где он едет (.shiftLive).
+*/
+.shift {
+  --sp: 1;
+  position: absolute;
+  inset: 0;
+  transform: translate(calc(var(--shift-x) * var(--sp)), calc(var(--shift-y) * var(--sp)));
+}
+
+.shiftDone {
+  --sp: 0;
+  transform: none;
+}
+
+:global(.scene[data-active]) .shiftLive {
+  will-change: transform;
+}
+
+.pic {
+  position: absolute;
+  top: var(--pic-top);
+  left: var(--pic-left);
+  width: var(--pic-w);
+  height: var(--pic-h);
+  background-color: oklch(0.3 0.05 55);
+}
+
+.img {
+  object-fit: cover;
+}
+
+/*
+  Притемнение картинки: чёрная заливка 16 % даёт ровно brightness(0.84). Раньше это был filter на картинке
+  больше экрана: WebKit рисует такой фильтр через отдельный буфер размером с картинку, и так в трёх сценах.
+*/
+.dim {
+  position: absolute;
+  inset: 0;
+  background-color: rgb(0 0 0 / 0.16);
+}
+
+/* Затемнение сверху под шапку и снизу под подписи: проявляется вместе с раскрытием окна */
+.scrim {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background-image:
+    linear-gradient(to bottom, oklch(0.15 0.01 39 / 0.72) 0%, oklch(0.15 0.01 39 / 0) 20%),
+    linear-gradient(to top, oklch(0.15 0.01 39 / 0.78) 0%, oklch(0.15 0.01 39 / 0) 26%);
+}
+
+.scrimOn {
+  opacity: 1;
+}
+
+/* Матовая панель слева: лежит внутри окна и появляется, когда край окна проходит под ней */
+.glass {
+  --panel-w: max(32vw, 300px);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--panel-w);
+  border-right: 1px solid oklch(0.99 0.01 97 / 0.1);
+  /* Размытие 18 px вместо 44: замер на переходе зал -> тепловая дал 20 % занятости видеокарты при 44 px
+     и 14 % при 16 px. Заливка чуть плотнее, чтобы фото за текстом читалось так же мягко. */
+  background-color: oklch(0.19 0.012 50 / 0.56);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+
+/* ----------------------------------------------------------------- Тексты */
+
+.panel {
+  --panel-w: max(32vw, 300px);
+  --col-right: max(6vw, 24px);
+  --icon: clamp(44px, 4.7vw, 72px);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--panel-w);
+  padding: 0 var(--col-right) 0 var(--gx);
+}
+
+/* Вход по времени: блоки проявляются со сдвигом снизу, выходят затуханием без сдвига */
+.rise {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 180ms linear,
+    transform 180ms linear,
+    visibility 0s linear 180ms;
+}
+
+.root[data-phase='in'] .rise {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 420ms var(--ease-out) calc(var(--i, 0) * 55ms),
+    transform 520ms var(--ease-out) calc(var(--i, 0) * 55ms),
+    visibility 0s;
+}
+
+.root[data-phase='out'] .rise {
+  transform: none;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0;
+  padding-top: calc(18dvh - var(--icon) / 2);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon);
+  height: var(--icon);
+  border-radius: 50%;
+  color: var(--color-fg);
+  background-color: oklch(0.99 0.01 97 / 0.2);
+}
+
+.eyebrow {
+  margin: calc(9.2dvh - var(--icon) / 2) 0 0;
+  font-size: clamp(0.8125rem, 1.15vw, 1.375rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.body {
+  max-width: 34ch;
+  margin: 2.4dvh 0 0;
+  font-size: clamp(0.875rem, 1.1vw, 1.3125rem);
+  font-weight: 500;
+  line-height: 1.38;
+  color: var(--color-fg-soft);
+  text-wrap: pretty;
+}
+
+.data {
+  position: relative;
+  margin-top: 3dvh;
+}
+
+/* Место под событие занято заранее: при приходе данных панель не прыгает */
+.eventBox {
+  min-height: clamp(12.9rem, 14.4vw, 17.5rem);
+}
+
+.listBox {
+  min-height: clamp(11.25rem, 12.4vw, 14.6rem);
+}
+
+/* Линейка и титул внизу панели */
+.ruler {
+  position: absolute;
+  top: 78.8dvh;
+  right: var(--col-right);
+  left: var(--gx);
+  height: 1px;
+  background-image: repeating-linear-gradient(to right, oklch(0.99 0.01 97 / 0.7) 0 2px, transparent 2px 5px);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 160ms linear;
+}
+
+.root[data-phase='in'] .ruler {
+  clip-path: inset(0 0 0 0);
+  transition: clip-path 520ms var(--ease-out);
+}
+
+.title {
+  position: absolute;
+  top: 82.6dvh;
+  right: var(--col-right);
+  left: var(--gx);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: min(4.6dvh, 2.6vw);
+  font-weight: 600;
+  line-height: 0.96;
+  letter-spacing: -0.035em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.line {
+  display: block;
+  overflow: hidden;
+  padding-block: 0.06em 0.14em;
+  margin-block: -0.06em -0.14em;
+  white-space: nowrap;
+}
+
+/*
+  Буква выезжает снизу из-под маски строки; выходит затуханием слева направо без сдвига.
+  Сдвиг 130 %: при 118 % кратка над «Й» выглядывала из-под маски двумя чёрточками.
+*/
+.ch {
+  display: inline-block;
+  transform: translateY(130%);
+  transition: transform 180ms linear;
+}
+
+.root[data-phase='in'] .ch {
+  transform: none;
+  transition: transform 460ms var(--ease-out) calc(var(--i) * 16ms);
+}
+
+.root[data-phase='out'] .ch {
+  opacity: 0;
+  transform: none;
+  transition: opacity 140ms linear calc(var(--i) * 9ms);
+}
+
+/* Правый нижний угол: подпись и крупная дата (слот формулы в референсе) */
+.corner {
+  position: absolute;
+  right: 5vw;
+  bottom: 3.4dvh;
+  display: flex;
+  align-items: flex-end;
+  gap: 2.4vw;
+  text-align: right;
+}
+
+.cornerNote {
+  margin: 0 0 0.5dvh;
+  font-size: var(--fs-caps);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+
+.cornerBig {
+  min-width: 4ch;
+  min-height: 1em;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: min(6dvh, 3.4vw);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- Событие */
+
+.event {
+  display: block;
+  padding: 2px 0;
+  border-radius: var(--radius-xs);
+  color: var(--color-fg);
+}
+
+.eventTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 2.36em;
+  font-size: clamp(1.0625rem, 1.5vw, 1.8125rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.eventMeta {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(0.875rem, 0.98vw, 1.125rem);
+  line-height: 1.35;
+  color: var(--color-fg-soft);
+}
+
+.eventWhen {
+  display: block;
+  min-height: 1.35em;
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.eventWhere {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 2.7em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.eventRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 26px;
+  margin-top: 10px;
+  font-size: clamp(0.9375rem, 1.04vw, 1.1875rem);
+}
+
+.eventCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: 4px;
+  font-size: clamp(0.9375rem, 1.04vw, 1.1875rem);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--color-line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+  transition: text-decoration-color var(--duration-fast) var(--ease-out);
+}
+
+.arrow {
+  flex: none;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: clamp(0.875rem, 0.98vw, 1.125rem);
+  font-weight: 500;
+  color: var(--color-fg-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--color-line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .event:hover .eventCta,
+  .row:hover .rowTitle {
+    text-decoration-color: var(--color-fg);
+  }
+
+  .event:hover .arrow,
+  .row:hover .arrow {
+    transform: translateX(3px);
+  }
+
+  .more:hover {
+    color: var(--color-fg);
+  }
+}
+
+.note {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: var(--color-fg-soft);
+}
+
+.retry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--color-line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+}
+
+/* ------------------------------------------------ Список тепловой сцены */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--color-line);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: clamp(58px, 4.1vw, 76px);
+  padding: 7px 0;
+  border-radius: var(--radius-xs);
+  color: var(--color-fg);
+}
+
+.rowText {
+  display: block;
+  min-width: 0;
+}
+
+.rowTitle {
+  display: block;
+  overflow: hidden;
+  font-size: clamp(0.9375rem, 1.2vw, 1.4375rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-overflow: ellipsis;
+  text-underline-offset: 0.26em;
+  white-space: nowrap;
+  transition: text-decoration-color var(--duration-fast) var(--ease-out);
+}
+
+.rowMeta {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  font-size: clamp(0.8125rem, 0.92vw, 1.0625rem);
+  line-height: 1.3;
+  color: var(--color-fg-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowWhen {
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+/* ---------------------------------------------------------------- Телефон */
+
+@media (max-width: 767.98px) {
+  .glass {
+    display: none;
+  }
+
+  .scrim {
+    background-image:
+      linear-gradient(to bottom, oklch(0.15 0.01 39 / 0.74) 0%, oklch(0.15 0.01 39 / 0) 24%),
+      linear-gradient(to top, oklch(0.15 0.01 39 / 0.86) 0%, oklch(0.15 0.01 39 / 0) 62%);
+  }
+
+  .panel {
+    --icon: 38px;
+    position: absolute;
+    inset: 0;
+    width: auto;
+    padding: 0;
+  }
+
+  /* Плашка сверху по центру: значок и подзаголовок */
+  .head {
+    position: absolute;
+    top: 11dvh;
+    left: 50%;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100vw - 2 * var(--gx));
+    min-height: 56px;
+    padding: 9px 22px 9px 9px;
+    border-radius: 9999px;
+    translate: -50% 0;
+    /* Без размытия фона: backdrop-filter на iPhone дорог по памяти. Заливка плотнее, текст читается так же */
+    background-color: oklch(0.19 0.012 50 / 0.8);
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  /* Стеклянная панель снизу на всю внутреннюю ширину */
+  .sheet {
+    position: absolute;
+    right: var(--gx);
+    bottom: max(4.2dvh, env(safe-area-inset-bottom));
+    left: var(--gx);
+    padding: 18px 16px 8px;
+    border-radius: var(--radius-md);
+    background-color: oklch(0.19 0.012 50 / 0.84);
+  }
+
+  .title {
+    position: static;
+    font-size: clamp(24px, 6.9vw, 30px);
+    line-height: 1.04;
+    text-align: center;
+  }
+
+  .ruler,
+  .corner {
+    display: none;
+  }
+
+  .body {
+    max-width: none;
+    margin-top: 10px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  .data {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .eventBox {
+    min-height: 11.6rem;
+  }
+
+
+  .listBox {
+    min-height: 9.9rem;
+  }
+
+  .eventTitle {
+    font-size: 1.0625rem;
+  }
+
+  .eventMeta {
+    margin-top: 6px;
+    font-size: 0.875rem;
+  }
+
+  .eventRow,
+  .eventCta {
+    font-size: 0.9375rem;
+  }
+
+  .more {
+    font-size: 0.875rem;
+  }
+
+  .rowTitle {
+    font-size: 0.9375rem;
+  }
+
+  .rowMeta {
+    font-size: 0.8125rem;
+  }
+
+  .eventWhere {
+    min-height: 1.35em;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .eventRow {
+    margin-top: 8px;
+  }
+
+  /* «Все спектакли» встаёт в одну строку с «Открыть событие» */
+  .moreAside {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+  }
+
+  /* Плашка и нижняя панель матовые: проявляются целиком, тексты внутри идут следом */
+  .head,
+  .sheet {
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      opacity 180ms linear,
+      visibility 0s linear 180ms;
+  }
+
+  .root[data-phase='in'] .head,
+  .root[data-phase='in'] .sheet {
+    visibility: visible;
+    opacity: 1;
+    transition:
+      opacity 360ms var(--ease-out),
+      visibility 0s;
+  }
+
+  .row {
+    min-height: 52px;
+    padding: 5px 0;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .root[data-unsettled] {
+    --hot-y: 48.7dvh;
+  }
+}
+
+/* Низкий телефон: абзац уступает место событиям */
+@media (max-width: 767.98px) and (max-height: 640px) {
+  .body {
+    display: none;
+  }
+}
+
+/* Низкое окно на компьютере: абзац уступает место событиям */
+@media (min-width: 768px) and (max-height: 659px) {
+  .body {
+    display: none;
+  }
+
+  .data {
+    margin-top: 2.4dvh;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .head,
+  .sheet {
+    background-color: oklch(0.19 0.012 50 / 0.94);
+    backdrop-filter: none;
+  }
+}
+
+/* Меньше движения: тексты только проявляются, буквы не выезжают */
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .root[data-phase='in'] .rise {
+    transform: none;
+  }
+
+  .ch {
+    opacity: 0;
+    transform: none;
+    transition: opacity 180ms linear;
+  }
+
+  .root[data-phase='in'] .ch {
+    opacity: 1;
+    transition: opacity 320ms linear;
+  }
+
+  .arrow {
+    transition: none;
+  }
+}

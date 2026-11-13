@@ -1,0 +1,1034 @@
+@import 'tailwindcss';
+
+/*
+  Токены сайта «АФИША». Палитра измерена по кадрам референса (см. .reanimate/home/spec),
+  все цвета заданы в oklch, чистых #000 и #fff нет.
+
+  ПАЛИТРА TAILWIND ПО УМОЛЧАНИЮ ОТКЛЮЧЕНА (--color-*: initial). Классы вроде text-zinc-400
+  или bg-black/50 ничего не дадут: используйте только токены ниже (text-fg, bg-surface, border-line ...).
+
+  СЛОИ (z-index). Только эти значения: z-(--z-header) в Tailwind или var(--z-header) в CSS.
+    --z-bg         0   фиксированный фон со свечением (.glow-bg)
+    --z-backdrop   5   подложки сцен под жетоном (слот backdrop у <Scene>)
+    --z-token     10   холст с жетоном (TokenCanvas), pointer-events: none
+    --z-content   20   содержимое страниц и сцен (main)
+    --z-grain     40   зерно (.grain), pointer-events: none
+    --z-progress  50   полоса прогресса прокрутки
+    --z-header    60   шапка
+    --z-overlay   70   мобильное меню и другие оверлеи на весь экран
+    --z-skip      80   ссылка «Перейти к содержанию»
+  Внутри сцены слои считаются от 0 до 9: у закреплённой сцены свой контекст наложения.
+
+  РАДИУСЫ. Одна система, почти прямые углы как в референсе:
+    rounded-xs 2px  волосяные элементы (полоса прогресса, метки)
+    rounded-sm 4px  элементы управления (кнопки, чипы, поля)
+    rounded-md 6px  поверхности (карточки, панели, картинки)
+    rounded-full    только круглые кнопки-иконки
+*/
+
+@theme {
+  /* ---------------------------------------------------------------- Шрифты */
+  --font-sans:
+    'Golos Text Variable', 'Golos Text Fallback', 'Helvetica Neue', Arial, 'Segoe UI', Roboto, 'Noto Sans', system-ui,
+    sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* ----------------------------------------------------------------- Цвета */
+  --color-*: initial;
+
+  /* Фон: базовый #100D0C, в сценах со свечением #1A1613, поверхности чуть светлее */
+  --color-bg: oklch(0.162 0.006 39.3);
+  --color-bg-lit: oklch(0.204 0.009 59.1);
+  --color-surface: oklch(0.238 0.008 59.2);
+  --color-surface-2: oklch(0.273 0.01 61);
+
+  /* Текст: #FEFDF8, вторичный #CBC9C2, приглушённый #9D988F (6.7:1 на фоне) */
+  --color-fg: oklch(0.993 0.007 97.3);
+  /* Поднят с 0.836 до 0.875: приглушённый текст держит 4.5:1 и на самом ярком месте свечения фона. */
+  --color-fg-soft: oklch(0.875 0.01 93.6);
+  --color-fg-muted: oklch(0.681 0.014 82.4);
+
+  /* Линии и подложки под наведение */
+  --color-line: oklch(0.993 0.007 97.3 / 0.14);
+  --color-line-strong: oklch(0.993 0.007 97.3 / 0.32);
+  --color-hover: oklch(0.993 0.007 97.3 / 0.08);
+  --color-scrim: oklch(0.162 0.006 39.3 / 0.72);
+
+  /* Свечение фона #E57C4E, акцент #E2472F (только точечно), медь жетона #D77241 */
+  --color-glow: oklch(0.695 0.144 43.5);
+  --color-accent: oklch(0.616 0.196 31.6);
+  --color-copper: oklch(0.659 0.142 45.1);
+  --color-copper-hi: oklch(0.727 0.15 47.8);
+  --color-copper-lo: oklch(0.525 0.133 39.2);
+  --color-progress: oklch(0.894 0.028 109.2);
+
+  /* Светлый кремовый блок: поверхность #F1EFDD, карточки #D9D3BF, текст #2B2622 */
+  --color-cream: oklch(0.949 0.024 101.7);
+  --color-cream-2: oklch(0.866 0.028 93.1);
+  --color-ink: oklch(0.273 0.01 61);
+  --color-ink-soft: oklch(0.4 0.016 71);
+
+  /*
+    Статусы сеанса. Свои оттенки, не совпадают с акцентом (тон 32) и медью (тон 45).
+    На тёмном фоне контраст от 8.9:1. Вместе с цветом всегда идут значок и подпись.
+  */
+  --color-status-ok: oklch(0.802 0.112 156);
+  --color-status-cancelled: oklch(0.775 0.136 9.3);
+  --color-status-moved: oklch(0.843 0.132 86);
+  --color-status-soldout: oklch(0.792 0.073 289);
+  --color-status-unverified: oklch(0.765 0.017 82.8);
+
+  /* ----------------------------------------------------------------- Радиусы */
+  --radius-*: initial;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+
+  /* ------------------------------------------------------------------ Кривые */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+:root {
+  /* Слои */
+  --z-bg: 0;
+  --z-backdrop: 5;
+  --z-token: 10;
+  --z-content: 20;
+  --z-grain: 40;
+  --z-progress: 50;
+  --z-header: 60;
+  --z-overlay: 70;
+  --z-skip: 80;
+
+  /* Отступы: шкала 4pt с именами по смыслу. В Tailwind та же шкала: p-1 = 4px, p-6 = 24px. */
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+
+  /* Поля страницы как в референсе: 3 % ширины, но не меньше 16px */
+  --gutter: max(16px, 3vw);
+  /* Высота зоны шапки: отступ под неё у внутренних страниц */
+  --header-h: clamp(60px, 9vh, 84px);
+
+  /* Длительности для интерфейса (сцены главной ездят по прокрутке, им это не нужно) */
+  --duration-press: 140ms;
+  --duration-fast: 180ms;
+  --duration-base: 240ms;
+  --duration-slow: 360ms;
+
+  /*
+    Типошкала (fonts.md, раздел 3). Телефон: значения ниже; с 768px значения из кадров референса.
+    Трекинг и интерлиньяж зашиты в утилиты t-*.
+  */
+  --fs-giant: 20vw;
+  --fs-display: clamp(40px, 11vw, 104px);
+  --fs-title: clamp(30px, 9vw, 50px);
+  --fs-heading: clamp(32px, 8.4vw, 56px);
+  --fs-subtitle: clamp(1.5rem, 5.6vw, 2rem);
+  --fs-lead: 1.125rem;
+  --fs-body: 1rem;
+  --fs-ui: 0.9375rem;
+  --fs-caps: 0.75rem;
+  --fs-wordmark: 24px;
+  --ls-title: -0.035em;
+  --ls-caps: 0.02em;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --fs-giant: 16.3vw;
+    --fs-display: 8.1vw;
+    --fs-title: clamp(34px, 3.9vw, 84px);
+    --fs-heading: clamp(40px, 4.4vw, 72px);
+    --fs-subtitle: clamp(1.5rem, 2.6vw, 2.5rem);
+    --fs-lead: clamp(1.125rem, 1.65vw, 1.375rem);
+    --fs-body: clamp(1rem, 1.15vw, 1.0625rem);
+    --fs-caps: clamp(0.6875rem, 0.9vw, 0.75rem);
+    --fs-wordmark: clamp(22px, 2.05vw, 32px);
+    --ls-title: -0.045em;
+    --ls-caps: 0.01em;
+  }
+}
+
+/*
+  Светлая тема для отдельного блока: кремовая секция доверия на главной, светлый виджет.
+  Достаточно поставить data-theme="light" на контейнер: все утилиты (text-fg, bg-bg, border-line,
+  статусы) внутри переключатся сами.
+*/
+[data-theme='light'] {
+  --color-bg: oklch(0.949 0.024 101.7);
+  --color-bg-lit: oklch(0.949 0.024 101.7);
+  --color-surface: oklch(0.866 0.028 93.1);
+  --color-surface-2: oklch(0.82 0.03 93);
+  --color-fg: oklch(0.273 0.01 61);
+  --color-fg-soft: oklch(0.4 0.016 71);
+  --color-fg-muted: oklch(0.45 0.016 74);
+  --color-line: oklch(0.273 0.01 61 / 0.16);
+  --color-line-strong: oklch(0.273 0.01 61 / 0.4);
+  --color-hover: oklch(0.273 0.01 61 / 0.07);
+  --color-scrim: oklch(0.949 0.024 101.7 / 0.78);
+  --color-status-ok: oklch(0.43 0.097 157);
+  --color-status-cancelled: oklch(0.46 0.177 16);
+  --color-status-moved: oklch(0.44 0.099 80);
+  --color-status-soldout: oklch(0.42 0.133 283);
+  --color-status-unverified: oklch(0.43 0.017 74);
+  color: var(--color-fg);
+}
+
+/* Запасной шрифт с подогнанными метриками: меньше скачок текста при подмене (замер в fonts.md) */
+@font-face {
+  font-family: 'Golos Text Fallback';
+  font-weight: 400 500;
+  src: local('Arial');
+  size-adjust: 105.2%;
+  ascent-override: 93.2%;
+  descent-override: 20.9%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Golos Text Fallback';
+  font-weight: 600 900;
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  size-adjust: 100.5%;
+  ascent-override: 97.5%;
+  descent-override: 21.9%;
+  line-gap-override: 0%;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Основа                                                                      */
+/* -------------------------------------------------------------------------- */
+
+@layer base {
+  html {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 100%;
+    font-weight: 400;
+    line-height: 1.55;
+    /* В семье нет курсива: браузер не должен рисовать поддельный наклон */
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    /* Вместо системной полосы прокрутки работает ScrollProgress */
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar {
+    display: none;
+  }
+
+  body {
+    min-height: 100dvh;
+    font-size: var(--fs-body);
+    /* clip, а не hidden: не создаёт контейнер прокрутки и не ломает закрепление */
+    overflow-x: clip;
+  }
+
+  ::selection {
+    background-color: var(--color-copper);
+    color: var(--color-bg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-fg);
+    outline-offset: 3px;
+    border-radius: var(--radius-xs);
+  }
+
+  a,
+  button,
+  summary,
+  select,
+  label[for],
+  [role='button'] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  /* Цены, даты, счётчики: цифры одной ширины */
+  time,
+  [data-num] {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Типографика                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/* Гигантское слово: «есть куда пойти», «достоверность», «АФИША-102» */
+@utility t-giant {
+  font-family: var(--font-display);
+  font-size: var(--fs-giant);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+}
+
+/* Заголовок сцены строчными: «Подберёт ИИ» */
+@utility t-display {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+/* Заголовок сцены прописными: «НЕ ПРОСТО АФИША.» */
+@utility t-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: var(--ls-title);
+  text-transform: uppercase;
+}
+
+/* Заголовок внутренней страницы (h1) */
+@utility t-heading {
+  font-family: var(--font-display);
+  font-size: var(--fs-heading);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+/* Подзаголовок 24-40px */
+@utility t-subtitle {
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+/* Лид 18-22px */
+@utility t-lead {
+  font-size: var(--fs-lead);
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  text-wrap: pretty;
+}
+
+/* Основной текст 16-17px */
+@utility t-body {
+  font-size: var(--fs-body);
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-wrap: pretty;
+}
+
+/* Кнопки, чипы, подписи полей 15px */
+@utility t-ui {
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+/* Мелкие прописные 11-12px: меню, сноски, статусы */
+@utility t-caps {
+  font-size: var(--fs-caps);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+
+/* Словесный знак в шапке */
+@utility t-wordmark {
+  font-family: var(--font-display);
+  font-size: var(--fs-wordmark);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+
+/*
+  Маска появления строки. При line-height: 1 хвосты р, у, ф, ҙ, ҫ, ң выходят за строку:
+  обёртке с overflow: hidden нужен запас (fonts.md, правило 4).
+*/
+@utility mask-line {
+  display: block;
+  overflow: hidden;
+  padding-block: 0.04em 0.12em;
+  margin-block: -0.04em -0.12em;
+}
+
+/* Скрыто визуально, доступно для чтения с экрана */
+@utility visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Фон со свечением и зерно                                                    */
+/* -------------------------------------------------------------------------- */
+
+/*
+  Фиксированный фон. Свечение не круг в углу, а полоса вдоль левого края:
+  усиливается книзу и затухает к 50 % ширины. Яркость меняют через opacity у .glow-bg__lit.
+*/
+.glow-bg {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-bg);
+  pointer-events: none;
+  background-color: var(--color-bg);
+}
+
+.glow-bg__lit {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-bg-lit);
+}
+
+.glow-bg__lit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to right,
+    oklch(0.695 0.144 43.5) 0%,
+    oklch(0.695 0.144 43.5 / 0.93) 8%,
+    oklch(0.695 0.144 43.5 / 0.82) 16%,
+    oklch(0.695 0.144 43.5 / 0.66) 23%,
+    oklch(0.695 0.144 43.5 / 0.53) 31%,
+    oklch(0.695 0.144 43.5 / 0.33) 41%,
+    oklch(0.695 0.144 43.5 / 0) 50%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    oklch(0 0 0 / 0.26) 0%,
+    oklch(0 0 0 / 0.4) 14%,
+    oklch(0 0 0 / 0.55) 28%,
+    oklch(0 0 0 / 0.63) 42%,
+    oklch(0 0 0 / 0.74) 56%,
+    oklch(0 0 0 / 0.87) 69%,
+    oklch(0 0 0 / 0.94) 83%,
+    oklch(0 0 0 / 1) 100%
+  );
+}
+
+/* Зерно: только на фиксированном слое без событий мыши, без режимов наложения */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-grain);
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.99 0 0 0 0 0.98 0 0 0 0 0.95 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Сцены главной (scene-kit)                                                   */
+/* -------------------------------------------------------------------------- */
+
+.scene {
+  position: relative;
+}
+
+.scene-stage {
+  position: relative;
+  width: 100%;
+}
+
+/*
+  Закреплённая сцена: экран высотой 100dvh. ScrollTrigger на время закрепления пишет высоту в px
+  инлайном, поэтому !important: на телефоне экран должен следовать за панелью адреса.
+*/
+@media (min-width: 768px) {
+  .scene[data-pin-d] .scene-stage {
+    height: 100dvh !important;
+    max-height: none !important;
+    overflow: clip;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .scene[data-pin-m] .scene-stage {
+    height: 100dvh !important;
+    max-height: none !important;
+    overflow: clip;
+  }
+}
+
+/* Подложки сцен под жетоном: фиксированный слой между фоном и холстом */
+.scene-backdrops {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-backdrop);
+  pointer-events: none;
+}
+
+.scene-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+}
+
+/*
+  Выгрузка дальних сцен (data-far ставит <Scene>): у закреплённой сцены вдали от прокрутки убирается всё содержимое
+  стадии и её подложка. Сама стадия остаётся (её высоту 100dvh меряет закрепление). display: none, а не visibility:
+  только так браузер iPhone освобождает слои и картинки, иначе на длинной главной вкладка падает от нехватки памяти.
+*/
+.scene[data-far] .scene-stage > *,
+.scene-backdrop[data-far] {
+  display: none !important;
+}
+
+/* Холст с жетоном */
+.token-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-token);
+  pointer-events: none;
+}
+
+.token-layer canvas {
+  display: block;
+}
+
+/* Жетон без WebGL: плоский медный диск, который ведёт та же поза (без вращения) */
+.token-fallback {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20vw;
+  height: 20vw;
+  margin: -10vw 0 0 -10vw;
+  border-radius: 50%;
+  opacity: 0;
+  will-change: transform, opacity;
+  /* Статичный рендер настоящего жетона; градиент под ним виден, пока картинка грузится. */
+  background:
+    url('/images/token-fallback.webp') center / contain no-repeat,
+    radial-gradient(circle at 34% 30%, oklch(0.727 0.15 47.8) 0%, oklch(0.659 0.142 45.1) 46%, oklch(0.525 0.133 39.2) 100%);
+}
+
+.token-fallback[data-mode='wire'] {
+  background: none;
+  box-shadow:
+    inset 0 0 0 1px var(--color-fg-soft),
+    inset 0 0 0 1.4vw transparent,
+    inset 0 0 0 calc(1.4vw + 1px) var(--color-line-strong);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Оболочка: шапка, меню, полоса прогресса                                     */
+/* -------------------------------------------------------------------------- */
+
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: var(--z-skip);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-fg);
+  color: var(--color-bg);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/*
+  Шапка. Цвет текста идёт через --header-fg: на тёмных сценах светлый, над светлой секцией тёмный
+  (html[data-header-tone='dark']). Переключение по порогу, цвет меняется за 200 мс.
+*/
+.site-header {
+  --header-fg: var(--color-fg);
+  --header-fg-soft: var(--color-fg-soft);
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: var(--z-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  height: var(--header-h);
+  /* Правое поле: 3 % ширины до текста меню, как в референсе */
+  padding-inline: var(--gutter);
+  color: var(--header-fg);
+  transition:
+    color var(--duration-base) var(--ease-in-out),
+    background-color var(--duration-base) var(--ease-out);
+}
+
+html[data-header-tone='dark'] .site-header {
+  --header-fg: var(--color-ink);
+  --header-fg-soft: var(--color-ink-soft);
+}
+
+/* Внутренние страницы: после начала прокрутки шапка получает полупрозрачную подложку */
+.site-header[data-scrolled]:not([data-home]) {
+  background-color: oklch(0.162 0.006 39.3 / 0.9);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* Главная: в сценах обычной прокрутки (города, выбор, подвал) содержимое проезжает под шапкой, нужна та же подложка */
+html[data-header-scrim='on'] .site-header[data-home] {
+  background-color: oklch(0.162 0.006 39.3 / 0.9);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .site-header[data-scrolled]:not([data-home]),
+  html[data-header-scrim='on'] .site-header[data-home] {
+    background-color: var(--color-bg);
+    backdrop-filter: none;
+  }
+}
+
+.site-header__logo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+}
+
+.site-header__nav {
+  display: none;
+  align-items: center;
+  gap: clamp(14px, 1.5vw, 28px);
+}
+
+.site-header__list {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 1.5vw, 28px);
+}
+
+.site-header__compact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+@media (min-width: 1024px) {
+  .site-header__nav {
+    display: flex;
+  }
+
+  .site-header__compact {
+    display: none;
+  }
+}
+
+/* Пункт меню: мелкие прописные, у активного подчёркивание в 1px */
+.site-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  font-size: var(--fs-caps);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--header-fg-soft);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.site-nav-link::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  left: 0;
+  height: 1px;
+  background-color: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.site-nav-link[aria-current='page'] {
+  color: var(--header-fg);
+}
+
+.site-nav-link[aria-current='page']::after {
+  transform: scaleX(1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-nav-link:hover {
+    color: var(--header-fg);
+  }
+}
+
+.site-header__menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  border-radius: var(--radius-full, 9999px);
+  color: inherit;
+  transition: transform var(--duration-press) var(--ease-out);
+}
+
+.site-header__menu-button:active {
+  transform: scale(0.94);
+}
+
+/* Переключатель языка */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+}
+
+.lang-switch__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 36px;
+  padding-inline: 6px;
+  font-size: var(--fs-caps);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--header-fg-soft, var(--color-fg-soft));
+  opacity: 0.72;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.lang-switch__button + .lang-switch__button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1px;
+  height: 10px;
+  margin-top: -5px;
+  background-color: currentColor;
+  opacity: 0.5;
+}
+
+.lang-switch__button[aria-pressed='true'] {
+  color: var(--header-fg, var(--color-fg));
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lang-switch__button:hover {
+    opacity: 1;
+  }
+}
+
+.lang-switch[data-size='large'] .lang-switch__button {
+  min-width: 64px;
+  min-height: 44px;
+  padding-inline: 14px;
+  font-size: var(--fs-ui);
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 1023.98px) {
+  .site-header .lang-switch__button {
+    min-height: 44px;
+  }
+}
+
+/* Мобильное меню: оверлей на весь экран */
+.mobile-menu {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--gutter) max(var(--space-lg), env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--color-fg);
+  background:
+    linear-gradient(to top right, oklch(0.695 0.144 43.5 / 0.5) 0%, oklch(0.695 0.144 43.5 / 0.14) 34%, transparent 58%),
+    var(--color-bg-lit);
+  visibility: hidden;
+  opacity: 0;
+  /* Закрытие быстрее открытия */
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    visibility 0s linear var(--duration-fast);
+}
+
+.mobile-menu[data-open] {
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity var(--duration-base) var(--ease-out),
+    visibility 0s;
+}
+
+.mobile-menu__top {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-h);
+}
+
+.mobile-menu__nav {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: var(--space-xl);
+}
+
+.mobile-menu__item,
+.mobile-menu__bottom {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.mobile-menu[data-open] .mobile-menu__item,
+.mobile-menu[data-open] .mobile-menu__bottom {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--duration-slow) var(--ease-out) calc(60ms + var(--i, 0) * 40ms),
+    transform var(--duration-slow) var(--ease-out) calc(60ms + var(--i, 0) * 40ms);
+}
+
+.mobile-menu__link {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  font-size: clamp(32px, 9.4vw, 56px);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  color: var(--color-fg);
+}
+
+.mobile-menu__link[aria-current='page'] {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.16em;
+}
+
+.mobile-menu__bottom {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-line);
+}
+
+.mobile-menu__bottom .lang-switch {
+  margin-left: -14px;
+}
+
+.mobile-menu__telegram {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--color-fg);
+}
+
+/* Полоса прогресса у правого края: ширина 1,1 % окна, длина около 28 % высоты */
+.scroll-progress {
+  position: fixed;
+  top: 1dvh;
+  right: 0.3vw;
+  bottom: 1.6dvh;
+  z-index: var(--z-progress);
+  width: clamp(8px, 1.1vw, 20px);
+  pointer-events: none;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.scroll-progress[data-idle] {
+  opacity: 0;
+}
+
+.scroll-progress__bar {
+  width: 100%;
+  height: 28.7%;
+  border-radius: clamp(2px, 0.28vw, 5px);
+  background-color: var(--color-progress);
+  will-change: transform;
+  transition: background-color var(--duration-base) var(--ease-in-out);
+}
+
+html[data-header-tone='dark'] .scroll-progress__bar {
+  background-color: oklch(0.273 0.01 61 / 0.72);
+}
+
+@media (max-width: 767.98px) {
+  .scroll-progress {
+    right: 2px;
+    width: 3px;
+  }
+
+  .scroll-progress__bar {
+    border-radius: var(--radius-xs);
+  }
+}
+
+/* Пометка «Демо-данные» */
+.demo-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: var(--color-fg);
+  background-color: var(--color-hover);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.demo-notice__text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-xs);
+  min-width: 0;
+}
+
+.demo-notice__hint {
+  color: var(--color-fg-soft);
+}
+
+.demo-notice[data-compact] {
+  min-height: 32px;
+  padding: 5px 10px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-notice:hover {
+    background-color: var(--color-line);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-menu__item,
+  .mobile-menu__bottom {
+    transform: none;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Движение                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/* Плашка-заглушка загрузки */
+.skeleton {
+  background-color: var(--color-surface);
+  background-image: linear-gradient(
+    100deg,
+    transparent 38%,
+    var(--color-surface-2) 50%,
+    transparent 62%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sheen 1.4s linear infinite;
+}
+
+@keyframes skeleton-sheen {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/* Отладочный счётчик кадров (PerfHud, включается ?fps=1): левый верхний угол, под шапкой, поверх всего */
+.perf-hud {
+  position: fixed;
+  top: calc(var(--header-h) + 4px);
+  left: 8px;
+  z-index: 120;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  max-width: calc(100vw - 16px);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: oklch(0.12 0.005 40 / 0.86);
+  color: oklch(0.97 0.01 90);
+  font: 600 12px/1.3 var(--font-mono, ui-monospace), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.perf-hud__worst[data-bad='true'] {
+  color: oklch(0.72 0.18 30);
+}
+
+.perf-hud__block {
+  color: oklch(0.86 0.09 70);
+}

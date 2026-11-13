@@ -1,0 +1,150 @@
+/*
+  Тепловая палитра сцены thermal: слой с перекрашенной картинкой, его раскрытие кругом, горячая точка и шкала.
+  Основа сцены (картинка зала, панель, тексты) общая с fullscreen: ../fullscreen/scene.module.css.
+  Переменные --hot-x, --hot-y и геометрия: ../gallery/frame.module.css.
+*/
+
+/* Слой с тепловой картой: раскрывается кругом от горячей точки (--tr от 0 до 1) */
+.thermal {
+  --tr: 0;
+  position: absolute;
+  inset: 0;
+  clip-path: circle(calc(var(--tr) * 150vmax) at var(--hot-x) var(--hot-y));
+}
+
+.thermalCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-color: oklch(0.32 0.14 290);
+}
+
+/* Тепловая картинка под панелью притемнена: текст панели читается и над пурпурным, и над жёлтым */
+.thermalShade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: max(32vw, 300px);
+  background-color: oklch(0.17 0.03 300 / 0.4);
+}
+
+/* Тёплая кромка на границе раскрытия: прячет резкий край круга */
+.rim {
+  --tr: 0;
+  position: absolute;
+  top: calc(var(--hot-y) - 30vmax);
+  left: calc(var(--hot-x) - 30vmax);
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  opacity: 0;
+  background-image: radial-gradient(
+    closest-side,
+    oklch(0.97 0.14 110 / 0) 86%,
+    oklch(0.97 0.14 110 / 0.34) 95%,
+    oklch(0.77 0.14 60 / 0.3) 98.5%,
+    oklch(0.6 0.24 15 / 0) 100%
+  );
+  transform: scale(calc(var(--tr) * 5));
+  will-change: transform, opacity;
+}
+
+/* Горячая точка: медленно «дышит», пока сцена на экране */
+.hot {
+  position: absolute;
+  top: calc(var(--hot-y) - 11vmax);
+  left: calc(var(--hot-x) - 11vmax);
+  width: 22vmax;
+  height: 22vmax;
+  border-radius: 50%;
+  background-image: radial-gradient(
+    closest-side,
+    oklch(0.98 0.12 105 / 0.62) 0%,
+    oklch(0.84 0.16 75 / 0.36) 32%,
+    oklch(0.63 0.25 350 / 0) 100%
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-active]) .hot {
+    animation: hot-breath 3.2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes hot-breath {
+  from {
+    opacity: 0.72;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+/* Вертикальная шкала справа: сверху горячо, внизу тихо, нижняя треть пунктиром */
+.scaleBox {
+  --scale-w: clamp(6px, 0.7vw, 10px);
+  position: absolute;
+  top: 25.6dvh;
+  /* Родитель: панель слева (её левый край совпадает с краем окна), поэтому отступ считается от ширины окна */
+  left: calc(100vw - 3.7vw - var(--scale-w));
+  width: var(--scale-w);
+  height: 50dvh;
+}
+
+.scale {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to bottom,
+    oklch(0.94 0.06 340) 0%,
+    oklch(0.97 0.14 110) 10%,
+    oklch(0.77 0.14 60) 30%,
+    oklch(0.6 0.24 15) 48%,
+    oklch(0.47 0.22 340) 66%,
+    oklch(0.45 0.17 280) 100%
+  );
+  mask-image:
+    linear-gradient(to bottom, #000 0 66%, transparent 66%),
+    repeating-linear-gradient(to bottom, #000 0 3px, transparent 3px 7px);
+}
+
+/* Подписи шкалы на тёмной плашке: под ними может оказаться и жёлтое, и синее */
+.scaleLabel {
+  position: absolute;
+  right: calc(100% + 8px);
+  margin: 0;
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  text-align: right;
+  white-space: nowrap;
+  background-color: oklch(0.16 0.01 39 / 0.74);
+}
+
+.scaleHigh {
+  top: 0;
+}
+
+.scaleLow {
+  bottom: 0;
+}
+
+@media (max-width: 767.98px) {
+  .thermalShade {
+    display: none;
+  }
+
+  /* Шкала стоит над нижней панелью у правого края: панель выше, чем в референсе, и шкала её не перекрывает */
+  .scaleBox {
+    --scale-w: 9px;
+    top: auto;
+    right: 0;
+    bottom: calc(100% + 14px);
+    left: auto;
+    height: 19dvh;
+  }
+}

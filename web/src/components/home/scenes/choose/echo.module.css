@@ -1,0 +1,45 @@
+/*
+  Словесный знак с эхо-шлейфом (S13 «АФИШУ», S14 «АФИША-102»).
+  Ширину знака задаёт родитель через --echo-w, кегль считается из неё и из измеренной ширины слова
+  в кеглях (--echo-ratio пишет скрипт после загрузки шрифта). Так знак занимает ровно заданную долю окна
+  на любом языке и при любой ширине, без пересчёта на ресайзе.
+*/
+
+.echo {
+  --echo-ratio: 4;
+  position: relative;
+  display: inline-block;
+  margin: 0;
+  font-family: var(--font-display);
+  /* --echo-w задаёт класс родителя; здесь его объявлять нельзя: порядок правил в сборке не гарантирован */
+  font-size: calc(var(--echo-w, 39vw) / var(--echo-ratio));
+  font-weight: 800;
+  line-height: 0.8;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-fg);
+}
+
+.main {
+  position: relative;
+  display: block;
+  /* Отрицательный трекинг оставляет пустоту после последней буквы: возвращаем знак в оптический центр */
+  margin-right: -0.03em;
+}
+
+/* Копии лежат под знаком. В покое совпадают с ним и не видны: прозрачность им пишет скрипт по скорости. */
+.clone {
+  position: absolute;
+  inset: 0;
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clone {
+    display: none;
+  }
+}

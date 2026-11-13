@@ -1,0 +1,430 @@
+/*
+  Сцена footer (S14 и подвал главной). Обычный поток, фон почти чёрный (свечение погашено в def.ts).
+
+  Верх: надзаголовок, знак «АФИША-102» (46 % ширины в референсе; у нас 9 знаков вместо 7, поэтому 60 %),
+  три кнопки в ряд, абзац колонкой 36 % ширины по центру.
+  Подвал: по описанию живого оригинала (live.md, 6.2 и 6.3). Соответствие блоков:
+    знак студии и заголовок-обращение   мотив курая и девиз в две строки (первая влево, вторая вправо);
+    блок «поделиться» в пунктире         блок Telegram-бота;
+    соцсети и юридические ссылки         колонки ссылок по разделам;
+    дисклеймер справа снизу              пометка о демо-данных;
+  плюс переключатель РУС/БАШ и строка об авторах фотографий.
+*/
+
+.root {
+  position: relative;
+  padding-inline: var(--gutter);
+}
+
+/* ------------------------------------------------------------------------ Верх */
+
+.top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 20dvh;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--color-fg-soft);
+}
+
+.signWrap {
+  margin: 8.5dvh 0 0;
+  line-height: 0;
+}
+
+.sign {
+  --echo-w: 60vw;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8vw;
+  justify-content: center;
+  margin: 6.5dvh 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pill {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding-inline: clamp(16px, 1.5vw, 26px);
+  border: 1px solid transparent;
+  /* «Пилюли», как три кнопки под знаком в референсе */
+  border-radius: 9999px;
+  background-color: color-mix(in oklch, var(--color-copper-lo) 26%, var(--color-bg));
+  color: var(--color-fg);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    scale var(--duration-press) var(--ease-out);
+}
+
+.pill:active {
+  scale: 0.97;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pill:hover {
+    background-color: color-mix(in oklch, var(--color-copper-lo) 42%, var(--color-bg));
+  }
+}
+
+.about {
+  width: 36vw;
+  min-width: min(100%, 420px);
+  margin: 4.5dvh 0 0;
+  font-weight: 600;
+  text-align: left;
+}
+
+.highlight {
+  color: var(--color-accent);
+}
+
+/* ----------------------------------------------------------------- Разделитель */
+
+.divider {
+  margin-block: 16dvh 0;
+  color: var(--color-copper-lo);
+}
+
+/* ------------------------------------------------------------- Девиз и мотив */
+
+.statement {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  column-gap: 1.25vw;
+  align-items: start;
+  padding-top: 13dvh;
+}
+
+.mark {
+  grid-column: 6 / span 2;
+  justify-self: start;
+  /* Резиновый размер задаётся здесь: атрибут width у svg не принимает clamp() (WebKit пишет ошибку в консоль). */
+  width: clamp(56px, 4.7vw, 84px);
+  height: clamp(56px, 4.7vw, 84px);
+  color: var(--color-fg);
+}
+
+.motto {
+  display: flex;
+  grid-column: 8 / -1;
+  flex-direction: column;
+  gap: 0.5em;
+  margin: 0;
+}
+
+.mottoLine {
+  display: block;
+  max-width: 16ch;
+}
+
+.mottoLine:nth-child(2) {
+  align-self: flex-end;
+  text-align: right;
+}
+
+/* --------------------------------------------------------- Ссылки, бот, язык */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  column-gap: 1.25vw;
+  row-gap: 48px;
+  align-items: start;
+  padding-top: 20dvh;
+}
+
+.bot {
+  display: flex;
+  grid-column: 1 / span 5;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 18px;
+  border: 1px dashed oklch(0.993 0.007 97.3 / 0.28);
+}
+
+.botTitle {
+  margin: 0;
+  color: var(--color-accent);
+}
+
+.botLink {
+  margin: 0;
+  font-size: clamp(1.125rem, 1.5vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.botNote {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--color-fg-muted);
+}
+
+.botButton {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  align-self: flex-end;
+  min-height: 44px;
+  margin-top: 6px;
+  padding-inline: 16px;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: 9999px;
+  color: var(--color-fg);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    scale var(--duration-press) var(--ease-out);
+}
+
+.botButton:active {
+  scale: 0.97;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .botButton:hover {
+    background-color: var(--color-hover);
+  }
+}
+
+.group {
+  grid-column: span 3;
+}
+
+.group:first-of-type {
+  grid-column: 7 / span 3;
+}
+
+.groupTitle {
+  margin: 0;
+  color: var(--color-fg-muted);
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 44px;
+  font-size: clamp(1rem, 1.25vw, 1.25rem);
+  font-weight: 600;
+  line-height: 1.15;
+  text-transform: uppercase;
+  color: var(--color-fg);
+  text-decoration: underline transparent 1px;
+  text-underline-offset: 0.3em;
+  transition: text-decoration-color var(--duration-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+.lang {
+  grid-column: 14 / -1;
+  justify-self: end;
+  text-align: right;
+}
+
+.lang :global(.lang-switch) {
+  margin: 4px -14px 0 0;
+}
+
+/* Узкий компьютер и планшет: блоку бота нужна ширина под кнопку в одну строку */
+@media (min-width: 768px) and (max-width: 1099.98px) {
+  .bot {
+    grid-column: 1 / span 6;
+  }
+
+  .group:first-of-type {
+    grid-column: 8 / span 3;
+  }
+}
+
+/* ------------------------------------------------------------------------- Низ */
+
+.bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px 5vw;
+  align-items: end;
+  padding-block: 9dvh 28px;
+}
+
+.legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 40px;
+  align-items: center;
+}
+
+.legalLink {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-fg);
+  text-decoration: underline transparent 1px;
+  text-underline-offset: 0.3em;
+  transition: text-decoration-color var(--duration-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .legalLink:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+.note {
+  justify-self: end;
+  max-width: 46ch;
+  margin: 0;
+  color: var(--color-fg-muted);
+  text-align: right;
+}
+
+.note a {
+  color: var(--color-fg-soft);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .note a:hover {
+    color: var(--color-fg);
+  }
+}
+
+/*
+  Появление блоков при входе в окно (по времени, как абзац в кадрах 489-491).
+  Действует, только когда блок помечен скриптом; при «меньше движения» без сдвига.
+*/
+.root[data-live] [data-reveal] {
+  opacity: 0;
+  translate: 0 18px;
+  transition:
+    opacity 420ms var(--ease-out),
+    translate 520ms var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 70ms);
+}
+
+.root[data-live] [data-reveal][data-in] {
+  opacity: 1;
+  translate: 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root[data-live] [data-reveal] {
+    translate: none;
+    transition: opacity 200ms linear;
+  }
+}
+
+/* --------------------------------------------------------------------- Телефон */
+
+@media (max-width: 767.98px) {
+  .top {
+    padding-top: 14dvh;
+  }
+
+  .sign {
+    --echo-w: 82vw;
+  }
+
+  .signWrap {
+    margin-top: 28px;
+  }
+
+  .buttons {
+    gap: 8px;
+    margin-top: 36px;
+  }
+
+  .about {
+    width: 100%;
+    min-width: 0;
+    margin-top: 44px;
+  }
+
+  .divider {
+    margin-top: 96px;
+  }
+
+  .statement,
+  .grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .statement {
+    gap: 36px;
+    padding-top: 72px;
+  }
+
+  .mark {
+    align-self: center;
+  }
+
+  .grid {
+    gap: 40px;
+    padding-top: 72px;
+  }
+
+  .botButton {
+    align-self: flex-end;
+  }
+
+  .lang {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .lang :global(.lang-switch) {
+    margin: 4px 0 0 -14px;
+  }
+
+  .bottom {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 48px;
+    border-top: 1px dashed oklch(0.993 0.007 97.3 / 0.28);
+    margin-top: 48px;
+  }
+
+  .legal {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .note {
+    justify-self: start;
+    text-align: left;
+  }
+}

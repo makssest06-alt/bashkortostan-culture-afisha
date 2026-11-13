@@ -1,0 +1,639 @@
+/*
+  Сцена gallery. Слои снизу вверх: фон страницы, гигантская фраза, конверт, ленты миниатюр,
+  рамка с фото (всё это подложка ПОД жетоном), холст жетона, интерфейс (экран сцены).
+  Геометрия рамки: ./frame.module.css. Движением управляет таймлайн в index.tsx:
+  он пишет transform, opacity, clip-path и числовые переменные (--m, --d, --c, --px),
+  от которых ниже считаются transform и clip-path.
+*/
+
+/* ----------------------------------------------------------------- Подложка */
+
+.back {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  color: var(--color-fg);
+}
+
+/* Гигантская фраза: кегль подгоняется под ширину (--pf, vw), сжатие (--c) ведёт её в подзаголовок */
+.phrase {
+  --pf: 12.4;
+  --sf: 2.3;
+  --phrase-top: calc(50dvh - 0.6em);
+  --sub-top: 30.4dvh;
+  --px: 0;
+  --c: 0;
+  position: absolute;
+  top: var(--phrase-top);
+  left: var(--gx);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: calc(var(--pf) * 1vw);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+  transform-origin: 0 0;
+  transform: translate3d(calc(var(--px) * 1vw), calc(var(--c) * (var(--sub-top) - var(--phrase-top))), 0)
+    scale(calc(1 - var(--c) * (1 - var(--sf) / var(--pf))));
+  will-change: transform;
+}
+
+/*
+  Свечение фразы отдельным слоем (will-change: opacity): тени растрируются один раз, а вспышка идёт только
+  прозрачностью. Без своего слоя каждая смена прозрачности перерисовывала размытые тени вокруг букв высотой
+  в полэкрана: замер на M3 давал 37 % кадров по 33-50 мс на проходе фразы, со слоем 0 %.
+*/
+.phraseGlow {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  opacity: 0;
+  will-change: opacity;
+  text-shadow:
+    0 0 0.1em oklch(0.96 0.03 85 / 0.95),
+    0 0 0.34em oklch(0.86 0.1 60 / 0.6),
+    0 0 0.8em oklch(0.8 0.12 50 / 0.35);
+}
+
+/* Билетный конверт вокруг жетона: наш аналог обёртки из референса */
+.wrap {
+  --ww: min(23.8vw, 42dvh);
+  position: absolute;
+  top: calc(var(--cy) - var(--ww) / 2);
+  left: calc(50vw - var(--ww) / 2);
+  width: var(--ww);
+  height: var(--ww);
+  opacity: 0;
+}
+
+.wrapTilt {
+  position: absolute;
+  inset: 0;
+  rotate: -5deg;
+}
+
+.wrapHalf {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px oklch(0.99 0.01 97 / 0.28);
+  will-change: transform;
+}
+
+.wrapHalfLeft {
+  clip-path: polygon(0 0, 52% 0, 47% 12%, 53% 25%, 46% 38%, 54% 52%, 47% 66%, 53% 80%, 48% 100%, 0 100%);
+}
+
+.wrapHalfRight {
+  clip-path: polygon(52% 0, 100% 0, 100% 100%, 48% 100%, 53% 80%, 47% 66%, 54% 52%, 46% 38%, 53% 25%, 47% 12%);
+}
+
+.wrapPattern {
+  position: absolute;
+  inset: -35%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  rotate: -38deg;
+  font-family: var(--font-display);
+  font-size: calc(var(--ww) * 0.105);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: oklch(0.99 0.01 97 / 0.92);
+}
+
+.wrapPattern span:nth-child(even) {
+  translate: -1.6em 0;
+}
+
+.wrapSheen {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    118deg,
+    oklch(0.99 0.01 97 / 0.2) 0%,
+    oklch(0.99 0.01 97 / 0) 34%,
+    oklch(0.16 0.01 39 / 0.22) 100%
+  );
+}
+
+/* Ленты миниатюр: слева пройденные карточки, справа будущие (затемнены). Обе уходят под рамку */
+.strip {
+  --tw: 12.3vw;
+  --th: calc(var(--tw) / 0.79);
+  --tstep: 13.3vw;
+  position: absolute;
+  top: calc(var(--cy) - var(--th) / 2);
+  height: var(--th);
+  overflow: hidden;
+}
+
+.stripLeft {
+  left: 0;
+  width: calc(var(--pl) - var(--gap));
+}
+
+.stripRight {
+  right: 0;
+  left: calc(var(--pl) + var(--pw) + var(--gap));
+  filter: brightness(0.6);
+}
+
+.track {
+  position: absolute;
+  top: 0;
+  display: flex;
+  gap: calc(var(--tstep) - var(--tw));
+  height: 100%;
+  will-change: transform;
+}
+
+/* Миниатюра k в покое стоит на шаг правее ближайшего к рамке места: её закрывает рамка */
+.stripLeft .track {
+  left: calc(100% - 0.9vw - var(--tw) + var(--tstep));
+}
+
+.stripRight .track {
+  left: calc(0.8vw - var(--tstep));
+}
+
+.thumb {
+  position: relative;
+  flex: none;
+  width: var(--tw);
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--color-surface);
+}
+
+@media (max-width: 767.98px) {
+  .strip,
+  .seam {
+    display: none;
+  }
+}
+
+/* Рамка: прямоугольник пунктира D. --d прорисовка сторон «вертушкой», --m квадрат -> портрет */
+.frame {
+  --dw: calc(var(--pw) + 2 * var(--gap));
+  --dh: calc(var(--ph) + 2 * var(--gap));
+  --m: 0;
+  --d: 0;
+  --a: calc((1 - var(--m)) * (var(--dw) - var(--sw)) / 2);
+  --b: calc((1 - var(--m)) * (var(--dh) - var(--sh)) / 2);
+  --lh: calc(var(--dw) - 2 * var(--a));
+  --lv: calc(var(--dh) - 2 * var(--b));
+  position: absolute;
+  top: calc(var(--pt) - var(--gap));
+  left: calc(var(--pl) - var(--gap));
+  width: var(--dw);
+  height: var(--dh);
+}
+
+.edges {
+  position: absolute;
+  inset: 0;
+  color: oklch(0.99 0.01 97 / 0.78);
+}
+
+.edge {
+  position: absolute;
+}
+
+.edgeTop,
+.edgeBottom {
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background-image: repeating-linear-gradient(to right, currentColor 0 3px, transparent 3px 7px);
+}
+
+.edgeLeft,
+.edgeRight {
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background-image: repeating-linear-gradient(to bottom, currentColor 0 3px, transparent 3px 7px);
+}
+
+.edgeTop {
+  top: 0;
+  transform: translateY(var(--b));
+  clip-path: inset(0 calc(var(--a) + (1 - var(--d)) * var(--lh)) 0 var(--a));
+}
+
+.edgeRight {
+  right: 0;
+  transform: translateX(calc(-1 * var(--a)));
+  clip-path: inset(var(--b) 0 calc(var(--b) + (1 - var(--d)) * var(--lv)) 0);
+}
+
+.edgeBottom {
+  bottom: 0;
+  transform: translateY(calc(-1 * var(--b)));
+  clip-path: inset(0 var(--a) 0 calc(var(--a) + (1 - var(--d)) * var(--lh)));
+}
+
+.edgeLeft {
+  left: 0;
+  transform: translateX(var(--a));
+  clip-path: inset(calc(var(--b) + (1 - var(--d)) * var(--lv)) 0 var(--b) 0);
+}
+
+/* Точка: в правом верхнем углу, едет вместе с углом при вытягивании */
+.dotWrap {
+  --dot: clamp(8px, 0.94vw, 14px);
+  --dot-off: clamp(12px, 1.64vw, 26px);
+  position: absolute;
+  top: var(--dot-off);
+  right: var(--dot-off);
+  width: var(--dot);
+  height: var(--dot);
+  transform: translate(calc(-1 * var(--a)), var(--b));
+}
+
+.dot {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: var(--color-fg);
+  opacity: 0;
+}
+
+/* Окружность из точек с четырьмя засечками */
+.circle {
+  --cd: calc(var(--sw) * 0.925);
+  position: absolute;
+  top: calc(50% - var(--cd) / 2);
+  left: calc(50% - var(--cd) / 2);
+  width: var(--cd);
+  height: var(--cd);
+  border: 1px dotted oklch(0.99 0.01 97 / 0.6);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.tick {
+  position: absolute;
+  background-color: oklch(0.99 0.01 97 / 0.75);
+}
+
+.tickTop,
+.tickBottom {
+  left: calc(50% - 0.5px);
+  width: 1px;
+  height: clamp(6px, 0.7vw, 10px);
+}
+
+.tickLeft,
+.tickRight {
+  top: calc(50% - 0.5px);
+  width: clamp(6px, 0.7vw, 10px);
+  height: 1px;
+}
+
+.tickTop {
+  top: clamp(6px, 0.7vw, 10px);
+}
+
+.tickBottom {
+  bottom: clamp(6px, 0.7vw, 10px);
+}
+
+.tickLeft {
+  left: clamp(6px, 0.7vw, 10px);
+}
+
+.tickRight {
+  right: clamp(6px, 0.7vw, 10px);
+}
+
+/* Фото в рамке: прямоугольник P */
+.photo {
+  position: absolute;
+  inset: var(--gap);
+  overflow: hidden;
+}
+
+.glass {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  opacity: 0;
+  background-color: oklch(0.17 0.008 45 / 0.4);
+  backdrop-filter: blur(14px);
+}
+
+/*
+  Карточки без постоянного will-change: шесть карточек и шесть кадрирований были двенадцатью слоями
+  размером с рамку на всё время сцены. Слоем карточка становится, только пока её ведёт таймлайн
+  (GSAP пишет translate3d на время движения).
+*/
+.card {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--color-surface);
+}
+
+.cardZoom {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+  Шов на смене карточек: полоса шириной 13 % рамки едет вместе с границей нового фото
+  и преломляет то, что под ней, как гранёное стекло (в референсе это шейдер).
+*/
+.seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 13%;
+  visibility: hidden;
+  opacity: 0;
+  backdrop-filter: blur(9px) brightness(1.24) saturate(1.15);
+  mask-image: linear-gradient(to right, transparent 0%, #000 34%, #000 66%, transparent 100%);
+  will-change: transform;
+}
+
+/* Последняя карточка: то же окно в зал, что раскроется в сцене fullscreen (экран целиком, обрезан рамкой) */
+.stageBox {
+  position: absolute;
+  top: calc(-1 * var(--pt));
+  left: calc(-1 * var(--pl));
+  width: 100vw;
+  height: 100dvh;
+}
+
+/* Крупное слово обложки на последней карточке: уезжает вверх за край рамки */
+.cover {
+  position: absolute;
+  top: 5%;
+  right: 5%;
+  left: 5%;
+  font-family: var(--font-display);
+  font-size: calc(var(--pw) * 0.25);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  color: var(--color-fg);
+  text-shadow: 0 2px 30px oklch(0.16 0.01 39 / 0.55);
+}
+
+.coverShade {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to bottom, oklch(0.16 0.01 39 / 0.5) 0%, oklch(0.16 0.01 39 / 0) 42%);
+}
+
+/* ------------------------------------------------------------------ Экран */
+
+.stage {
+  position: absolute;
+  inset: 0;
+  color: var(--color-fg);
+}
+
+.caption {
+  --caption-top: 27.1dvh;
+  position: absolute;
+  top: var(--caption-top);
+  left: var(--gx);
+  margin: 0;
+  font-size: clamp(0.8125rem, 1.25vw, 1.125rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: oklch(0.975 0.022 84);
+  will-change: transform;
+}
+
+.heading {
+  margin: 0;
+}
+
+.captionInner {
+  display: block;
+  opacity: 0;
+  transition: opacity 240ms var(--ease-out);
+}
+
+.stage[data-caption] .captionInner {
+  opacity: 1;
+}
+
+.sub {
+  --sf: 2.3;
+  position: absolute;
+  top: 30.4dvh;
+  left: var(--gx);
+  font-family: var(--font-display);
+  font-size: calc(var(--sf) * 1vw);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.links {
+  position: absolute;
+  top: var(--pt);
+  left: var(--pl);
+  width: var(--pw);
+  height: var(--ph);
+}
+
+.link {
+  position: absolute;
+  inset: 0;
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+  border-radius: 0;
+}
+
+.link:focus-visible {
+  outline-offset: calc(var(--gap) + 2px);
+}
+
+/* Нижняя полоса карточки: категория, число событий, действие */
+.bar {
+  position: absolute;
+  right: 3%;
+  bottom: 3%;
+  left: 3%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--radius-sm);
+  background-color: oklch(0.162 0.006 39.3 / 0.9);
+}
+
+.barText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.barLabel {
+  font-size: clamp(0.9375rem, 1.25vw, 1.25rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.barMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  min-height: 1.25em;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  color: var(--color-fg-soft);
+}
+
+.barCount {
+  display: inline-block;
+  min-width: 9ch;
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.barCta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-bg);
+  background-color: var(--color-copper-hi);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.barArrow {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link:hover .barCta {
+    background-color: var(--color-fg);
+  }
+
+  .link:hover .barArrow {
+    transform: translateX(3px);
+  }
+}
+
+.link:active .barCta {
+  transform: scale(0.97);
+}
+
+/* Подсказка прокрутки: снизу по центру, на телефоне справа снизу */
+.hint {
+  position: absolute;
+  bottom: 3.2dvh;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  translate: -50% 0;
+  white-space: nowrap;
+  color: oklch(0.975 0.022 84);
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out);
+}
+
+.stage[data-hint] .hint {
+  opacity: 1;
+}
+
+.hintIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+@media (max-width: 767.98px) {
+  /* Телефон: «матовое стекло» без размытия, плотнее заливкой (backdrop-filter дорог в WebKit) */
+  .glass {
+    background-color: oklch(0.17 0.008 45 / 0.78);
+    backdrop-filter: none;
+  }
+
+  .phrase {
+    --pf: 10.4;
+    --sf: 8.5;
+    --phrase-top: calc(var(--cy) + var(--sh) / 2 + 5.5dvh);
+    --sub-top: calc(var(--pt) - var(--gap) - 12px - 9.3vw);
+    left: 10vw;
+  }
+
+  .wrap {
+    --ww: min(57vw, 32dvh);
+  }
+
+  .caption {
+    --caption-top: calc(var(--pt) - var(--gap) - 12px - 9.3vw - 24px);
+    left: 10vw;
+    font-size: 1rem;
+  }
+
+  .sub {
+    --sf: 8.5;
+    top: calc(var(--pt) - var(--gap) - 12px - 9.3vw);
+    left: 10vw;
+  }
+
+  .bar {
+    min-height: 56px;
+    padding-left: 12px;
+  }
+
+  .barCta {
+    min-height: 44px;
+  }
+
+  .hint {
+    right: 5vw;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: auto;
+    flex-direction: row-reverse;
+    translate: none;
+  }
+}
+
+/* Меньше движения: без дрейфа стрелки и кнопки */
+@media (prefers-reduced-motion: reduce) {
+  .barArrow,
+  .barCta {
+    transition: none;
+  }
+
+  .link:active .barCta {
+    transform: none;
+  }
+}

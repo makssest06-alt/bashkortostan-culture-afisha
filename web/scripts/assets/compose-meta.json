@@ -1,0 +1,86 @@
+{
+  "/images/scenes/desk.webp": {
+    "sources": [
+      {
+        "id": 37225886,
+        "author": "Chris Steele",
+        "author_url": "https://www.pexels.com/@chris-steele-18904829",
+        "source_url": "https://www.pexels.com/photo/detailed-oak-wood-texture-with-natural-knots-37225886/"
+      },
+      {
+        "id": 15429341,
+        "author": "Engin Akyurt",
+        "author_url": "https://www.pexels.com/@enginakyurt",
+        "source_url": "https://www.pexels.com/photo/a-blue-textured-background-15429341/"
+      }
+    ],
+    "alt_ru": "Стол зрителя, вид сверху: тёмно-зелёное сукно на тёплой деревянной столешнице, программки, билеты и карандаш",
+    "note": "коллаж: дерево и сукно из фотографий, бумага и карандаш нарисованы; бинокля нет"
+  },
+  "/images/scenes/desk-angle.webp": {
+    "sources": [
+      {
+        "id": 37225886,
+        "author": "Chris Steele",
+        "author_url": "https://www.pexels.com/@chris-steele-18904829",
+        "source_url": "https://www.pexels.com/photo/detailed-oak-wood-texture-with-natural-knots-37225886/"
+      },
+      {
+        "id": 15429341,
+        "author": "Engin Akyurt",
+        "author_url": "https://www.pexels.com/@enginakyurt",
+        "source_url": "https://www.pexels.com/photo/a-blue-textured-background-15429341/"
+      },
+      {
+        "id": 19969569,
+        "author": "Masood Aslami",
+        "author_url": "https://www.pexels.com/@masoodaslami",
+        "source_url": "https://www.pexels.com/photo/lights-in-bokeh-19969569/"
+      }
+    ],
+    "alt_ru": "Стол зрителя под углом: зелёное сукно на дереве, тёплые огни в расфокусе на заднем плане",
+    "note": "коллаж: тот же стол в перспективе, фон из фотографии с боке"
+  },
+  "/images/scenes/hand.webp": {
+    "sources": [
+      {
+        "id": 12506706,
+        "author": "Kathrine Birch",
+        "author_url": "https://www.pexels.com/@kathrinepnw",
+        "source_url": "https://www.pexels.com/photo/a-person-s-hand-on-a-black-background-12506706/"
+      }
+    ],
+    "alt_ru": "Тёмная рука, поднятая снизу, с пальцами, готовыми держать жетон, в оранжевом свете на чёрном фоне",
+    "note": "фотография руки, переведённая в тёмно-медную гамму"
+  },
+  "/images/scenes/macro.webp": {
+    "sources": [
+      {
+        "id": 4232245,
+        "author": "Caio Cardenas",
+        "author_url": "https://www.pexels.com/@caiocardenas",
+        "source_url": "https://www.pexels.com/photo/metal-cymbals-with-geometric-pattern-on-surface-4232245/"
+      }
+    ],
+    "alt_ru": "Крупный план кромки чеканного диска медного оттенка, малая глубина резкости",
+    "note": "кадр из фотографии чеканного диска, затемнён; зелёного сукна в кадре нет"
+  },
+  "/images/scenes/texture.webp": {
+    "sources": [
+      {
+        "id": 16659340,
+        "author": "Engin Akyurt",
+        "author_url": "https://www.pexels.com/@enginakyurt",
+        "source_url": "https://www.pexels.com/photo/surface-of-a-brown-carpet-16659340/"
+      },
+      {
+        "id": 4232245,
+        "author": "Caio Cardenas",
+        "author_url": "https://www.pexels.com/@caiocardenas",
+        "source_url": "https://www.pexels.com/photo/metal-cymbals-with-geometric-pattern-on-surface-4232245/"
+      }
+    ],
+    "alt_ru": "Фактура крупным планом: тёмный войлок поверх тёплой чеканной меди",
+    "note": "коллаж из двух фотографий фактур"
+  }
+}

@@ -1,0 +1,99 @@
+/*
+  Сцена cities. Всё движение здесь играет по времени после порога (вход блока в экран, смена активной строки):
+  прокруткой ведётся только жетон (поза в def.ts). Анимируются opacity и filter.
+*/
+
+/* ------------------------------------------------------------------------------- Подложка */
+
+/* Тёплый тёмный фон и свечение сверху по центру: эллипс около 30 % ширины, гаснет к 30-35 % высоты */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 34% 38% at 50% -4%,
+      oklch(0.62 0.13 45 / 0.95) 0%,
+      oklch(0.56 0.12 45 / 0.62) 34%,
+      oklch(0.45 0.09 47 / 0.26) 64%,
+      oklch(0.4 0.08 47 / 0) 100%
+    ),
+    var(--color-bg-lit);
+}
+
+/* ------------------------------------------------- Заголовок и абзац: появление по словам */
+
+.reveal[data-armed] [data-word] {
+  opacity: 0;
+}
+
+.reveal[data-armed][data-in] [data-word] {
+  opacity: 1;
+  transition: opacity 140ms var(--ease-out) calc(var(--i, 0) * var(--gap, 30ms));
+}
+
+/* ------------------------------------------------------------------------------ Строки */
+
+/*
+  Активна строка у центра окна (data-active ставит наблюдатель). Остальные приглушены:
+  текст до 0,55 (контраст с фоном остаётся выше 4,5:1), миниатюра тёмная и без цвета.
+*/
+.dim {
+  opacity: 0.55;
+  transition: opacity 200ms var(--ease-out);
+}
+
+.thumb {
+  filter: grayscale(1) brightness(0.5);
+  transition: filter 220ms var(--ease-out);
+}
+
+.count {
+  transition: color 200ms var(--ease-out);
+}
+
+.row[data-active] .dim,
+.link:focus-visible .dim {
+  opacity: 1;
+}
+
+.row[data-active] .thumb,
+.link:focus-visible .thumb {
+  filter: none;
+}
+
+/* Число событий активной строки: светлая медь (значение токена --color-copper-hi, контраст с фоном 7:1) */
+.row[data-active] .count,
+.link:focus-visible .count {
+  color: oklch(0.727 0.15 47.8);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link:hover .dim {
+    opacity: 1;
+  }
+
+  .link:hover .thumb {
+    filter: none;
+  }
+
+  .link:hover .count {
+    color: oklch(0.727 0.15 47.8);
+  }
+}
+
+/* Обводка фокуса внутри строки: строка идёт во всю ширину, наружная обводка обрезалась бы */
+.link:focus-visible {
+  outline-offset: -3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dim,
+  .thumb,
+  .count {
+    transition: none;
+  }
+
+  .reveal[data-armed][data-in] [data-word] {
+    transition: opacity 160ms linear;
+  }
+}

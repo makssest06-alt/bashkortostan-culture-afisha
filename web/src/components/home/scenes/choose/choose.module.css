@@ -1,0 +1,582 @@
+/*
+  Сцена choose (S13). Базовая вёрстка это ИТОГОВОЕ состояние кадра 480 референса:
+  знак 39vw на v 0,217-0,376, вкладки на v 0,41, жетон в три четверти на v 0,748,
+  слева название и абзац, справа три пункта. Скрипт на компьютере ведёт к нему из начального
+  состояния (знак 48vw по центру экрана). Без скриптов и при «меньше движения» остаётся итог.
+
+  Три раскладки, выбор делает CSS:
+    компьютер                 экран сцены липкий (sticky) на 1,5 экрана, дальше колонки сравнения;
+    компьютер, меньше движения  тот же экран без закрепления;
+    телефон                   обычный поток: подпись, знак, вкладки, жетон, текст, колонки стопкой.
+*/
+
+.root {
+  --choose-pin: 1.5;
+  position: relative;
+}
+
+.stage {
+  position: relative;
+  height: 100dvh;
+  overflow: clip;
+}
+
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .pinTrack {
+    height: calc(100dvh * (1 + var(--choose-pin)));
+  }
+
+  .stage {
+    position: sticky;
+    top: 0;
+  }
+}
+
+/* -------------------------------------------------------------- Знак и подпись */
+
+.headPos {
+  position: absolute;
+  top: 29.65dvh;
+  left: 50%;
+  translate: -50% -50%;
+}
+
+.head {
+  position: relative;
+  margin: 0;
+  text-align: center;
+  will-change: transform;
+}
+
+.eyebrow {
+  position: absolute;
+  right: -20vw;
+  bottom: calc(100% + 2dvh);
+  left: -20vw;
+  display: block;
+  font-size: clamp(13px, 1.25vw, 22px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--color-fg);
+}
+
+.sign {
+  --echo-w: 39vw;
+}
+
+/* --------------------------------------------------------------------- Вкладки */
+
+.tabsPos {
+  position: absolute;
+  top: 41dvh;
+  right: var(--gutter);
+  left: var(--gutter);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.8vw;
+  align-items: stretch;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  will-change: transform;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: max(44px, 6.4dvh);
+  padding-inline: clamp(16px, 2vw, 34px);
+  border: 2px solid transparent;
+  /* «Пилюля», как у вкладок референса: полное скругление (в общей системе радиусов такое только здесь и в подвале) */
+  border-radius: 9999px;
+  /* Тёплый тёмно-коричневый, как у вкладок референса (#4C3729), собран из меди жетона и фона */
+  background-color: color-mix(in oklch, var(--color-copper-lo) 26%, var(--color-bg));
+  color: var(--color-fg);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    scale var(--duration-press) var(--ease-out);
+}
+
+.tab:active {
+  scale: 0.97;
+}
+
+.tab[aria-current='true'] {
+  border-color: var(--color-accent);
+  background-color: color-mix(in oklch, var(--color-copper-lo) 40%, var(--color-bg));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tab:hover {
+    background-color: color-mix(in oklch, var(--color-copper-lo) 40%, var(--color-bg));
+  }
+}
+
+/* ------------------------------------------------------ Место жетона, текст, пункты */
+
+.slot {
+  position: absolute;
+  top: 74.8dvh;
+  left: 50%;
+  width: 22vw;
+  height: 11vw;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+.aside {
+  position: absolute;
+  top: 70dvh;
+  left: var(--gutter);
+  width: max(22.1vw, 240px);
+}
+
+.asideName {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(18px, 1.45vw, 26px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.asideText {
+  margin: 0.9em 0 0;
+  font-size: clamp(14px, 1.05vw, 17px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--color-fg-soft);
+  text-wrap: pretty;
+}
+
+.points {
+  position: absolute;
+  top: 68.7dvh;
+  right: 7.1vw;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 2.4dvh, 22px);
+  width: max(19.8vw, 230px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.point {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: clamp(14px, 1.05vw, 17px);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.pointIcon {
+  flex-shrink: 0;
+  margin-top: 0.05em;
+  color: var(--color-fg-muted);
+}
+
+/*
+  Появление по порогу, по времени (кадры 472-480): вкладки по одной, абзац построчно, пункты по одному.
+  Правила действуют только там, где сцену ведёт скрипт (data-live ставит он же), иначе всё видно сразу.
+*/
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .root[data-live] .tab {
+    opacity: 0;
+    translate: 0 10px;
+    transition:
+      opacity 140ms var(--ease-out),
+      translate 220ms var(--ease-out),
+      background-color var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  .root[data-live][data-tabs] .tab {
+    opacity: 1;
+    translate: 0 0;
+    transition-delay: calc(var(--i, 0) * 60ms), calc(var(--i, 0) * 60ms), 0s, 0s, 0s;
+  }
+
+  /* Фокус с клавиатуры пришёл раньше порога: вкладки показываются сразу, невидимого фокуса нет */
+  .root[data-live] .tabs:focus-within .tab {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  .root[data-live] .asideName,
+  .root[data-live] .point {
+    opacity: 0;
+    transition: opacity 160ms var(--ease-out);
+  }
+
+  /* Абзац печатается построчно: окно открывается ступенями сверху вниз */
+  .root[data-live] .asideText {
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path 100ms linear;
+  }
+
+  .root[data-live][data-details] .asideName,
+  .root[data-live][data-details] .point {
+    opacity: 1;
+  }
+
+  .root[data-live][data-details] .asideText {
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 320ms steps(5, end) 60ms;
+  }
+
+  .root[data-live][data-details] .point {
+    transition-delay: calc(80ms + var(--i, 0) * 60ms);
+  }
+}
+
+/* ----------------------------------------------------------- Колонки сравнения */
+
+.compare {
+  position: relative;
+  padding-block: 14dvh 18dvh;
+  scroll-margin-top: var(--header-h);
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(7, auto);
+  margin-inline: 8.7vw 9.2vw;
+}
+
+.col {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: 1 / span 7;
+  grid-column: var(--col, auto);
+  justify-items: center;
+  padding-inline: clamp(12px, 1.6vw, 28px);
+  text-align: center;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.colHead {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+
+.colMark {
+  color: var(--color-fg-muted);
+  transition: color var(--duration-base) var(--ease-out);
+}
+
+.col[data-active] .colMark {
+  color: var(--color-accent);
+}
+
+.colName {
+  margin: 0;
+  font-size: clamp(22px, 1.9vw, 32px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--color-fg-soft);
+  transition: color var(--duration-base) var(--ease-out);
+}
+
+.col[data-active] .colName {
+  color: var(--color-fg);
+}
+
+.colTag {
+  max-width: 26ch;
+  margin: 14px 0 0;
+  padding-bottom: 5dvh;
+  color: var(--color-fg-muted);
+}
+
+.feat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  max-width: 30ch;
+  margin: 0;
+  padding-block: clamp(16px, 2.6dvh, 26px);
+}
+
+.featLabel {
+  color: var(--color-fg-muted);
+}
+
+.featValue {
+  color: var(--color-fg);
+  text-wrap: balance;
+}
+
+.colActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  padding-top: clamp(20px, 4dvh, 40px);
+}
+
+.colNote {
+  max-width: 28ch;
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--color-fg-muted);
+}
+
+/* Полосы под нечётными строками: идут через все три колонки (как в таблице референса) */
+.band {
+  grid-column: 1 / -1;
+  /* Полосы таблицы в оригинале это вытянутые «пилюли» со сплошным скруглением */
+  border-radius: 9999px;
+  background-color: oklch(0.993 0.007 97.3 / 0.035);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------- Подложка */
+
+/* То же свечение сверху по центру, что у popular: в начале сцены оно ещё видно, затем гаснет (кадры 468-476) */
+.glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 34% 38% at 50% -4%,
+      oklch(0.62 0.13 45 / 0.95) 0%,
+      oklch(0.56 0.12 45 / 0.62) 34%,
+      oklch(0.45 0.09 47 / 0.26) 64%,
+      oklch(0.4 0.08 47 / 0) 100%
+    ),
+    var(--color-bg-lit);
+}
+
+/* Кольцо кускара лежит «на полу» под жетоном: свой мотив на месте оранжевых эскизов референса */
+.floor {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 46vw;
+  height: 46vw;
+  margin: -23vw 0 0 -23vw;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.floorRing {
+  width: 100%;
+  height: 100%;
+  color: var(--color-copper-lo);
+  transform: rotateX(66deg);
+}
+
+.floorGlow {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, oklch(0.525 0.133 39.2 / 0.34), oklch(0.525 0.133 39.2 / 0));
+  transform: rotateX(66deg);
+}
+
+/*
+ * Тусклое красное пятно между вкладками и жетоном (кадры 477-480: около u 0,56, v 0,50, цвет #4B1B1E).
+ * Лежит внутри кольца на полу, поэтому едет и гаснет вместе с ним; центр на 30 % высоты окна выше центра кольца.
+ * Проявляет его таймлайн сцены, без закрепления (телефон, «меньше движения») пятна нет.
+ */
+.haze {
+  position: absolute;
+  top: calc(50% - 30dvh - 6vw);
+  left: calc(50% + 4vw - 10vw);
+  width: 20vw;
+  height: 12vw;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, oklch(0.3 0.075 18 / 0.85), oklch(0.27 0.06 18 / 0.35) 55%, oklch(0.25 0.05 18 / 0));
+  opacity: 0;
+  visibility: hidden;
+  filter: blur(18px);
+}
+
+/* «Меньше движения»: вместо 3D-жетона плоский диск анфас, поэтому и кольцо под ним лежит плоско */
+@media (prefers-reduced-motion: reduce) {
+  .floorRing,
+  .floorGlow {
+    transform: none;
+  }
+}
+
+@media (min-width: 768px) and (prefers-reduced-motion: reduce) {
+  .floor {
+    width: 36vw;
+    height: 36vw;
+    margin: -18vw 0 0 -18vw;
+  }
+}
+
+@media (max-width: 767.98px) and (prefers-reduced-motion: reduce) {
+  .floor {
+    width: 70vw;
+    height: 70vw;
+    margin: -35vw 0 0 -35vw;
+  }
+}
+
+/*
+  Узкое высокое окно на компьютерной раскладке (планшет стоя): ширины мало, высоты много.
+  Знак крупнее, текст и пункты поднимаются над жетоном, чтобы не лечь на кольцо.
+*/
+@media (min-width: 768px) and (max-aspect-ratio: 1 / 1) {
+  .sign {
+    --echo-w: 54vw;
+  }
+
+  .aside {
+    top: 53dvh;
+  }
+
+  .points {
+    top: 53dvh;
+    right: var(--gutter);
+  }
+
+  .floor {
+    width: 40vw;
+    height: 40vw;
+    margin: -20vw 0 0 -20vw;
+  }
+}
+
+/* --------------------------------------------------------------------- Телефон */
+
+@media (max-width: 767.98px) {
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: auto;
+    padding: 20dvh var(--gutter) 0;
+    overflow: visible;
+  }
+
+  .headPos,
+  .tabsPos,
+  .slot,
+  .aside,
+  .points {
+    position: static;
+    translate: none;
+  }
+
+  .eyebrow {
+    position: static;
+    margin-bottom: 14px;
+    font-size: clamp(15px, 4.27vw, 20px);
+  }
+
+  .sign {
+    --echo-w: 73vw;
+  }
+
+  .tabsPos {
+    width: 100%;
+    margin-top: 26px;
+  }
+
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .tab {
+    min-height: 47px;
+    padding-inline: 4px;
+    font-size: 0.75rem;
+    line-height: 1.15;
+    letter-spacing: 0;
+    text-align: center;
+    white-space: normal;
+  }
+
+  /* Место под жетон: 51 % ширины, вид в три четверти */
+  .slot {
+    width: 51vw;
+    height: 66vw;
+  }
+
+  .aside {
+    width: 100%;
+    max-width: 34ch;
+    text-align: center;
+  }
+
+  .asideName {
+    font-size: clamp(24px, 6.93vw, 32px);
+  }
+
+  .asideText {
+    font-size: 1rem;
+  }
+
+  .points {
+    align-items: flex-start;
+    width: 100%;
+    max-width: 34ch;
+    margin-top: 36px;
+    gap: 14px;
+  }
+
+  .point {
+    font-size: 1rem;
+  }
+
+  .compare {
+    padding-block: 9dvh 12dvh;
+  }
+
+  .cols {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    margin-inline: var(--gutter);
+  }
+
+  .col {
+    grid-template-rows: none;
+    grid-row: auto;
+    grid-column: 1;
+    padding: 44px 0 40px;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .colTag {
+    padding-bottom: 18px;
+  }
+
+  .feat {
+    padding-block: 12px;
+  }
+
+  .band {
+    display: none;
+  }
+
+  .floor {
+    width: 84vw;
+    height: 84vw;
+    margin: -42vw 0 0 -42vw;
+  }
+}

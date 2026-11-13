@@ -1,0 +1,957 @@
+/*
+  Раскладка страницы /ask.
+
+  Телефон: одна колонка в порядке «шапка, чипы (липкая строка), лента диалога, подборка»,
+  поле ввода закреплено у нижнего края окна. Обёртки .dialog и .workspace растворены
+  (display: contents), порядок задан свойством order.
+
+  От 1024px: слева диалог на высоту окна (липкий, лента прокручивается внутри),
+  справа рабочая область с чипами, допущениями и карточками.
+
+  Двигаются только transform и opacity. При «меньше движения» общая
+  страховка в globals.css гасит все анимации.
+*/
+
+.page {
+  /* Место под закреплённое поле ввода: подвал не прячется под ним. */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+}
+
+.main {
+  /* Подвал начинается ниже первого экрана: короткий диалог не висит над ним */
+  min-height: 100dvh;
+  padding-bottom: 32px;
+  /*
+    На шаг выше подвала (у него тот же слой --z-content): закреплённое поле ввода живёт
+    внутри main и иначе оказывалось бы под текстом подвала. Шапка, зерно и меню выше.
+  */
+  z-index: calc(var(--z-content) + 1);
+}
+
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog,
+.workspace {
+  display: contents;
+}
+
+.head,
+.headCompact,
+.engineNote {
+  order: 1;
+}
+
+.conditions {
+  order: 2;
+}
+
+.thread {
+  order: 3;
+}
+
+.assumptions {
+  order: 4;
+}
+
+.results,
+.waiting {
+  order: 5;
+}
+
+/* Диалог начат: пометка о правилах уходит в конец страницы, верх остаётся ленте */
+.root[data-started] .engineNote {
+  order: 6;
+  margin-top: 32px;
+}
+
+/* Диалог начат: над лентой нет крупного заголовка, отступ под шапку меньше */
+.main:has([data-started]) {
+  padding-top: calc(var(--header-h) + 12px);
+}
+
+/* ---------------------------------------------------------------- Шапка */
+
+.headCompact {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  margin-bottom: 8px;
+}
+
+.engineNote {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 62ch;
+  margin-top: 24px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-fg-soft);
+}
+
+.root:not([data-started]) .engineNote {
+  margin-bottom: 28px;
+}
+
+/* ------------------------------------------------------------------ Чипы */
+
+.conditions {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 3;
+  margin-inline: calc(-1 * var(--gutter));
+  padding-inline: var(--gutter);
+  border-bottom: 1px solid var(--color-line);
+  /* Сплошной фон: лента под липкой строкой не должна просвечивать сквозь чипы и редактор */
+  background-color: var(--color-bg);
+}
+
+.conditionsTitle {
+  /* На телефоне строка чипов говорит сама за себя: заголовок остаётся скринридеру. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.chipRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-inline: calc(-1 * var(--gutter));
+  padding: 8px var(--gutter);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chipRow::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  /* 44px у кнопок внутри плюс рамка чипа */
+  min-height: 46px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--color-fg);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+  animation: chip-in 240ms var(--ease-out) both;
+}
+
+.chip[data-open] {
+  border-color: var(--color-fg);
+  background-color: var(--color-hover);
+}
+
+.chip[data-pending] {
+  opacity: 0.55;
+}
+
+.chipMain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 12px;
+  border-radius: var(--radius-xs);
+}
+
+.chipMain:last-child {
+  padding-right: 12px;
+}
+
+.chipLabel {
+  color: var(--color-fg-muted);
+}
+
+.chipRemove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border-radius: var(--radius-xs);
+  color: var(--color-fg-soft);
+  transition:
+    scale var(--duration-press) var(--ease-out),
+    background-color var(--duration-press) var(--ease-out),
+    color var(--duration-press) var(--ease-out);
+}
+
+.chipRemove:active:not(:disabled),
+button.chipMain:active:not(:disabled) {
+  scale: 0.96;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip {
+    min-height: 36px;
+  }
+
+  .chipRemove {
+    width: 32px;
+  }
+
+  .chipRemove:hover:not(:disabled) {
+    background-color: var(--color-hover);
+    color: var(--color-fg);
+  }
+
+  button.chipMain:hover:not(:disabled) .chipValue {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.25em;
+  }
+}
+
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.editor {
+  padding-block: 4px 16px;
+  animation: editor-in 200ms var(--ease-out) both;
+}
+
+@keyframes editor-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.editorForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 520px;
+}
+
+.editorPair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.presets,
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------- Допущения */
+
+.assumptions {
+  padding-block: 16px 4px;
+  border-top: 1px solid var(--color-line);
+}
+
+.assumptionsTitle {
+  font-size: var(--fs-caps);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--color-fg-muted);
+}
+
+.assumptionList {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+
+.assumption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  align-items: center;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  color: var(--color-fg-soft);
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------------- Лента */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-block: 24px 8px;
+}
+
+.turn {
+  /* Прокрутка к реплике на телефоне: над ней шапка и липкая строка чипов. */
+  scroll-margin-top: calc(var(--header-h) + 76px);
+  animation: turn-in 260ms var(--ease-out) both;
+}
+
+.turnUser {
+  align-self: flex-end;
+  max-width: min(88%, 44ch);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+
+.turnNote {
+  align-self: flex-end;
+  max-width: 88%;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  text-align: right;
+  color: var(--color-fg-soft);
+  overflow-wrap: anywhere;
+}
+
+.turnAssistant {
+  align-self: flex-start;
+  max-width: min(100%, 58ch);
+  overflow-wrap: anywhere;
+}
+
+.turnText {
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* Метка честного отказа: «Билеты не продаю», «Вне афиши» */
+.refusal {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-caps);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--color-fg-soft);
+}
+
+.replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.turnError {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  align-self: flex-start;
+  max-width: min(100%, 58ch);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+@keyframes turn-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.dots {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 1.55em;
+}
+
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-fg-soft);
+  animation: dot-pulse 1.1s ease-in-out infinite;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes dot-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* ------------------------------------------------------------ Поле ввода */
+
+.composer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
+  padding: 10px var(--gutter) max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-line);
+  background-color: var(--color-bg);
+  /* Над экранной клавиатурой: смещение пишет Composer из размеров visualViewport. */
+  transform: translateY(calc(-1 * var(--keyboard-offset, 0px)));
+}
+
+.composerBox {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.composerBox:focus-within {
+  border-color: var(--color-fg);
+}
+
+/* Видимый фокус: рамка поля становится светлой и вдвое толще (без второго кольца вокруг) */
+.composerBox:has(.composerInput:focus-visible) {
+  box-shadow: 0 0 0 1px var(--color-fg);
+}
+
+.composerHint {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--color-fg-soft);
+}
+
+.composerHint:has(span) {
+  margin-top: 6px;
+}
+
+/* На сенсорном экране Enter на клавиатуре и так подписан «Отправить» */
+.enterHint {
+  display: none;
+}
+
+.composerInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 9.5rem;
+  padding-block: 10px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  /* 16px: iOS не приближает страницу при фокусе */
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-fg);
+  field-sizing: content;
+}
+
+.composerInput::placeholder {
+  color: var(--color-fg-muted);
+  opacity: 1;
+  /* Подсказка не растягивает поле на две строки, пока идёт диалог */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* До первой фразы подсказка показывает пример целиком */
+.root:not([data-started]) .composerInput::placeholder {
+  white-space: normal;
+}
+
+.sendButton {
+  display: inline-flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 12px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-fg);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--color-bg);
+  transition:
+    scale var(--duration-press) var(--ease-out),
+    background-color var(--duration-press) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.sendButton:active:not(:disabled) {
+  scale: 0.97;
+}
+
+.sendButton:disabled {
+  opacity: 0.4;
+}
+
+.sendLabel {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sendButton:hover:not(:disabled) {
+    background-color: var(--color-fg-soft);
+  }
+}
+
+/* --------------------------------------------------------------- Примеры */
+
+.example {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 64px;
+  padding-block: 16px;
+  border-top: 1px solid var(--color-line);
+  font-size: clamp(1.125rem, 4.6vw, 1.625rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  text-align: left;
+  text-wrap: balance;
+  color: var(--color-fg);
+  transition: color var(--duration-fast) var(--ease-out);
+  animation: turn-in 320ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
+
+.exampleArrow {
+  flex: none;
+  color: var(--color-fg-muted);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.example:active:not(:disabled) .exampleArrow {
+  transform: translateX(4px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .example:hover:not(:disabled) .exampleArrow {
+    transform: translateX(6px);
+    color: var(--color-copper-hi);
+  }
+}
+
+/* -------------------------------------------------------------- Карточки */
+
+.results {
+  padding-top: 8px;
+}
+
+.resultsHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding-bottom: 8px;
+}
+
+@media (pointer: coarse) {
+  .resultsHead a.demoNotice {
+    min-height: 44px;
+  }
+}
+
+.cards {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+/* «Остался один вопрос»: на телефоне вопрос и так стоит прямо над этим местом */
+.waiting {
+  display: none;
+}
+
+.relaxLabel {
+  font-size: clamp(1.125rem, 4.4vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.results[aria-busy='true'] .cards {
+  opacity: 0.5;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding-block: 24px;
+  border-top: 1px solid var(--color-line);
+  animation: turn-in 320ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+.media {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+
+.image {
+  object-fit: cover;
+  transition: scale 600ms var(--ease-out);
+}
+
+.cardBody {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cardTitle {
+  font-size: 1.1875rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.cardLink {
+  /* Зона касания 44px и у заголовка в одну строку: поля компенсированы отступами */
+  display: inline-block;
+  margin-block: -12px;
+  padding-block: 12px;
+  border-radius: var(--radius-xs);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.why {
+  grid-column: 1 / -1;
+  padding: 14px 16px 16px;
+  border-radius: var(--radius-md);
+  background-color: oklch(0.993 0.007 97.3 / 0.045);
+}
+
+.reason {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.reason > span::first-letter {
+  text-transform: uppercase;
+}
+
+.reason > span {
+  display: block;
+}
+
+.reasonIcon {
+  margin-top: 0.18em;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover .image {
+    scale: 1.04;
+  }
+
+  .cardLink:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+}
+
+/* Варианты ослабления условий */
+.relax {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 56px;
+  padding-block: 14px;
+  border-top: 1px solid var(--color-line);
+  text-align: left;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.relax:active:not(:disabled) .exampleArrow {
+  transform: translateX(4px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .relax:hover:not(:disabled) .exampleArrow {
+    transform: translateX(6px);
+    color: var(--color-copper-hi);
+  }
+}
+
+/* Рабочая область шире 640px: картинка крупнее, причины встают третьей колонкой */
+@container workspace (min-width: 640px) {
+  .card {
+    grid-template-columns: 148px minmax(0, 1fr) minmax(0, 0.92fr);
+    column-gap: 24px;
+    padding-block: 28px;
+  }
+
+  .cardTitle {
+    font-size: 1.5rem;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+  }
+
+  .why {
+    grid-column: auto;
+    align-self: stretch;
+  }
+}
+
+/* --------------------------------------------------------- От 1024px */
+
+@media (min-width: 1024px) {
+  .page {
+    padding-bottom: 0;
+  }
+
+  .main {
+    padding-top: calc(var(--header-h) + 16px);
+    padding-bottom: 56px;
+  }
+
+  .root {
+    display: grid;
+    grid-template-columns: minmax(340px, 0.72fr) minmax(0, 1.28fr);
+    column-gap: clamp(32px, 4.4vw, 80px);
+    align-items: start;
+  }
+
+  .dialog {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* Порядок телефона здесь не нужен: блоки идут как в разметке */
+  .dialog > *,
+  .workspace > *,
+  .root[data-started] .engineNote {
+    order: 0;
+  }
+
+  /* Диалог начат: колонка занимает высоту окна и едет вместе с прокруткой */
+  .root[data-started] .dialog {
+    position: sticky;
+    top: calc(var(--header-h) + 16px);
+    height: calc(100dvh - var(--header-h) - 40px);
+    min-height: 400px;
+  }
+
+  .workspace {
+    display: block;
+    min-width: 0;
+    container: workspace / inline-size;
+  }
+
+  .root[data-started] .workspace {
+    padding-left: clamp(32px, 4.4vw, 80px);
+    margin-left: calc(-1 * clamp(32px, 4.4vw, 80px) / 2);
+    border-left: 1px solid var(--color-line);
+    min-height: calc(100dvh - var(--header-h) - 40px);
+  }
+
+  .conditions {
+    position: static;
+    z-index: auto;
+    margin-inline: 0;
+    padding-inline: 0;
+    border-bottom: 0;
+    background: none;
+  }
+
+  .chipRow {
+    flex-wrap: wrap;
+    margin-inline: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .editor {
+    padding-block: 16px 4px;
+  }
+
+  .thread {
+    flex: 1;
+    min-height: 0;
+    padding: 20px 12px 20px 0;
+    overflow-y: auto;
+    /* Реплики уходят под шапку диалога плавно, а не обрезаются по линии */
+    mask-image: linear-gradient(to bottom, transparent 0, #000 20px);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  .root:not([data-started]) .thread {
+    display: none;
+  }
+
+  .turn {
+    scroll-margin-top: 0;
+  }
+
+  .composer {
+    position: static;
+    z-index: auto;
+    padding: 0;
+    border-top: 0;
+    background: none;
+    transform: none;
+  }
+
+  .enterHint {
+    display: inline;
+  }
+
+  .root:not([data-started]) .composer {
+    margin-top: 40px;
+  }
+
+  .root[data-started] .engineNote {
+    margin-top: 16px;
+  }
+
+  .root:not([data-started]) .engineNote {
+    margin-bottom: 0;
+  }
+
+  .main:has([data-started]) {
+    padding-top: calc(var(--header-h) + 16px);
+  }
+
+  .headCompact {
+    flex: none;
+    margin-bottom: 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .conditionsTitle {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0 0 12px;
+    overflow: visible;
+    clip-path: none;
+    font-size: var(--fs-caps);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: var(--ls-caps);
+    text-transform: uppercase;
+    color: var(--color-fg-muted);
+  }
+
+  .assumptions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 20px;
+    align-items: baseline;
+    margin-top: 20px;
+    padding-block: 12px 0;
+  }
+
+  .assumptionList {
+    flex-flow: row wrap;
+    gap: 0 24px;
+    margin-top: 0;
+  }
+
+  .waiting {
+    display: block;
+    padding-top: 40px;
+  }
+
+  .root[data-started] .results {
+    padding-top: 28px;
+  }
+
+
+  .results {
+    padding-top: 0;
+  }
+}
+
+/* Подпись на кнопке отправки: только когда колонка диалога достаточно широка */
+@media (min-width: 1280px) {
+  .sendLabel {
+    display: inline;
+  }
+
+  .sendButton {
+    padding-inline: 16px;
+  }
+}

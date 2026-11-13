@@ -1,0 +1,376 @@
+/*
+  Страница /widget: код вставки, настройки и живой пример внутри макета страницы министерства.
+
+  Макет намеренно не похож на афишу: нейтральные серые, системный шрифт, светлая или тёмная
+  подложка по выбранной теме виджета. Так видно, как виджет встаёт в чужую страницу.
+  Оформление, герб и логотип настоящего сайта министерства не используются.
+*/
+
+.playground {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 40px;
+}
+
+.side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panelHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-height: 36px;
+}
+
+@media (min-width: 1024px) {
+  .playground {
+    grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.45fr);
+    column-gap: clamp(32px, 4vw, 64px);
+    align-items: start;
+  }
+}
+
+/* -------------------------------------------------------------- Вкладки кода */
+
+.tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--color-fg-soft);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background-color: var(--color-fg);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--color-fg);
+}
+
+.tab[aria-selected='true']::after {
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tab:hover {
+    color: var(--color-fg);
+  }
+}
+
+.codeFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.hint {
+  min-width: 12rem;
+  max-width: 40ch;
+  flex: 1;
+  color: var(--color-fg-soft);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+/* ----------------------------------------------------------------- Настройки */
+
+.settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 16px;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.choice {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choiceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 419.98px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --------------------------------------------------------------------- Макет */
+
+.mock {
+  --m-bg: #f1f0ec;
+  --m-surface: #faf9f6;
+  --m-fg: #23211e;
+  --m-soft: #55514b;
+  --m-line: rgba(35, 33, 30, 0.14);
+
+  container-type: inline-size;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--m-bg);
+  color: var(--m-fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  transition: background-color var(--duration-base) var(--ease-out);
+}
+
+.mock[data-theme='dark'] {
+  --m-bg: #201f1d;
+  --m-surface: #292725;
+  --m-fg: #f2f0eb;
+  --m-soft: #bcb8b0;
+  --m-line: rgba(242, 240, 235, 0.14);
+}
+
+.mock[data-viewport='phone'] {
+  max-width: 390px;
+}
+
+.mockBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--m-line);
+  background-color: var(--m-surface);
+}
+
+.mockOrg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Условный знак организации: просто круг. Герб и логотип не используются. */
+.mockMark {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 2px solid var(--m-soft);
+  border-radius: 50%;
+}
+
+.mockNav {
+  display: none;
+  gap: 22px;
+  margin-left: auto;
+  color: var(--m-soft);
+  font-size: 14px;
+}
+
+.mockBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 16px 24px;
+}
+
+.mockBadge {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border: 1px dashed var(--m-soft);
+  border-radius: var(--radius-sm);
+  color: var(--m-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mockTitle {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.mockText {
+  max-width: 62ch;
+  color: var(--m-soft);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+@container (min-width: 600px) {
+  .mockNav {
+    display: flex;
+  }
+
+  .mockBody {
+    padding: 32px 32px 40px;
+  }
+
+  .mockTitle {
+    font-size: 30px;
+  }
+}
+
+/* Место виджета. Пока скрипт не вставил блок, под ним виден каркас списка. */
+.slot:not(:empty) + .placeholder {
+  display: none;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--m-line);
+  border-radius: 6px;
+}
+
+.placeholderRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--m-line);
+}
+
+.placeholderRow:first-child {
+  border-top: 0;
+}
+
+.bar {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background-color: var(--m-line);
+}
+
+.frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+}
+
+.mockError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 16px;
+  border: 1px solid var(--m-line);
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.mockRetry {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding-inline: 20px;
+  border: 1px solid var(--m-soft);
+  border-radius: var(--radius-sm);
+  color: var(--m-fg);
+  font-size: 15px;
+  font-weight: 500;
+  transition: scale var(--duration-press) ease-out;
+}
+
+.mockRetry:active {
+  scale: 0.97;
+}
+
+.mock :focus-visible {
+  outline-color: var(--m-fg);
+}
+
+/* ------------------------------------------------------------- Что умеет виджет */
+
+.features {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.feature {
+  padding-block: 18px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-fg);
+}
+
+@media (min-width: 768px) {
+  .features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: clamp(24px, 4vw, 64px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: widget-rise 320ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+}
+
+@keyframes widget-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mock,
+  .tab,
+  .tab::after {
+    transition: none;
+  }
+}

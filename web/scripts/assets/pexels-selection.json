@@ -1,0 +1,232 @@
+{
+  "defaults": {
+    "event": {
+      "aspect": "3:4",
+      "long_side": 1200
+    },
+    "hall": {
+      "aspect": "16:9",
+      "long_side": 2000
+    },
+    "panel": {
+      "aspect": "9:16",
+      "long_side": 2000
+    },
+    "scene": {
+      "aspect": "16:9",
+      "long_side": 2000
+    }
+  },
+  "items": [
+    {
+      "path": "/images/events/theatre-1.webp",
+      "kind": "event",
+      "category": "theatre",
+      "id": 12616962,
+      "alt_ru": "Театральный зал: ряды кресел перед красным занавесом в свете софитов"
+    },
+    {
+      "path": "/images/events/theatre-2.webp",
+      "kind": "event",
+      "category": "theatre",
+      "id": 13331292,
+      "alt_ru": "Ложи и балкон старинного театра с бархатными драпировками"
+    },
+    {
+      "path": "/images/events/theatre-3.webp",
+      "kind": "event",
+      "category": "theatre",
+      "id": 6899772,
+      "alt_ru": "Сцена из спектакля: актёры в исторических костюмах у красного занавеса"
+    },
+    {
+      "path": "/images/events/theatre-4.webp",
+      "kind": "event",
+      "category": "theatre",
+      "id": 8994700,
+      "alt_ru": "Вид из ложи на сцену театра с красным занавесом"
+    },
+    {
+      "path": "/images/events/concert-1.webp",
+      "kind": "event",
+      "category": "concert",
+      "id": 18238120,
+      "alt_ru": "Рояль на сцене концертного зала"
+    },
+    {
+      "path": "/images/events/concert-2.webp",
+      "kind": "event",
+      "category": "concert",
+      "id": 27028361,
+      "alt_ru": "Музыканты играют на сцене в окружении сотен свечей"
+    },
+    {
+      "path": "/images/events/concert-3.webp",
+      "kind": "event",
+      "category": "concert",
+      "id": 7095838,
+      "alt_ru": "Виолончель в руках музыканта, крупный план"
+    },
+    {
+      "path": "/images/events/concert-4.webp",
+      "kind": "event",
+      "category": "concert",
+      "id": 32024630,
+      "alt_ru": "Дирижёр и оркестр во время концерта"
+    },
+    {
+      "path": "/images/events/museum-1.webp",
+      "kind": "event",
+      "category": "museum",
+      "id": 37125513,
+      "alt_ru": "Музейная галерея с расписным потолком и рыцарскими доспехами"
+    },
+    {
+      "path": "/images/events/museum-2.webp",
+      "kind": "event",
+      "category": "museum",
+      "id": 20742028,
+      "alt_ru": "Парадный зал музея с узорным полом и аркадами"
+    },
+    {
+      "path": "/images/events/museum-3.webp",
+      "kind": "event",
+      "category": "museum",
+      "id": 14950665,
+      "alt_ru": "Древний сосуд в подсвеченной витрине тёмного музейного зала"
+    },
+    {
+      "path": "/images/events/museum-4.webp",
+      "kind": "event",
+      "category": "museum",
+      "id": 39544428,
+      "alt_ru": "Керамические сосуды на музейных постаментах"
+    },
+    {
+      "path": "/images/events/exhibition-1.webp",
+      "kind": "event",
+      "category": "exhibition",
+      "id": 11905911,
+      "alt_ru": "Зал выставки с терракотовой стеной и картинами в рамах"
+    },
+    {
+      "path": "/images/events/exhibition-2.webp",
+      "kind": "event",
+      "category": "exhibition",
+      "id": 40086500,
+      "alt_ru": "Посетитель на скамье перед картиной в зале с красными стенами"
+    },
+    {
+      "path": "/images/events/exhibition-3.webp",
+      "kind": "event",
+      "category": "exhibition",
+      "id": 18250532,
+      "alt_ru": "Стена картинной галереи с полотнами в золочёных рамах"
+    },
+    {
+      "path": "/images/events/exhibition-4.webp",
+      "kind": "event",
+      "category": "exhibition",
+      "id": 35101544,
+      "alt_ru": "Тёплый коридор галереи с картинами вдоль стены"
+    },
+    {
+      "path": "/images/events/festival-1.webp",
+      "kind": "event",
+      "category": "festival",
+      "id": 27771877,
+      "alt_ru": "Народное гулянье: горит масленичное чучело, вокруг собрались люди"
+    },
+    {
+      "path": "/images/events/festival-2.webp",
+      "kind": "event",
+      "category": "festival",
+      "id": 29907502,
+      "alt_ru": "Вечерняя ярмарка под гирляндами огней"
+    },
+    {
+      "path": "/images/events/festival-3.webp",
+      "kind": "event",
+      "category": "festival",
+      "id": 18480708,
+      "alt_ru": "Зрители на празднике под открытым небом в закатном свете"
+    },
+    {
+      "path": "/images/events/festival-4.webp",
+      "kind": "event",
+      "category": "festival",
+      "id": 8590431,
+      "alt_ru": "Музыкант в народном костюме с балалайкой у костра на зимнем празднике"
+    },
+    {
+      "path": "/images/events/kids-1.webp",
+      "kind": "event",
+      "category": "kids",
+      "id": 5801307,
+      "alt_ru": "Дети у домашней сцены с красным занавесом и гирляндами"
+    },
+    {
+      "path": "/images/events/kids-2.webp",
+      "kind": "event",
+      "category": "kids",
+      "id": 7356472,
+      "alt_ru": "Двое детей смотрят кукольный спектакль"
+    },
+    {
+      "path": "/images/events/kids-3.webp",
+      "kind": "event",
+      "category": "kids",
+      "id": 7356563,
+      "alt_ru": "Куклы лисы и зайца в окне кукольного театра"
+    },
+    {
+      "path": "/images/events/kids-4.webp",
+      "kind": "event",
+      "category": "kids",
+      "id": 7626321,
+      "alt_ru": "Ребёнок в зрительном зале смотрит на освещённую сцену"
+    },
+    {
+      "path": "/images/scenes/hall.webp",
+      "kind": "hall",
+      "scene": "S4",
+      "id": 28113394,
+      "alt_ru": "Большой театральный зал с ярусами балконов в тёплом свете"
+    },
+    {
+      "path": "/images/scenes/panel-1.webp",
+      "kind": "panel",
+      "scene": "S12",
+      "id": 13425706,
+      "alt_ru": "Балерина за кулисами в золотом свете софитов"
+    },
+    {
+      "path": "/images/scenes/panel-2.webp",
+      "kind": "panel",
+      "scene": "S12",
+      "id": 7097454,
+      "alt_ru": "Скрипачи оркестра во время выступления"
+    },
+    {
+      "path": "/images/scenes/panel-3.webp",
+      "kind": "panel",
+      "scene": "S12",
+      "id": 27410076,
+      "alt_ru": "Музейная витрина с древними сосудами"
+    },
+    {
+      "path": "/images/scenes/panel-4.webp",
+      "kind": "panel",
+      "scene": "S12",
+      "id": 18470461,
+      "alt_ru": "Фейерверк над зрителями ночного фестиваля"
+    },
+    {
+      "path": "/images/scenes/panel-5.webp",
+      "kind": "panel",
+      "scene": "S12",
+      "id": 18606230,
+      "alt_ru": "Деревянные куклы-марионетки кукольного театра"
+    }
+  ]
+}

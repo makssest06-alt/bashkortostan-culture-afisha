@@ -1,0 +1,334 @@
+/*
+  Сетка каталога и раскладка карточки.
+
+  Ритм: страница выдачи это 10 событий. Две карточки из десяти крупные (афишный разворот:
+  картинка сбоку, заголовок крупнее, есть описание) и занимают строку целиком, остальные обычные.
+  Позиции разворотов подобраны так, чтобы сетка закрывалась без дыр:
+    3 колонки: [Р Р Р] [о о о] [о о о] [о о о]        разворот 1-й из десяти
+    2 колонки: [Р Р] [о о] [о о] [Р Р] [о о] [о о]    развороты 1-й и 6-й из десяти
+  На телефоне все карточки идут строками: миниатюра 3:4 слева, текст справа.
+*/
+
+/*
+  Завеса под фильтрами и выдачей. Фон страницы светится вдоль левого края (PageShell), и мелкий
+  приглушённый текст на свечении не добирает контраста 4.5:1: замер по пикселям давал 2.4:1 у подписей
+  колонки фильтров и 2.5:1 у строки источника в левой колонке планшета. Завеса гасит свечение под
+  областью чтения до тёплого оттенка, шапка страницы остаётся освещённой, а у самого края экрана
+  свет виден узкой полосой. Слой лежит под содержимым и не ловит события.
+*/
+.veil {
+  /* На широком экране слева от колонки остаётся поле: завеса тянется до края окна и набирает плотность плавно. */
+  --bleed: max(0px, (100vw - 1400px - 2 * var(--gutter)) / 2);
+
+  position: absolute;
+  z-index: -1;
+  top: -120px;
+  right: calc(var(--gutter) * -1 - var(--bleed));
+  bottom: -72px;
+  left: calc(var(--gutter) * -1 - var(--bleed));
+  pointer-events: none;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    color-mix(in oklch, var(--color-bg) 30%, transparent) 64px,
+    color-mix(in oklch, var(--color-bg) 80%, transparent) 144px,
+    color-mix(in oklch, var(--color-bg) 80%, transparent) calc(100% - 96px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, transparent 0, #000 calc(var(--bleed) + var(--gutter) * 0.85));
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: start;
+  padding-block: 20px;
+  border-top: 1px solid var(--color-line);
+  animation: card-in 320ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+.card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.media {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+
+.image {
+  object-fit: cover;
+  transition: scale 600ms var(--ease-out);
+}
+
+.body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  /* Название или площадка одним длинным словом переносится, а не раздвигает карточку */
+  overflow-wrap: anywhere;
+}
+
+/* Текст карточки двумя частями: «что, когда, где» и «цена, статус, источник» */
+.head,
+.tail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  /* Очень длинное название в списке обрезается на четвёртой строке, целиком оно есть на странице события */
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+/* Вся карточка ведёт на событие: ссылка в заголовке растянута на всю площадь. */
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+}
+
+.link:focus-visible {
+  outline: none;
+}
+
+.link:focus-visible::after {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 4px;
+}
+
+.excerpt {
+  display: none;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover .image {
+    scale: 1.04;
+  }
+
+  .card:hover .link {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: clamp(20px, 2.4vw, 36px);
+    row-gap: clamp(40px, 4.5vw, 64px);
+  }
+
+  /*
+    Обычная карточка занимает три строки сетки через subgrid: картинка, «что, когда, где»,
+    «цена и источник». Высота средней строки общая для всего ряда, поэтому линия над ценой
+    стоит на одной высоте у соседних карточек, даже если у одной из них название длиннее
+    или цена со статусом переносятся на вторую строку.
+  */
+  .card,
+  .card:first-child {
+    grid-row: span 3;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    row-gap: 16px;
+    padding-block: 0;
+    border-top: 0;
+  }
+
+  .card .body {
+    display: contents;
+  }
+
+  .title {
+    font-size: 1.375rem;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+  }
+
+  .facts {
+    padding-top: 12px;
+    border-top: 1px solid var(--color-line);
+  }
+}
+
+/*
+  Разворот: картинка сбоку, текст у её нижнего края. Ему subgrid не нужен, он один в своём ряду.
+  Две колонки: разворот 1-й и 6-й из каждых десяти, второй зеркальный.
+*/
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .card:nth-child(10n + 1),
+  .card:nth-child(10n + 6) {
+    grid-row: auto;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 0.44fr) minmax(0, 1fr);
+    grid-template-rows: none;
+    column-gap: clamp(20px, 2.4vw, 36px);
+    align-items: end;
+  }
+
+  .card:nth-child(10n + 1) .title,
+  .card:nth-child(10n + 6) .title {
+    font-size: clamp(1.75rem, 3vw, 3rem);
+    line-height: 1.03;
+    letter-spacing: -0.04em;
+  }
+
+  .card:nth-child(10n + 1) .body,
+  .card:nth-child(10n + 6) .body,
+  .card:nth-child(10n + 1) .head,
+  .card:nth-child(10n + 6) .head {
+    display: flex;
+    gap: 12px;
+  }
+
+  .card:nth-child(10n + 1) .excerpt,
+  .card:nth-child(10n + 6) .excerpt {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .card:nth-child(10n + 6) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.44fr);
+  }
+
+  .card:nth-child(10n + 6) .media {
+    order: 2;
+  }
+}
+
+/* Три колонки: разворот открывает каждую десятку, через раз зеркальный */
+@media (min-width: 1280px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .card:nth-child(10n + 1) {
+    grid-row: auto;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 0.44fr) minmax(0, 1fr);
+    grid-template-rows: none;
+    column-gap: clamp(20px, 2.4vw, 36px);
+    align-items: end;
+  }
+
+  .card:nth-child(10n + 1) .title {
+    font-size: clamp(1.75rem, 3vw, 3rem);
+    line-height: 1.03;
+    letter-spacing: -0.04em;
+  }
+
+  .card:nth-child(10n + 1) .body,
+  .card:nth-child(10n + 1) .head {
+    display: flex;
+    gap: 12px;
+  }
+
+  .card:nth-child(10n + 1) .excerpt {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .card:nth-child(20n + 11) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.44fr);
+  }
+
+  .card:nth-child(20n + 11) .media {
+    order: 2;
+  }
+}
+
+/* Список без ритма крупных карточек: события без цены или возраста, показанные по кнопке */
+.plain .card:nth-child(n) {
+  grid-column: auto;
+}
+
+@media (min-width: 768px) {
+  .plain .card:nth-child(n) {
+    grid-row: span 3;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    align-items: start;
+  }
+
+  .plain .card:nth-child(n) .title {
+    font-size: 1.375rem;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+  }
+
+  .plain .card:nth-child(n) .body {
+    display: contents;
+  }
+
+  .plain .card:nth-child(n) .head {
+    gap: 8px;
+  }
+
+  .plain .card:nth-child(n) .excerpt {
+    display: none;
+  }
+
+  .plain .card:nth-child(n) .media {
+    order: 0;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+
+  .image {
+    transition: none;
+  }
+}
