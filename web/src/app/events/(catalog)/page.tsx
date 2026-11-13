@@ -39,7 +39,7 @@ async function loadInitial(raw: SearchParams): Promise<InitialCatalog> {
 
 /**
  * Каталог событий. Первый экран собирается на сервере по параметрам адресной строки
- * (?date=weekend, ?city=ufa, ?free=1 и остальные из docs/api.md), дальше фильтры работают
+ * (?date=weekend, ?city=ufa, ?free=true и остальные из docs/api.md), дальше фильтры работают
  * в браузере без перезагрузки страницы.
  */
 export default async function EventsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {

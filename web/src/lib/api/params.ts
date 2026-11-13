@@ -232,7 +232,8 @@ export function eventsQueryToParams(query: EventsQuery): URLSearchParams {
   if (query.time_from) params.set('time_from', query.time_from);
   if (query.time_to) params.set('time_to', query.time_to);
   if (query.price_max !== undefined) params.set('price_max', String(query.price_max));
-  if (query.free_only) params.set('free', '1');
+  // Контракт v1: free — boolean. Разбор выше понимает и прежние free=1, free_only=1.
+  if (query.free_only) params.set('free', 'true');
   if (query.age !== undefined) params.set('age', String(query.age));
   if (query.age_rating?.length) params.set('age_rating', query.age_rating.join(','));
   if (query.audience) params.set('audience', query.audience);

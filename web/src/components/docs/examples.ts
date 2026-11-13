@@ -109,7 +109,7 @@ const EMPTY_CANDIDATES = [
   '/api/v1/events?city=sibay&date=today',
   '/api/v1/events?city=kumertau&date=today',
   '/api/v1/events?city=beloretsk&date=tomorrow',
-  '/api/v1/events?city=sibay&category=festival&free=1',
+  '/api/v1/events?city=sibay&category=festival&free=true',
   '/api/v1/events?city=kumertau&category=excursion&date=today',
 ];
 
