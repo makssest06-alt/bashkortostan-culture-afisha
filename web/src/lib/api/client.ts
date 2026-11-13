@@ -13,9 +13,10 @@
 
 import type { ApplicationKind } from '../admin/types';
 import { API_BASE_URL } from './config';
+import { DICTIONARIES } from '../../data/dictionaries';
 import { eventsQueryToParams } from './params';
 import { fromApiAssistantResponse, fromApiEvent, fromApiEventsList } from './wire';
-import type { ApiAssistantResponse, ApiEvent, ApiEventsListResponse } from './wire';
+import type { ApiAssistantResponse, ApiEventInput, ApiEventsListInput } from './wire';
 import type {
   AfishaEvent,
   ApiErrorBody,
@@ -112,6 +113,11 @@ async function request<T>(path: string, options: ClientOptions, setup: RequestSe
   return body as T;
 }
 
+/** 404 или 405 на сам адрес метода: бэк этого метода не реализует (он вне контракта v1). */
+function isMissingMethod(error: unknown): boolean {
+  return error instanceof ApiClientError && (error.status === 404 || error.status === 405);
+}
+
 function withQuery(path: string, query: EventsQuery): string {
   const search = eventsQueryToParams(query).toString();
   return search ? `${path}?${search}` : path;
@@ -120,14 +126,14 @@ function withQuery(path: string, query: EventsQuery): string {
 /** Список событий с фильтрами, счётчиками и вариантами ослабить условия. */
 export async function listEvents(query: EventsQuery = {}, options: ClientOptions = {}): Promise<EventsListResponse> {
   if (runsOnServer(options)) return (await import('./server')).listEvents(query);
-  return fromApiEventsList(await request<ApiEventsListResponse>(withQuery('/events', query), options));
+  return fromApiEventsList(await request<ApiEventsListInput>(withQuery('/events', query), options), query);
 }
 
 /** Событие со всеми сеансами. null, если события нет (ответ 404). */
 export async function getEvent(id: string, options: ClientOptions = {}): Promise<AfishaEvent | null> {
   if (runsOnServer(options)) return (await import('./server')).getEvent(id);
   try {
-    return fromApiEvent(await request<ApiEvent>(`/events/${encodeURIComponent(id)}`, options));
+    return fromApiEvent(await request<ApiEventInput>(`/events/${encodeURIComponent(id)}`, options));
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 404) return null;
     throw error;
@@ -137,13 +143,27 @@ export async function getEvent(id: string, options: ClientOptions = {}): Promise
 /** Справочники: категории, города, возрастные метки, статусы. */
 export async function getDictionaries(options: ClientOptions = {}): Promise<Dictionaries> {
   if (runsOnServer(options)) return (await import('./server')).getDictionaries();
-  return request<Dictionaries>('/dictionaries', options);
+  try {
+    return await request<Dictionaries>('/dictionaries', options);
+  } catch (error) {
+    // Справочников нет в контракте v1: если бэк их не отдаёт, подписи берутся из сайта.
+    if (isMissingMethod(error)) return DICTIONARIES;
+    throw error;
+  }
 }
 
 /** Число событий по городам, категориям, возрасту и цене. */
 export async function getFacets(query: EventsQuery = {}, options: ClientOptions = {}): Promise<FacetsResponse> {
   if (runsOnServer(options)) return (await import('./server')).getFacets(query);
-  return request<FacetsResponse>(withQuery('/facets', query), options);
+  try {
+    return await request<FacetsResponse>(withQuery('/facets', query), options);
+  } catch (error) {
+    // Отдельного /facets нет в контракте v1: тогда счётчики берутся из расширения ответа списка.
+    if (!isMissingMethod(error)) throw error;
+    const list = await listEvents({ ...query, page: 1, page_size: 1 }, options);
+    if (!list.facets) throw error;
+    return list.facets;
+  }
 }
 
 /** Запрос к ассистенту: фраза, прежние условия или правка чипа. */

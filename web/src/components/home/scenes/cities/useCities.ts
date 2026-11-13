@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 
 import { CITIES } from '@/data/dictionaries';
 import { getFacets, listEvents } from '@/lib/api/client';
-import type { CityId, EventListItem, LocalizedText } from '@/lib/api/types';
+import type { ClientOptions } from '@/lib/api/client';
+import type { CityId, EventListItem, FacetEntry, LocalizedText } from '@/lib/api/types';
 
 export type CityEvent = {
   id: string;
@@ -55,6 +56,27 @@ function pickEvents(events: readonly EventListItem[]): Map<CityId, CityEvent> {
 }
 
 /**
+ * Числа по городам из GET /facets. Если бэк его не отдаёт (метода нет в контракте v1),
+ * число берётся из total короткого запроса списка по каждому городу.
+ */
+async function cityCounts(options: ClientOptions): Promise<{ cities: FacetEntry<CityId>[]; total: number }> {
+  try {
+    const facets = await getFacets({}, options);
+    return { cities: facets.cities, total: facets.total };
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    const cities = await Promise.all(
+      CITIES.map(async (city) => ({
+        id: city.slug,
+        name: city.name,
+        count: (await listEvents({ city: [city.slug], page_size: 1 }, options)).total,
+      })),
+    );
+    return { cities, total: cities.reduce((sum, city) => sum + city.count, 0) };
+  }
+}
+
+/**
  * Города с числом событий (GET /api/v1/facets, по убыванию) и миниатюрами (GET /api/v1/events).
  * Пока ответа нет, отдаёт города из справочника без чисел; при ошибке они же остаются ссылками.
  */
@@ -65,7 +87,7 @@ export function useCities(): CitiesState {
     const controller = new AbortController();
     const options = { signal: controller.signal };
 
-    Promise.all([getFacets({}, options), listEvents({ sort: 'popularity', page_size: EVENTS_PAGE }, options)])
+    Promise.all([cityCounts(options), listEvents({ sort: 'popularity', page_size: EVENTS_PAGE }, options)])
       .then(async ([facets, list]) => {
         const events = pickEvents(list.items);
         const cities = facets.cities.filter((city) => city.count > 0).sort((a, b) => b.count - a.count);

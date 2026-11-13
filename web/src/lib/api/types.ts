@@ -425,7 +425,8 @@ export interface EventsListResponse {
   page: number;
   page_size: number;
   total_pages: number;
-  facets: Facets;
+  /** Счётчики фильтров. null: бэк их не прислал (в контракте это необязательное расширение). */
+  facets: Facets | null;
   applied: AppliedFilters;
   /** Сколько событий подошло бы, но цена у них не указана. В выдачу они не попали. */
   hidden_unknown_price: number;

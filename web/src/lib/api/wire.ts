@@ -10,8 +10,9 @@
  * Модуль без серверных зависимостей: его импортируют и обработчики API, и клиент.
  */
 
-import { getCity } from '../../data/dictionaries';
+import { CITIES, getCity } from '../../data/dictionaries';
 import { summarizePrice } from './price';
+import { normalizeEventsList } from './wire-list';
 import type {
   AfishaEvent,
   AgeLimit,
@@ -27,6 +28,7 @@ import type {
   EventSource,
   EventStatus,
   EventsListResponse,
+  EventsQuery,
   Occurrence,
   OccurrenceStatus,
   Offer,
@@ -117,7 +119,29 @@ export interface ApiEventListItem extends ApiEvent {
 
 export type ApiEventsListResponse = Omit<EventsListResponse, 'items'> & { items: ApiEventListItem[] };
 
-export type ApiAssistantResult = Omit<AssistantResult, 'event'> & { event: ApiEvent };
+/** Расширения события сверх п. 8.1: контракт их не требует, бэк может их не присылать. */
+type ApiEventExtension =
+  | 'city_id'
+  | 'venue_id'
+  | 'time_precision'
+  | 'kind'
+  | 'popularity'
+  | 'organizer'
+  | 'image'
+  | 'synthetic'
+  | 'sources'
+  | 'occurrences'
+  | 'offers';
+
+/** Событие, каким его может прислать бэк: обязательные поля п. 8.1 и любые из расширений. */
+export type ApiEventInput = Omit<ApiEvent, ApiEventExtension> & Partial<Pick<ApiEvent, ApiEventExtension>>;
+
+export type ApiEventListItemInput = ApiEventInput & Partial<Pick<ApiEventListItem, 'matched_occurrence_ids' | 'primary_occurrence_id'>>;
+
+/** Ответ списка, каким его может прислать бэк: обязательны только items и счётчики страниц. */
+export type ApiEventsListInput = Partial<Omit<ApiEventsListResponse, 'items'>> & { items: ApiEventListItemInput[] };
+
+export type ApiAssistantResult = Omit<AssistantResult, 'event'> & { event: ApiEventInput };
 
 export type ApiAssistantResponse = Omit<AssistantResponse, 'results'> & { results?: ApiAssistantResult[] };
 
@@ -238,11 +262,65 @@ export function toApiAssistantResponse(response: AssistantResponse): ApiAssistan
 // Контракт → внутреннее
 // ---------------------------------------------------------------------------
 
-function fromApiOccurrence(occurrence: ApiOccurrence, event: ApiEvent): Occurrence {
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase().replace(/ё/g, 'е');
+}
+
+/** Город сайта по названию из п. 8.1, если бэк не прислал расширение city_id. */
+function cityIdOf(event: ApiEventInput): CityId {
+  if (event.city_id) return event.city_id;
+  const name = normalizeName(event.city ?? '');
+  const known = CITIES.find((city) => normalizeName(city.name.ru) === name || normalizeName(city.name.ba) === name);
+  return (known?.slug ?? name) as CityId;
+}
+
+/** Короткий устойчивый хеш строки (FNV-1a): одинаковая площадка получает одинаковый код. */
+function shortHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (const char of value) {
+    hash ^= char.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function venueIdOf(event: ApiEventInput): string {
+  return event.venue_id ?? `venue_${shortHash(`${cityIdOf(event)}|${normalizeName(event.venue ?? '')}`)}`;
+}
+
+function timePrecisionOf(event: ApiEventInput): TimePrecision {
+  if (event.time_precision) return event.time_precision;
+  return event.date_start && event.date_start.includes('T') ? 'minute' : 'date';
+}
+
+/**
+ * Сеанс из дат п. 8.1, если бэк не прислал расширение occurrences.
+ * Статус «состоится» подтверждён, только если у события есть дата проверки.
+ */
+function occurrencesFromDates(event: ApiEventInput, now: number = Date.now()): ApiOccurrence[] {
+  if (!event.date_start) return [];
+  const precision = timePrecisionOf(event);
+  const last = event.date_end ?? event.date_start;
+  const endMs = precision === 'date' ? Date.parse(`${last.slice(0, 10)}T23:59:59+05:00`) : Date.parse(last);
+  return [
+    {
+      id: `${event.id}_occ_1`,
+      date_start: event.date_start,
+      date_end: event.date_end,
+      time_precision: precision,
+      status: event.status === 'cancelled' ? 'cancelled' : 'scheduled',
+      status_verified: event.verified_at !== null,
+      availability: 'unknown',
+      is_past: Number.isFinite(endMs) && endMs < now,
+    },
+  ];
+}
+
+function fromApiOccurrence(occurrence: ApiOccurrence, event: ApiEventInput): Occurrence {
   const result: Occurrence = {
     id: occurrence.id,
     event_id: event.id,
-    venue_id: event.venue_id,
+    venue_id: venueIdOf(event),
     start: timeValueOf(occurrence.date_start, occurrence.time_precision),
     status: occurrence.status,
     status_is_verified: occurrence.status_verified,
@@ -269,7 +347,7 @@ function fromApiOffer(offer: ApiOffer, index: number, eventId: string): Offer {
 }
 
 /** Тарифы из цены п. 8.1, если сервер не прислал расширение offers. */
-function offersFromPrice(event: ApiEvent): ApiOffer[] {
+function offersFromPrice(event: ApiEventInput): ApiOffer[] {
   if (event.is_free) return [{ price: 0, is_free: true }];
   if (event.price_min === null) return [];
   const offers: ApiOffer[] = [{ price: event.price_min, is_free: false }];
@@ -277,13 +355,14 @@ function offersFromPrice(event: ApiEvent): ApiOffer[] {
   return offers;
 }
 
-function fromApiVenue(event: ApiEvent): Venue {
-  const city = getCity(event.city_id);
+function fromApiVenue(event: ApiEventInput): Venue {
+  const cityId = cityIdOf(event);
+  const city = getCity(cityId);
   const cityName = city?.name ?? { ru: event.city, ba: event.city };
   const venue: Venue = {
-    id: event.venue_id,
+    id: venueIdOf(event),
     name: event.venue,
-    city: event.city_id,
+    city: cityId,
     city_name: cityName,
     address: event.address,
     map_url: `https://yandex.ru/maps/?text=${encodeURIComponent(`${event.venue}, ${cityName.ru}`)}`,
@@ -295,7 +374,7 @@ function fromApiVenue(event: ApiEvent): Venue {
   return venue;
 }
 
-export function fromApiEvent(event: ApiEvent): AfishaEvent {
+export function fromApiEvent(event: ApiEventInput): AfishaEvent {
   const offers = (event.offers ?? offersFromPrice(event)).map((offer, index) => fromApiOffer(offer, index, event.id));
   const sources = event.sources?.length
     ? event.sources.map((source) => ({ ...source }))
@@ -315,7 +394,7 @@ export function fromApiEvent(event: ApiEvent): AfishaEvent {
     date_start: event.date_start,
     date_end: event.date_end,
     duration_min: event.duration_min,
-    time_precision: event.time_precision ?? 'minute',
+    time_precision: timePrecisionOf(event),
     price_min: event.price_min,
     price_max: event.price_max,
     is_free: event.is_free,
@@ -330,7 +409,9 @@ export function fromApiEvent(event: ApiEvent): AfishaEvent {
     sources,
     image: event.image ?? null,
     popularity: event.popularity ?? 0,
-    occurrences: (event.occurrences ?? []).map((occurrence) => fromApiOccurrence(occurrence, event)),
+    occurrences: (event.occurrences?.length ? event.occurrences : occurrencesFromDates(event)).map((occurrence) =>
+      fromApiOccurrence(occurrence, event),
+    ),
     venue: fromApiVenue(event),
     offers,
     price_summary: summarizePrice(offers),
@@ -349,16 +430,22 @@ export function fromApiEvent(event: ApiEvent): AfishaEvent {
   return result;
 }
 
-export function fromApiListItem(item: ApiEventListItem): EventListItem {
-  return {
-    ...fromApiEvent(item),
-    matched_occurrence_ids: [...item.matched_occurrence_ids],
-    primary_occurrence_id: item.primary_occurrence_id,
-  };
+/**
+ * Элемент списка. Без расширений бэка подходящими считаются будущие сеансы (или все, если будущих нет),
+ * а показывается первый из них.
+ */
+export function fromApiListItem(item: ApiEventListItemInput): EventListItem {
+  const event = fromApiEvent(item);
+  const upcoming = event.occurrences.filter((occurrence) => !occurrence.is_past);
+  const matched = item.matched_occurrence_ids?.length
+    ? [...item.matched_occurrence_ids]
+    : (upcoming.length ? upcoming : event.occurrences).map((occurrence) => occurrence.id);
+  return { ...event, matched_occurrence_ids: matched, primary_occurrence_id: item.primary_occurrence_id ?? matched[0] ?? '' };
 }
 
-export function fromApiEventsList(response: ApiEventsListResponse): EventsListResponse {
-  return { ...response, items: response.items.map(fromApiListItem) };
+/** Список событий. query — что сайт отправил: из него восстанавливаются применённые условия, если бэк их не вернул. */
+export function fromApiEventsList(response: ApiEventsListInput, query: EventsQuery = {}): EventsListResponse {
+  return normalizeEventsList(response as unknown as Record<string, unknown>, response.items.map(fromApiListItem), query);
 }
 
 export function fromApiAssistantResponse(response: ApiAssistantResponse): AssistantResponse {

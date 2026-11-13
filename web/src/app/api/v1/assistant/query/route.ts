@@ -35,7 +35,14 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
     // Бэк подключён (NEXT_PUBLIC_API_BASE_URL): ответ берётся из него, моки ниже не участвуют.
-    if (USES_REMOTE_API) return await forwardToBackend(request, { timeoutMs: ASSISTANT_TIMEOUT_MS });
+    if (USES_REMOTE_API) {
+      const forwarded = await forwardToBackend(request, { timeoutMs: ASSISTANT_TIMEOUT_MS });
+      if (forwarded.status !== 404 && forwarded.status !== 405) return forwarded;
+      // Ассистента нет в контракте v1. Если бэк его не реализует, сайт показывает обычный поиск, как при недоступной модели.
+      return errorResponse(503, 'unavailable', 'ИИ-подбор пока не подключён. Поиск по фильтрам работает: GET /api/v1/events', undefined, {
+        headers: { 'Retry-After': '3600' },
+      });
+    }
 
     const raw = await request.text();
     if (raw.length > MAX_BODY_LENGTH) {
