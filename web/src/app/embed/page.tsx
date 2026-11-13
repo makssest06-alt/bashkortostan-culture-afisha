@@ -33,6 +33,7 @@ async function load(params: EmbedParams): Promise<Loaded> {
     const data = await listEvents({
       city: params.cities,
       category: params.categories,
+      ...(params.period ? { date: params.period } : {}),
       sort: 'date',
       page: 1,
       page_size: params.limit,
@@ -49,6 +50,8 @@ function selfHref(params: EmbedParams): string {
   const search = new URLSearchParams();
   if (params.cities.length > 0) search.set('city', params.cities.join(','));
   if (params.categories.length > 0) search.set('category', params.categories.join(','));
+  if (params.period) search.set('period', params.period);
+  if (params.height !== null) search.set('height', String(params.height));
   search.set('limit', String(params.limit));
   search.set('theme', params.theme);
   search.set('lang', params.lang);
@@ -60,7 +63,8 @@ const PAGE_BG = { light: '#fffdf8', dark: '#171311' } as const;
 
 /**
  * /embed: список ближайших событий без шапки и подвала сайта, для вставки через iframe.
- * Параметры: city, category (можно несколько через запятую), limit (1-10), theme (light | dark), lang (ru | ba).
+ * Параметры: city, category (можно несколько через запятую), period (today | tomorrow | weekend | week),
+ * height (высота в пикселях, 240–1600), limit (1-10), theme (light | dark), lang (ru | ba).
  * Список собирается на сервере и не требует скриптов: подходит сайтам, где сторонние скрипты запрещены.
  */
 export default async function EmbedPage({ searchParams }: { searchParams: Promise<SearchParams> }) {

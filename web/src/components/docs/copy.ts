@@ -93,8 +93,22 @@ export const DOCS = {
       {
         name: 'data-category',
         text: l(
-          'Код категории: `theatre`, `concert`, `museum`, `exhibition`, `festival`, `kids`.',
-          'Категория коды: `theatre`, `concert`, `museum`, `exhibition`, `festival`, `kids`.',
+          'Код категории п. 8.1: `concert`, `performance`, `exhibition`, `festival`, `cinema`, `excursion`, `other`.',
+          'Категория коды (8.1-се пункт): `concert`, `performance`, `exhibition`, `festival`, `cinema`, `excursion`, `other`.',
+        ),
+      },
+      {
+        name: 'data-period',
+        text: l(
+          'Период: `today`, `tomorrow`, `weekend` или `week`. Без атрибута показываются все ближайшие события.',
+          'Осор: `today`, `tomorrow`, `weekend` йәки `week`. Атрибутһыҙ бөтә яҡындағы саралар күрһәтелә.',
+        ),
+      },
+      {
+        name: 'data-height',
+        text: l(
+          'Высота в пикселях, от 240 до 1600. Длинный список прокручивается внутри виджета, страница не прыгает.',
+          'Пикселдәрҙә бейеклек, 240-тан 1600-гә тиклем. Оҙон исемлек виджет эсендә әйләнә, бит һикермәй.',
         ),
       },
       {

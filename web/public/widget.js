@@ -2,12 +2,14 @@
  * Виджет «Афиша культуры Башкортостана»: список ближайших событий для любого сайта.
  * Один файл, без зависимостей и без cookie. Подключение одной строкой:
  *
- *   <script src="https://<адрес афиши>/widget.js" data-city="ufa" data-category="theatre"
- *           data-limit="5" data-theme="light" data-lang="ru" async></script>
+ *   <script src="https://<адрес афиши>/widget.js" data-city="ufa" data-category="concert"
+ *           data-period="weekend" data-height="480" data-limit="5" async></script>
  *
- * Параметры (все необязательные):
+ * Параметры (все необязательные, п. 6.3 ТЗ: город, категория, период, высота):
  *   data-city      код города или несколько через запятую: ufa, sterlitamak, salavat ...
- *   data-category  код категории: theatre, concert, museum, exhibition, festival, kids
+ *   data-category  код категории: concert, performance, exhibition, festival, cinema, excursion, other
+ *   data-period    период: today, tomorrow, weekend, week (по умолчанию все ближайшие)
+ *   data-height    высота в пикселях от 240 до 1600; длинный список прокручивается внутри
  *   data-limit     сколько событий показать, от 1 до 10 (по умолчанию 5)
  *   data-theme     light (по умолчанию) или dark
  *   data-lang      ru или ba (по умолчанию язык страницы: <html lang="ba"> даёт башкирский)
@@ -16,6 +18,7 @@
  * Как устроен:
  *   - адрес API берётся из адреса самого скрипта: <адрес афиши>/api/v1/events;
  *   - разметка живёт в Shadow DOM: стили страницы на виджет не действуют, стили виджета на страницу тоже;
+ *   - cookie не ставит и не отправляет: запросы идут с credentials: 'omit', хранилища браузера не трогает;
  *   - всё, что пришло из API, попадает на страницу только через textContent;
  *   - если браузер не умеет Shadow DOM, вместо списка встаёт iframe со страницей /embed.
  */
@@ -27,6 +30,9 @@
   var MAX_LIMIT = 10;
   var DEFAULT_LIMIT = 5;
   var TIMEOUT_MS = 12000;
+  var PERIODS = ['today', 'tomorrow', 'weekend', 'week'];
+  var MIN_HEIGHT = 240;
+  var MAX_HEIGHT = 1600;
   var NBSP = ' ';
 
   // ------------------------------------------------------------------ Подписи
@@ -34,6 +40,7 @@
   var TEXT = {
     ru: {
       heading: 'Афиша событий',
+      periods: { today: 'сегодня', tomorrow: 'завтра', weekend: 'на выходных', week: 'на этой неделе' },
       allEvents: 'Все события',
       brand: 'Афиша культуры Башкортостана',
       demo: 'Демо-данные',
@@ -59,6 +66,7 @@
     },
     ba: {
       heading: 'Саралар афишаһы',
+      periods: { today: 'бөгөн', tomorrow: 'иртәгә', weekend: 'ял көндәрендә', week: 'ошо аҙнала' },
       allEvents: 'Бөтә саралар',
       brand: 'Башҡортостан мәҙәниәте афишаһы',
       demo: 'Демо-мәғлүмәттәр',
@@ -267,7 +275,7 @@
     var base;
     try {
       base = new URL(script.src, document.baseURI).origin;
-    } catch (error) {
+    } catch {
       base = window.location.origin;
     }
 
@@ -280,10 +288,15 @@
       lang = /^ba\b/i.test(document.documentElement.lang || '') ? 'ba' : 'ru';
     }
 
+    var period = (script.getAttribute('data-period') || '').trim().toLowerCase();
+    var height = parseInt(script.getAttribute('data-height') || '', 10);
+
     return {
       base: base,
       city: (script.getAttribute('data-city') || '').trim().toLowerCase(),
       category: (script.getAttribute('data-category') || '').trim().toLowerCase(),
+      period: PERIODS.indexOf(period) >= 0 ? period : '',
+      height: isNaN(height) ? 0 : Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, height)),
       limit: limit,
       theme: (script.getAttribute('data-theme') || '').toLowerCase() === 'dark' ? 'dark' : 'light',
       lang: lang,
@@ -295,6 +308,7 @@
     var parts = [];
     if (config.city) parts.push('city=' + encodeURIComponent(config.city));
     if (config.category) parts.push('category=' + encodeURIComponent(config.category));
+    if (config.period) parts.push('date=' + config.period);
     if (withLimit) {
       parts.push('page_size=' + config.limit);
       parts.push('sort=date');
@@ -411,6 +425,7 @@
     var applied = data.applied || {};
     collect(applied.city, facets.cities);
     collect(applied.category, facets.categories);
+    if (config.period) labels.push(TEXT[config.lang].periods[config.period]);
     return labels.join(', ');
   }
 
@@ -428,7 +443,7 @@
     if (config.target) {
       try {
         target = document.querySelector(config.target);
-      } catch (error) {
+      } catch {
         target = null;
       }
       if (!target && window.console) console.warn('[afisha-widget] элемент по data-target не найден:', config.target);
@@ -446,13 +461,17 @@
 
     if (!host.attachShadow) {
       var frame = document.createElement('iframe');
-      var scope = queryString(config, false);
-      frame.src =
-        config.base + '/embed' + (scope ? scope + '&' : '?') +
-        'limit=' + config.limit + '&theme=' + config.theme + '&lang=' + config.lang;
+      var embed = [];
+      if (config.city) embed.push('city=' + encodeURIComponent(config.city));
+      if (config.category) embed.push('category=' + encodeURIComponent(config.category));
+      if (config.period) embed.push('period=' + config.period);
+      if (config.height) embed.push('height=' + config.height);
+      embed.push('limit=' + config.limit, 'theme=' + config.theme, 'lang=' + config.lang);
+      frame.src = config.base + '/embed?' + embed.join('&');
       frame.title = t.heading;
       frame.loading = 'lazy';
-      frame.style.cssText = 'display:block;width:100%;border:0;height:' + (160 + config.limit * 112) + 'px';
+      frame.style.cssText =
+        'display:block;width:100%;border:0;height:' + (config.height || 160 + config.limit * 112) + 'px';
       host.appendChild(frame);
       return;
     }
@@ -466,7 +485,7 @@
         root.adoptedStyleSheets = [sheet];
         sheetApplied = true;
       }
-    } catch (error) {
+    } catch {
       sheetApplied = false;
     }
     if (!sheetApplied) root.appendChild(el('style', '', CSS));
@@ -475,6 +494,12 @@
     box.setAttribute('data-theme', config.theme);
     box.setAttribute('lang', config.lang);
     box.setAttribute('aria-label', t.heading);
+    if (config.height) {
+      // Высота из data-height: виджет не растёт, длинный список прокручивается внутри.
+      box.style.height = config.height + 'px';
+      box.style.overflowY = 'auto';
+      box.setAttribute('tabindex', '0');
+    }
     root.appendChild(box);
 
     var controller = null;

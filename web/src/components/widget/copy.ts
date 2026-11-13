@@ -12,6 +12,11 @@ import type { LocalizedText } from '@/lib/i18n/lang';
 export const WIDGET_COPY = {
   // ---------------------------------------------------------------- /widget
   viewport: { ru: 'Ширина страницы', ba: 'Бит киңлеге' },
+  period: { ru: 'Период', ba: 'Осор' },
+  periodAll: { ru: 'Все ближайшие', ba: 'Бөтә яҡындағылары' },
+  height: { ru: 'Высота', ba: 'Бейеклек' },
+  heightAuto: { ru: 'По содержимому', ba: 'Эстәлеге буйынса' },
+  heightHint: { ru: 'Длинный список прокручивается внутри виджета', ba: 'Оҙон исемлек виджет эсендә әйләнә' },
   viewportDesktop: { ru: 'Компьютер', ba: 'Компьютер' },
   viewportPhone: { ru: 'Телефон', ba: 'Телефон' },
   codeTabs: { ru: 'Способ вставки', ba: 'Ҡуйыу ысулы' },

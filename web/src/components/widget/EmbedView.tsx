@@ -8,7 +8,7 @@
 import type { CSSProperties } from 'react';
 
 import { ROUTES } from '@/content/links';
-import { displayStatusOf, getCategory, getCity } from '@/data/dictionaries';
+import { DATE_PRESETS, displayStatusOf, getCategory, getCity } from '@/data/dictionaries';
 import { formatAgo, formatDay, formatOccurrence, formatPrice } from '@/lib/api/format';
 import { eventsHref } from '@/lib/api/params';
 import { valueDate, valueTime } from '@/lib/api/time';
@@ -103,7 +103,8 @@ function scopeLabel(params: EmbedParams): string {
   const categories = params.categories
     .map((id) => getCategory(id))
     .flatMap((entry) => (entry ? [pick(entry.name, params.lang)] : []));
-  return [...cities, ...categories].join(', ');
+  const period = params.period ? DATE_PRESETS.find((entry) => entry.id === params.period) : null;
+  return [...cities, ...categories, ...(period ? [pick(period.label, params.lang)] : [])].join(', ');
 }
 
 export function EmbedView({ params, data, failed, now, retryHref }: EmbedViewProps) {
@@ -113,10 +114,19 @@ export function EmbedView({ params, data, failed, now, retryHref }: EmbedViewPro
   const items = data?.items ?? [];
   const demo = items.some((item) => item.synthetic);
   const filtered = items.length > 0;
-  const allHref = filtered ? eventsHref({ city: params.cities, category: params.categories }) : ROUTES.events;
+  const allHref = filtered
+    ? eventsHref({ city: params.cities, category: params.categories, ...(params.period ? { date: params.period } : {}) })
+    : ROUTES.events;
 
   return (
-    <main className={styles.box} data-theme={params.theme} data-embed lang={lang}>
+    <main
+      className={styles.box}
+      data-theme={params.theme}
+      data-embed
+      lang={lang}
+      // Высота из параметра height: коробка не растёт, длинный список прокручивается внутри.
+      style={params.height !== null ? { height: params.height, overflowY: 'auto' } : undefined}
+    >
       <div className={styles.head}>
         <h1 className={styles.title}>{t('widget.heading')}</h1>
         {filtered && scopeLabel(params) ? <p className={`${styles.caps} ${styles.scope}`}>{scopeLabel(params)}</p> : null}

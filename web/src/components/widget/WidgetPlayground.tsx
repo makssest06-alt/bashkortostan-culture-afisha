@@ -16,13 +16,17 @@ import { CopyButton } from '@/components/docs/CopyButton';
 import docs from '@/components/docs/docs.module.css';
 import { highlight } from '@/components/docs/highlight';
 import { Chip, Field, Select } from '@/components/ui';
-import { CATEGORIES, CITIES, isCategoryId, isCityId } from '@/data/dictionaries';
+import { CATEGORIES, CITIES, DATE_PRESETS, isCategoryId, isCityId } from '@/data/dictionaries';
+import type { DatePreset } from '@/lib/api/types';
 import { LANGS, pick, translate, useT } from '@/lib/i18n';
 import type { Lang } from '@/lib/i18n';
 
 import { WIDGET_COPY } from './copy';
 import {
+  WIDGET_HEIGHT_OPTIONS,
   WIDGET_LIMIT_OPTIONS,
+  WIDGET_PERIOD_IDS,
+  parseHeight,
   WIDGET_SCRIPT_PATH,
   clampLimit,
   embedHeight,
@@ -232,6 +236,42 @@ export function WidgetPlayground({ origin, initial, initialMode, fallbackLang }:
               </Select>
             </Field>
 
+            <Field label={pick(WIDGET_COPY.period, lang)}>
+              <Select
+                name="period"
+                value={settings.period}
+                onChange={(event) =>
+                  update({
+                    period: WIDGET_PERIOD_IDS.includes(event.target.value as DatePreset) ? (event.target.value as DatePreset) : '',
+                  })
+                }
+              >
+                <option value="">{pick(WIDGET_COPY.periodAll, lang)}</option>
+                {DATE_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {pick(preset.label, lang)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label={pick(WIDGET_COPY.height, lang)} hint={pick(WIDGET_COPY.heightHint, lang)}>
+              <Select
+                name="height"
+                value={settings.height === null ? '' : String(settings.height)}
+                onChange={(event) => update({ height: event.target.value ? parseHeight(event.target.value) : null })}
+              >
+                <option value="">{pick(WIDGET_COPY.heightAuto, lang)}</option>
+                {[...new Set([...WIDGET_HEIGHT_OPTIONS, ...(settings.height !== null ? [settings.height] : [])])]
+                  .sort((a, b) => a - b)
+                  .map((value) => (
+                    <option key={value} value={value}>
+                      {value} px
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+
             <Field label={t('widget.settings.limit')}>
               <Select
                 name="limit"
@@ -318,7 +358,7 @@ export function WidgetPlayground({ origin, initial, initialMode, fallbackLang }:
                 key={embedHref(settings)}
                 src={embedHref(settings)}
                 title={pick(WIDGET_COPY.iframeTitle, lang)}
-                height={embedHeight(settings.limit)}
+                height={settings.height ?? embedHeight(settings.limit)}
                 loading="lazy"
                 className={styles.frame}
                 data-widget-frame
