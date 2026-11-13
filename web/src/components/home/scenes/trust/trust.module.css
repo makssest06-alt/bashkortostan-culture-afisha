@@ -1,0 +1,353 @@
+/*
+  Сцена trust. Прокруткой (GSAP) ездят затемнение, фактура и яркость слова; здесь лежит то,
+  что играет по времени после порога: появление текстов и инверсия в кремовую тему.
+  Анимируются только opacity, filter (смаз половин на компьютере, подпись), transform, color
+  и background-color (смена темы за 0,17 с).
+*/
+
+/* ----------------------------------------------------------------------------------- Корень */
+
+/*
+  Цвет текста задан один раз на корне и наследуется: при смене data-theme он плавно темнеет
+  и чуть запаздывает за фоном (в референсе текст на 1-2 кадра тонет в светлеющем фоне).
+*/
+.root {
+  position: absolute;
+  inset: 0;
+  color: var(--color-fg);
+  transition: color 170ms var(--ease-in-out) 60ms;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-bg-lit);
+  transition: background-color 170ms var(--ease-in-out);
+}
+
+/*
+  Тёмная плашка: с неё сцена начинается (тем же цветом фона заканчивается dedup) и из неё проявляется фактура.
+  Цвет записан числом: внутри светлой темы переменная --color-bg стала бы кремовой.
+*/
+.scrim {
+  position: absolute;
+  inset: 0;
+  background-color: oklch(0.162 0.006 39.3);
+}
+
+/* --------------------------------------------------------------------------------- Фактура */
+
+/*
+  Фактура. Картинка /images/scenes/texture.webp показана целиком (cover, по центру). У временной картинки
+  граница войлока и меди идёт наклонно: картинка слегка повёрнута (--tex-turn) и сдвинута (--tex-shift),
+  чтобы граница легла на щель. Когда картинку заменят, обе переменные можно обнулить: остальное от снимка
+  не зависит. Поверх лежат тёплый свет и виньетка, фактура читается и при слабом снимке.
+
+  Память (iPhone убивал вкладку на этой сцене): картинка фактуры рисуется в трёх слоях, а не в четырёх,
+  без filter и без translate3d (каждый такой слой был отдельной текстурой больше экрана). Яркость 1,3
+  даёт смешение color-dodge с серым #3b3b3b: 1 / (1 - 59/255) = 1,3, то же, что brightness(1.3).
+  Подвижные половины становятся отдельными слоями только на время раскрытия (will-change ставит скрипт).
+*/
+.texture {
+  --tex-turn: 4.4deg;
+  --tex-shift: 2.3%;
+  position: absolute;
+  inset: 0;
+  perspective: 1400px;
+  perspective-origin: 50% 49%;
+}
+
+/*
+  Слой фактуры: шире экрана на 16 % с каждой стороны (тот же запас записан в jaws.ts, BLEED).
+  Вертикальную коробку задаёт модификатор; место картинки и подсветки внутри коробки приходит
+  переменными из jaws.ts (--tex-*, --glow-*), поэтому у всех слоёв фактура в одних и тех же точках экрана.
+  Рваную кромку (clip-path) несёт вложенный .face, а не сам слой: обрезка рисуется вместе с картинкой,
+  и браузеру не нужен отдельный слой-маска размером с половину.
+*/
+.half {
+  position: absolute;
+  right: -16%;
+  left: -16%;
+  transform-origin: 0 0;
+}
+
+.face {
+  position: absolute;
+  inset: 0;
+  background-color: oklch(0.22 0.03 45);
+}
+
+.stillHalf {
+  top: -16%;
+  bottom: -16%;
+}
+
+.jawUpper {
+  top: -16%;
+  bottom: 49%;
+}
+
+.jawLower {
+  top: 47%;
+  bottom: -16%;
+}
+
+/* Подвижные половины видны только во время раскрытия: до него их целиком закрывает неподвижная фактура */
+.jaw {
+  visibility: hidden;
+}
+
+/*
+  Неподвижная сомкнутая фактура: лежит поверх подвижных половин. Левее шарнира фактура цела, правее
+  её показывают половины. Обрезка по шарниру сделана сдвигами: рамка с overflow уезжает влево,
+  содержимое на столько же вправо, поэтому на раскрытии слой не перерисовывается. В щели тёмная полоса.
+*/
+.still {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.stillInner {
+  position: absolute;
+  inset: 0;
+}
+
+.stillInner::before {
+  content: '';
+  position: absolute;
+  inset: 40% 0 46%;
+  background-color: oklch(0.162 0.006 39.3);
+}
+
+.face::before {
+  content: '';
+  position: absolute;
+  top: var(--tex-top, -6%);
+  left: -6%;
+  width: 112%;
+  height: var(--tex-h, 112%);
+  background-image: linear-gradient(#3b3b3b, #3b3b3b), url('/images/scenes/texture.webp');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-blend-mode: color-dodge, normal;
+  transform: translateY(var(--tex-shift)) rotate(var(--tex-turn));
+}
+
+.face::after {
+  content: '';
+  position: absolute;
+  top: var(--glow-top, 0%);
+  right: 0;
+  left: 0;
+  height: var(--glow-h, 100%);
+  background:
+    radial-gradient(ellipse 60% 55% at 30% 46%, oklch(0.9 0.09 72 / 0.2) 0%, oklch(0.9 0.09 72 / 0) 72%),
+    linear-gradient(
+      to bottom,
+      oklch(0.12 0.01 40 / 0.5) 0%,
+      oklch(0.12 0.01 40 / 0) 26%,
+      oklch(0.12 0.01 40 / 0) 72%,
+      oklch(0.12 0.01 40 / 0.55) 100%
+    );
+}
+
+/* Телефон: половины едут плоско (без rotateY), перспектива не нужна */
+@media (max-width: 767.98px) {
+  .texture {
+    perspective: none;
+  }
+}
+
+/* ------------------------------------------------------------------------- Гигантское слово */
+
+.fit {
+  --fit-guess: 14.4vw;
+  font-size: var(--fit, var(--fit-guess));
+}
+
+@media (min-width: 768px) {
+  .fit {
+    --fit-guess: 12.9vw;
+  }
+}
+
+.fitHeading {
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------- Тексты: появление после порога */
+
+/* Выход короче входа и без задержек: при прокрутке назад тексты гаснут сразу */
+.eyebrow {
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.root[data-texts] .eyebrow {
+  opacity: 1;
+  transition: opacity 70ms var(--ease-out);
+}
+
+.caption {
+  opacity: 0;
+  filter: blur(4px);
+  transition:
+    opacity 100ms linear,
+    filter 100ms linear;
+}
+
+.root[data-texts] .caption {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity 230ms var(--ease-out) 70ms,
+    filter 230ms var(--ease-out) 70ms;
+}
+
+.lines {
+  text-wrap: balance;
+}
+
+.word {
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.root[data-texts] .word {
+  opacity: 1;
+  transition: opacity 70ms linear var(--delay, 0ms);
+}
+
+/* ------------------------------------------------------------- Тень орнамента на кремовом */
+
+/*
+  Тень орнамента: кольцо нарисовано один раз на маленьком холсте с размытием (ShadeRing.tsx), браузер
+  растягивает его до 128vh, и увеличение само даёт мягкий край. Раньше здесь были filter: blur(11px)
+  на квадрате 128vh и вечная анимация: два слоя по 40 МБ на iPhone с первого кадра сцены.
+  Дрейф включается только после инверсии.
+*/
+.shade {
+  position: absolute;
+  top: -42%;
+  right: -22%;
+  width: 128vh;
+  height: 128vh;
+  min-width: 560px;
+  min-height: 560px;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 170ms var(--ease-in-out),
+    visibility 0s linear 170ms;
+}
+
+/* До инверсии тень скрыта целиком (visibility): её слой не заставляет браузер поднимать в слои соседей */
+.root[data-theme='light'] .shade {
+  visibility: visible;
+  opacity: 0.15;
+  transition:
+    opacity 170ms var(--ease-in-out),
+    visibility 0s;
+}
+
+.shadeDrift {
+  width: 100%;
+  height: 100%;
+}
+
+.shadeCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.root[data-theme='light'] .shadeDrift {
+  animation: drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0) rotate(-4deg);
+  }
+  to {
+    transform: translate3d(-2%, 1.5%, 0) rotate(4deg);
+  }
+}
+
+/* ------------------------------------------------------------------- Светлый блок: карточки */
+
+/*
+  Акцентная карточка: зелёная, как первая карточка референса. Переменные темы переопределены внутри неё,
+  поэтому ссылка-кнопка и обводка фокуса сами становятся светлыми (контраст текста с фоном 6,4:1).
+*/
+.accent {
+  --color-fg: oklch(0.96 0.022 98);
+  --color-fg-soft: oklch(0.9 0.03 100);
+  --color-line-strong: oklch(0.96 0.022 98 / 0.55);
+  --color-hover: oklch(0.96 0.022 98 / 0.1);
+  background-color: oklch(0.44 0.068 128);
+  color: var(--color-fg);
+}
+
+/* Гигантское число: тон в тон с карточкой, но с контрастом 3:1 (крупный знак) */
+.accentNumber {
+  color: oklch(0.71 0.105 130);
+}
+
+/* Тёмная плашка под статусом: внутри неё статусы берут цвета тёмной темы */
+.plaque {
+  --color-status-ok: oklch(0.802 0.112 156);
+  --color-status-cancelled: oklch(0.775 0.136 9.3);
+  --color-status-moved: oklch(0.843 0.132 86);
+  --color-status-soldout: oklch(0.792 0.073 289);
+  --color-status-unverified: oklch(0.765 0.017 82.8);
+  background-color: oklch(0.27 0.012 60);
+}
+
+/* Содержимое карточки проявляется, когда карточка входит в экран (data-in ставит наблюдатель) */
+.card[data-armed] [data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+}
+
+.card[data-armed][data-in] [data-reveal] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity 280ms var(--ease-out) calc(var(--step, 0) * 60ms),
+    transform 420ms var(--ease-out) calc(var(--step, 0) * 60ms);
+}
+
+/* ------------------------------------------------------------------------- Меньше движения */
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .screen,
+  .shade,
+  .root[data-theme='light'] .shade {
+    transition: none;
+  }
+
+  .shadeDrift,
+  .root[data-theme='light'] .shadeDrift {
+    animation: none;
+  }
+
+  .caption {
+    filter: none;
+  }
+
+  .card[data-armed] [data-reveal] {
+    transform: none;
+  }
+
+  .card[data-armed][data-in] [data-reveal] {
+    transition: opacity 200ms linear;
+  }
+}

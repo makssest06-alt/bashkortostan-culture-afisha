@@ -1,0 +1,717 @@
+/*
+  Страницы-документы: /developers, /about и блоки кода на /widget.
+  Раскладка: слева оглавление (с 1024px оно прилипает к верху окна), справа колонка текста.
+  Разделы отделены одной волосяной линией, коробок нет. Движение только у кнопки копирования,
+  у стрелки свёрнутого блока и в каскаде появления первого экрана.
+*/
+
+/* ------------------------------------------------------------------ Раскладка */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 40px;
+}
+
+.content {
+  min-width: 0;
+  max-width: 920px;
+}
+
+.tocDesktop {
+  display: none;
+}
+
+.tocMobile {
+  border-block: 1px solid var(--color-line);
+}
+
+.tocSummary {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  color: var(--color-fg);
+}
+
+.tocSummary::-webkit-details-marker {
+  display: none;
+}
+
+.tocCaret {
+  flex-shrink: 0;
+  transition: rotate var(--duration-fast) var(--ease-out);
+}
+
+.tocMobile[open] .tocCaret {
+  rotate: 90deg;
+}
+
+.tocList {
+  display: flex;
+  flex-direction: column;
+}
+
+.tocMobile .tocList {
+  padding-bottom: 12px;
+}
+
+.tocLink {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--color-fg-muted);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  line-height: 1.25;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.tocLink[aria-current] {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tocLink:hover {
+    color: var(--color-fg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: 208px minmax(0, 1fr);
+    column-gap: clamp(40px, 6vw, 104px);
+  }
+
+  .tocMobile {
+    display: none;
+  }
+
+  .tocDesktop {
+    position: sticky;
+    top: calc(var(--header-h) + 24px);
+    display: block;
+    align-self: start;
+    max-height: calc(100dvh - var(--header-h) - 48px);
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .tocDesktop .tocLink {
+    min-height: 34px;
+  }
+
+  .tocTitle {
+    margin-bottom: 8px;
+    color: var(--color-fg-muted);
+  }
+}
+
+@media (min-width: 1024px) and (pointer: coarse) {
+  .tocDesktop .tocLink {
+    min-height: 44px;
+  }
+}
+
+/* -------------------------------------------------------------------- Разделы */
+
+.section {
+  scroll-margin-top: calc(var(--header-h) + 20px);
+}
+
+.section + .section {
+  margin-top: clamp(56px, 7vw, 96px);
+  padding-top: clamp(40px, 5vw, 64px);
+  border-top: 1px solid var(--color-line);
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+  scroll-margin-top: calc(var(--header-h) + 20px);
+}
+
+.subheading {
+  color: var(--color-fg);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.prose {
+  max-width: 68ch;
+  color: var(--color-fg-soft);
+}
+
+.prose + .prose {
+  margin-top: -8px;
+}
+
+.lead {
+  max-width: 46ch;
+  color: var(--color-fg);
+}
+
+.icode {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-xs);
+  background-color: var(--color-hover);
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
+}
+
+.bullets {
+  display: flex;
+  max-width: 68ch;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--color-fg-soft);
+}
+
+.bullets > li {
+  position: relative;
+  padding-left: 22px;
+}
+
+.bullets > li::before {
+  content: '';
+  position: absolute;
+  top: 0.7em;
+  left: 2px;
+  width: 10px;
+  height: 1px;
+  background-color: var(--color-fg-muted);
+}
+
+.numbered {
+  counter-reset: item;
+}
+
+.numbered > li {
+  counter-increment: item;
+  padding-left: 30px;
+}
+
+.numbered > li::before {
+  content: counter(item);
+  top: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--color-copper-hi);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Строки «название: описание»: общие правила API, принципы. */
+.defs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.defRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding-block: 14px;
+  border-top: 1px solid var(--color-line);
+}
+
+.defRow > dt {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+.defRow > dd {
+  max-width: 68ch;
+  color: var(--color-fg-soft);
+}
+
+@media (min-width: 768px) {
+  .defRow {
+    grid-template-columns: 11rem minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+/* Три шага подключения */
+.steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  padding-block: 28px;
+  border-top: 1px solid var(--color-line);
+}
+
+.step:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.stepNum {
+  min-width: 1.2ch;
+  color: var(--color-copper-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepBody {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .step {
+    column-gap: 24px;
+  }
+
+  .stepBody {
+    grid-column: 2;
+  }
+}
+
+/* ------------------------------------------------------------------- Таблицы */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.table caption {
+  padding-bottom: 12px;
+  color: var(--color-fg-muted);
+  text-align: left;
+}
+
+.table th {
+  padding: 0 20px 10px 0;
+  border-bottom: 1px solid var(--color-line-strong);
+  color: var(--color-fg-muted);
+  text-align: left;
+  vertical-align: bottom;
+}
+
+.table td {
+  padding: 12px 20px 12px 0;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-fg-soft);
+  vertical-align: top;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 0;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cellName {
+  color: var(--color-fg);
+}
+
+.cellName code {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.cellType {
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+  }
+
+  .table tr {
+    padding-block: 14px;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .table tbody tr:first-child {
+    padding-top: 0;
+  }
+
+  .table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .table td + td {
+    margin-top: 6px;
+  }
+
+  .cellName code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ---------------------------------------------------------- Адрес метода */
+
+.endpoint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.method {
+  display: inline-flex;
+  min-width: 3.4em;
+  justify-content: center;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-soft);
+}
+
+.method[data-method='POST'] {
+  color: var(--color-copper-hi);
+}
+
+.path {
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.try {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-fg);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--color-line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+  transition: text-decoration-color var(--duration-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .try:hover {
+    text-decoration-color: var(--color-fg);
+  }
+}
+
+.methodsTable td {
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------ Блок кода */
+
+.code {
+  position: relative;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background-color: color-mix(in oklch, var(--color-surface) 62%, transparent);
+}
+
+.codeBar {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 148px 0 16px;
+  color: var(--color-fg-muted);
+}
+
+.codeSummary {
+  list-style: none;
+  border-radius: var(--radius-md);
+  color: var(--color-fg-soft);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.codeSummary::-webkit-details-marker {
+  display: none;
+}
+
+.codeSummary:focus-visible {
+  outline-offset: -2px;
+}
+
+.codeCaret {
+  flex-shrink: 0;
+  transition: rotate var(--duration-fast) var(--ease-out);
+}
+
+.code details[open] .codeCaret {
+  rotate: 90deg;
+}
+
+.codeMeta {
+  color: var(--color-fg-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Через .code: у этого же элемента есть класс .copyWrap (position: relative), он объявлен ниже и иначе побеждает. */
+.code .codeCopy {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+}
+
+/* На сенсорном экране кнопка 44px: так она стоит по центру шапки высотой 46px. */
+@media (pointer: coarse) {
+  .code .codeCopy {
+    top: 1px;
+  }
+}
+
+.pre {
+  max-height: 30rem;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-fg-soft);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+.pre[data-size='lg'] {
+  padding: 20px;
+  color: var(--color-fg);
+  font-size: clamp(0.875rem, 1.25vw, 1.0625rem);
+  line-height: 1.7;
+}
+
+.pre:focus-visible {
+  outline-offset: -2px;
+}
+
+.tkKey {
+  color: var(--color-fg);
+}
+
+.tkStr {
+  color: var(--color-copper-hi);
+}
+
+.tkDim {
+  color: var(--color-fg-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .codeSummary:hover {
+    color: var(--color-fg);
+  }
+}
+
+/* --------------------------------------------------------- Кнопка копирования */
+
+.copyWrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.copy {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-fg-soft);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition:
+    scale var(--duration-press) ease-out,
+    background-color var(--duration-press) ease-out,
+    color var(--duration-press) ease-out;
+}
+
+.copy:active {
+  scale: 0.97;
+}
+
+.copy[data-variant='primary'] {
+  min-height: 44px;
+  padding-inline: 18px;
+  background-color: var(--color-fg);
+  color: var(--color-bg);
+  font-size: var(--fs-ui);
+}
+
+.copy[data-copied] {
+  color: var(--color-status-ok);
+}
+
+.copy[data-variant='primary'][data-copied] {
+  color: var(--color-bg);
+}
+
+@media (pointer: coarse) {
+  .copy {
+    min-height: 44px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .copy:hover {
+    background-color: var(--color-hover);
+    color: var(--color-fg);
+  }
+
+  .copy[data-variant='primary']:hover {
+    background-color: var(--color-fg-soft);
+    color: var(--color-bg);
+  }
+}
+
+.copyIcon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.copyIcon svg {
+  position: absolute;
+  inset: 0;
+  transition:
+    opacity 160ms var(--ease-out),
+    scale 160ms var(--ease-out),
+    filter 160ms var(--ease-out);
+}
+
+.copyIcon [data-icon='check'],
+.copy[data-copied] .copyIcon [data-icon='copy'] {
+  opacity: 0;
+  scale: 0.6;
+  filter: blur(2px);
+}
+
+.copy[data-copied] .copyIcon [data-icon='check'] {
+  opacity: 1;
+  scale: 1;
+  filter: none;
+}
+
+.copyLabel {
+  display: grid;
+}
+
+.copyLabel > span {
+  grid-area: 1 / 1;
+  transition: opacity 160ms var(--ease-out);
+}
+
+.copyLabel [data-label='copied'],
+.copy[data-copied] .copyLabel [data-label='copy'] {
+  opacity: 0;
+}
+
+.copy[data-copied] .copyLabel [data-label='copied'] {
+  opacity: 1;
+}
+
+.copyError {
+  max-width: 30ch;
+  color: var(--color-status-cancelled);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.codeCopy .copyError {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 1;
+  width: max-content;
+  max-width: min(30ch, 70vw);
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-2);
+}
+
+/* ------------------------------------------------------- Каскад первого экрана */
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: doc-rise 320ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 50ms);
+  }
+}
+
+@keyframes doc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copyIcon svg,
+  .copyLabel > span,
+  .codeCaret,
+  .tocCaret {
+    transition: none;
+  }
+}

@@ -1,0 +1,108 @@
+/*
+  Панель фильтров на телефоне: выезжает снизу, закрывается кнопкой, клавишей Escape,
+  касанием затемнения и свайпом вниз за шапку панели.
+  Кривая выезда как у системных шторок: быстрое начало, длинное мягкое торможение.
+*/
+
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 320ms;
+}
+
+.root[data-open] {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-scrim);
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+
+.root[data-open] .scrim {
+  opacity: 1;
+}
+
+.sheet {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  max-height: 88dvh;
+  flex-direction: column;
+  border-top: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background-color: var(--color-bg-lit);
+  transform: translateY(100%);
+  /* Закрытие быстрее открытия: система отвечает, а не показывает номер */
+  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+.root[data-open] .sheet {
+  transform: translateY(0);
+  transition-duration: 320ms;
+}
+
+.grip {
+  flex: none;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.grip:active {
+  cursor: grabbing;
+}
+
+.handle {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 10px auto 2px;
+  border-radius: 2px;
+  background-color: var(--color-line-strong);
+}
+
+.body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.footer {
+  flex: none;
+  border-top: 1px solid var(--color-line);
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 1024px) {
+  .root {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    transform: none;
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+  }
+
+  .root[data-open] .sheet {
+    opacity: 1;
+    transition-duration: 160ms;
+  }
+}

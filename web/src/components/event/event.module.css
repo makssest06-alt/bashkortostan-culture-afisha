@@ -1,0 +1,393 @@
+/*
+  Страница события: журнальная раскладка.
+
+  Телефон (до 768px): одна колонка. Порядок: заголовок, картинка 3:4, сеансы и цена, описание
+  со сведениями и блоком доверия, площадка. Цена и кнопка покупки живут в нижней липкой полосе (.bar).
+  Планшет (768-1199px): картинка слева, сеансы и цена справа, остальное ниже во всю ширину.
+  Десктоп (от 1200px): три колонки. Картинка, текст и правая липкая колонка с сеансами и ценой.
+
+  Движение: только каскад появления при загрузке (opacity и transform) и отклик на наведение.
+*/
+
+/* Обёртка статьи: внутри неё живёт нижняя липкая полоса. */
+.page {
+  position: relative;
+}
+
+/* Заголовок события: крупнее обычного заголовка страницы, как заглавие журнального материала. */
+.title {
+  max-width: 20ch;
+  font-family: var(--font-display);
+  font-size: clamp(34px, 9.6vw, 52px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+.title[data-long] {
+  max-width: 26ch;
+  font-size: clamp(28px, 7.6vw, 40px);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: clamp(46px, 5vw, 80px);
+    letter-spacing: -0.045em;
+  }
+
+  .title[data-long] {
+    font-size: clamp(36px, 3.7vw, 58px);
+    letter-spacing: -0.04em;
+  }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'head'
+    'media'
+    'aside'
+    'desc'
+    'venue';
+  row-gap: 40px;
+}
+
+.head {
+  grid-area: head;
+  min-width: 0;
+}
+
+.media {
+  grid-area: media;
+  min-width: 0;
+}
+
+.aside {
+  grid-area: aside;
+  min-width: 0;
+}
+
+.desc {
+  grid-area: desc;
+  min-width: 0;
+}
+
+.venue {
+  grid-area: venue;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .layout {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-areas:
+      'head head'
+      'media aside'
+      'desc desc'
+      'venue venue';
+    column-gap: 40px;
+    row-gap: 56px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr) minmax(340px, 400px);
+    grid-template-areas:
+      'head head aside'
+      'media desc aside'
+      'venue venue aside';
+    grid-template-rows: auto auto 1fr;
+    column-gap: clamp(32px, 3.4vw, 56px);
+    row-gap: 64px;
+  }
+
+  /* Правая колонка едет вместе с прокруткой, пока не кончится статья. */
+  .asideInner {
+    position: sticky;
+    top: calc(var(--header-h) + 16px);
+  }
+}
+
+/* Каскад появления блоков: номер в очереди задаёт --i. */
+.reveal {
+  animation: rise 420ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Картинка */
+
+.frame {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.image {
+  object-fit: cover;
+}
+
+/* Заглушка без картинки: тёплое пятно света и кольцо кускар, название категории крупно. */
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  text-align: center;
+  background-color: var(--color-surface);
+  background-image: radial-gradient(
+    120% 80% at 18% 100%,
+    oklch(0.659 0.142 45.1 / 0.34) 0%,
+    oklch(0.659 0.142 45.1 / 0.1) 46%,
+    transparent 72%
+  );
+}
+
+/* ------------------------------------------------------------------ Описание */
+
+.clamp {
+  max-height: calc(1.55em * 8);
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, oklch(0 0 0) 55%, transparent);
+}
+
+/* ---------------------------------------------------------------------- Карта */
+
+.map {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+@media (min-width: 768px) {
+  .map {
+    aspect-ratio: 21 / 9;
+  }
+}
+
+/*
+  Светлые плитки OpenStreetMap приглушены под тёмную тему. Карта не перехватывает прокрутку
+  и касания: это картинка места, вся её площадь ведёт в Яндекс Карты (.mapLink).
+*/
+.mapFrame {
+  position: absolute;
+  /* Рамка шире окна карты: кнопки масштаба и служебные ссылки встроенной карты остаются за краем,
+     метка при этом стоит по центру. Подпись об авторах карты стоит под картой отдельной ссылкой. */
+  inset: -56px;
+  width: calc(100% + 112px);
+  height: calc(100% + 112px);
+  border: 0;
+  pointer-events: none;
+  filter: invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.92) contrast(0.92);
+}
+
+.mapLink {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+}
+
+.mapLink:focus-visible {
+  outline-offset: -4px;
+}
+
+/* --------------------------------------------------------- Нижняя полоса */
+
+/*
+  Липкая полоса внизу статьи: прилипает к низу экрана, пока видна статья, и уезжает вместе с ней,
+  поэтому подвал сайта не перекрывает. На десктопе её заменяет правая колонка.
+*/
+.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 40px;
+  margin-inline: calc(var(--gutter) * -1);
+  min-height: 64px;
+  padding: 10px var(--gutter) max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-line);
+  /* Сплошной фон: текст страницы под полосой не просвечивает и не спорит с ценой. */
+  background-color: var(--color-bg);
+}
+
+@media (min-width: 1200px) {
+  .bar {
+    display: none;
+  }
+
+  .barOnly {
+    display: none;
+  }
+}
+
+@media (max-width: 1199.98px) {
+  /* Кнопка покупки на телефоне и планшете живёт в нижней полосе. */
+  .panelOnly {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------ Ещё в этом городе */
+
+.rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'thumb when arrow'
+    'thumb title arrow'
+    'thumb facts arrow';
+  column-gap: 16px;
+  row-gap: 4px;
+  align-items: center;
+  padding-block: 16px;
+  border-top: 1px solid var(--color-line);
+  animation: rise 360ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
+
+.rowThumb {
+  grid-area: thumb;
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+
+.rowWhen {
+  grid-area: when;
+  align-self: end;
+}
+
+.rowMain {
+  grid-area: title;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.rowFacts {
+  grid-area: facts;
+  align-self: start;
+}
+
+.rowArrow {
+  grid-area: arrow;
+  color: var(--color-fg-muted);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+/* Вся строка ведёт на событие: ссылка в названии растянута на всю площадь. */
+.rowLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+}
+
+.rowLink:focus-visible {
+  outline: none;
+}
+
+.rowLink:focus-visible::after {
+  outline: 2px solid var(--color-fg);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .row:hover .rowArrow {
+    transform: translateX(4px);
+    color: var(--color-fg);
+  }
+
+  .row:hover .rowTitle {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+}
+
+@media (min-width: 768px) {
+  .row {
+    grid-template-columns: 72px minmax(160px, 0.9fr) minmax(0, 2.4fr) minmax(120px, auto) auto;
+    grid-template-areas: 'thumb when title facts arrow';
+    column-gap: 24px;
+    padding-block: 18px;
+  }
+
+  .rowWhen,
+  .rowFacts {
+    align-self: center;
+  }
+
+  .rowTitle {
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .rowFacts {
+    justify-self: end;
+    text-align: right;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    animation: none;
+  }
+
+  .rowArrow {
+    transition: none;
+  }
+}

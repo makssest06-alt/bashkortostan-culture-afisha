@@ -1,0 +1,51 @@
+{
+  "model": "fal-ai/flux-2-pro",
+  "budget": 24,
+  "items": {
+    "desk": {
+      "target": "/images/scenes/desk.webp",
+      "width": 1920,
+      "height": 1080,
+      "aspect": "16:9",
+      "long_side": 2000,
+      "alt_ru": "Стол зрителя, вид сверху: тёмно-зелёное сукно на деревянной столешнице, программки, билеты, театральный бинокль и карандаш",
+      "prompt": "Overhead flat-lay photograph shot from directly above, camera pointing straight down at a tabletop. A warm honey-coloured oak wooden desk with fine visible grain. A large rectangular mat of dark forest-green wool felt, like billiard baize, lies on the desk and covers the right two thirds of the frame; its left edge is a straight vertical line and the left third of the frame is bare wood. The centre of the green felt is completely empty: a wide clean area of plain felt with nothing on it. Props are placed only near the edges of the frame. In the upper right corner a sharpened cedar pencil lies diagonally on the felt. In the lower right corner sits a pair of small vintage brass opera glasses with black leather grips. On the bare wood at the left lie two plain cream paper booklets with blank unprinted covers, slightly fanned, and beside them three small blank paper tickets in muted red and ivory with perforated tear-off stubs. Every paper surface is blank: no words, no letters, no numbers, no logos, no printing. Soft natural daylight from a window at the upper left, gentle soft-edged shadows, faint dappled light across the desk. Realistic product photography, 50mm lens, everything in sharp focus, natural colours, high detail."
+    },
+    "hand": {
+      "target": "/images/scenes/hand.webp",
+      "width": 1440,
+      "height": 1920,
+      "aspect": "3:4",
+      "long_side": 2000,
+      "alt_ru": "Тёмная скульптурная рука, поднятая снизу, с пальцами, готовыми держать жетон",
+      "prompt": "Studio photograph of a single sculptural human hand and forearm rising vertically from the bottom edge of the frame against a pure solid black background. The hand is made of dark matte charcoal-brown material, like smooth unglazed clay, with realistic anatomy and exactly five fingers. The thumb and the index finger are raised and gently curved toward each other at the top, forming an open pinch as if delicately holding a small flat coin between their tips, but the space between the fingertips is empty. The middle, ring and little fingers are loosely curled below. Strong warm orange rim light from behind on both sides outlines the fingers and the wrist with glowing copper-orange edges, and a soft warm fill light from the front keeps the form of the palm and fingers clearly readable. The hand is centred horizontally, the fingertips reach about sixty percent of the frame height, and the top third of the frame is empty pure black. The background is absolute black with no gradient, no floor, no haze and no reflections. High contrast, crisp edges, dramatic product lighting, ultra detailed."
+    },
+    "desk-angle": {
+      "target": "/images/scenes/desk-angle.webp",
+      "width": 1920,
+      "height": 1080,
+      "aspect": "16:9",
+      "long_side": 2000,
+      "alt_ru": "Стол зрителя под углом: зелёное сукно на дереве, бинокль, билеты и карандаш, мягкий фон в расфокусе",
+      "prompt": "Photograph of a tabletop seen from a 45 degree angle, a three-quarter view looking down and across a warm honey oak desk. A large mat of dark forest-green wool felt covers the centre and the right side of the tabletop; the left side is bare wood. The middle of the green felt, in the centre of the image, is empty: a clear open patch of plain felt in sharp focus with nothing on it. Around it, near the edges of the frame: a sharpened cedar pencil lying diagonally on the wood in the left foreground, a pair of small vintage brass opera glasses with black leather grips on the right side of the felt, and on the left a few blank cream paper tickets with perforated stubs next to a plain cream booklet with a blank cover. No printing, no letters and no numbers anywhere. Beyond the far edge of the desk, in the upper third of the frame, a softly blurred deep burgundy velvet curtain with a few warm amber bokeh lights. Shallow depth of field: the centre of the felt is sharp, the foreground and the background are softly out of focus. Warm cinematic light from the upper left, soft shadows. Realistic photography, 35mm lens at f/2, high detail."
+    },
+    "macro": {
+      "target": "/images/scenes/macro.webp",
+      "width": 1920,
+      "height": 1080,
+      "aspect": "16:9",
+      "long_side": 2000,
+      "alt_ru": "Макросъёмка кромки чеканного медного диска на зелёном сукне",
+      "prompt": "Extreme macro photograph taken from a very low angle at tabletop level: the rim of a thick hand-hammered copper disc lying flat on dark forest-green wool felt. The curved edge of the disc sweeps horizontally across the upper two thirds of the frame like a horizon. The metal shows tiny irregular hammer dimples, fine scratches and warm reflections, with a plain smooth bevelled edge. In the lower third the green felt is in the foreground with individual wool fibres visible. Extremely shallow depth of field: a thin band of the copper edge is tack sharp, everything in front of it and behind it melts into soft blur. Warm directional light from the left, deep shadows, dark moody background. The metal is plain: no engraving, no ornament, no pattern, no letters. Macro lens 100mm at f/2.8, photorealistic, ultra detailed."
+    },
+    "texture": {
+      "target": "/images/scenes/texture.webp",
+      "width": 2352,
+      "height": 1008,
+      "aspect": "21:9",
+      "long_side": 2000,
+      "alt_ru": "Фактура крупным планом: тёмный войлок и тёплая чеканная медь",
+      "prompt": "Extreme close-up texture photograph that fills the entire frame edge to edge, shot from directly above. Thick dark charcoal-brown wool felt with coarse matted fibres and rough torn edges is layered over a sheet of warm hand-hammered copper with dense irregular hammer dimples and a subtle dark patina. The felt and the copper interlock in irregular horizontal bands across the frame, like geological strata. Raking warm light from the left reveals deep relief, micro detail in every fibre and dimple, dark shadows in the crevices and glowing orange-copper highlights. Only material: no objects, no ornament, no symbols, no letters. Macro photography, high contrast, ultra detailed, a rich warm palette of copper, amber, umber and near-black."
+    }
+  }
+}

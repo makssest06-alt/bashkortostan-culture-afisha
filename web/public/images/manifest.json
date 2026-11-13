@@ -1,0 +1,428 @@
+{
+  "fal": {
+    "model": "fal-ai/flux-2-pro",
+    "budget": 24,
+    "generations_spent": 0,
+    "key_status": "HTTP 403 на пробном запросе 12.11.2026: баланс исчерпан, генерация не выполнялась"
+  },
+  "licenses": {
+    "pexels": "Pexels License: свободное использование и изменение, указание автора не обязательно"
+  },
+  "images": [
+    {
+      "path": "/images/events/concert-1.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Hoàng Tiến Việt",
+      "source_url": "https://www.pexels.com/photo/black-grand-piano-standing-on-a-concert-hall-stage-18238120/",
+      "avg_color": "#4E3B2A",
+      "alt_ru": "Рояль на сцене концертного зала"
+    },
+    {
+      "path": "/images/events/concert-2.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Gabriel Rissi",
+      "source_url": "https://www.pexels.com/photo/orchestra-playing-on-a-dark-stage-illuminated-by-burning-candles-27028361/",
+      "avg_color": "#3A2205",
+      "alt_ru": "Музыканты играют на сцене в окружении сотен свечей"
+    },
+    {
+      "path": "/images/events/concert-3.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "cottonbro studio",
+      "source_url": "https://www.pexels.com/photo/woman-playing-cello-7095838/",
+      "avg_color": "#2C1E15",
+      "alt_ru": "Виолончель в руках музыканта, крупный план"
+    },
+    {
+      "path": "/images/events/concert-4.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Zacchaeus Rains",
+      "source_url": "https://www.pexels.com/photo/orchestra-conductor-leading-a-symphony-performance-32024630/",
+      "avg_color": "#645145",
+      "alt_ru": "Дирижёр и оркестр во время концерта"
+    },
+    {
+      "path": "/images/events/exhibition-1.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Gül Işık",
+      "source_url": "https://www.pexels.com/photo/people-inside-an-art-gallery-11905911/",
+      "avg_color": "#562F16",
+      "alt_ru": "Зал выставки с терракотовой стеной и картинами в рамах"
+    },
+    {
+      "path": "/images/events/exhibition-2.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Maksim Shiriagin",
+      "source_url": "https://www.pexels.com/photo/art-gallery-visitor-admiring-classic-paintings-40086500/",
+      "avg_color": "#7D6363",
+      "alt_ru": "Посетитель на скамье перед картиной в зале с красными стенами"
+    },
+    {
+      "path": "/images/events/exhibition-3.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Alina Chernii",
+      "source_url": "https://www.pexels.com/photo/paintings-exhibition-in-art-gallery-18250532/",
+      "avg_color": "#544438",
+      "alt_ru": "Стена картинной галереи с полотнами в золочёных рамах"
+    },
+    {
+      "path": "/images/events/exhibition-4.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "caffeine",
+      "source_url": "https://www.pexels.com/photo/art-gallery-in-ankara-with-framed-paintings-35101544/",
+      "avg_color": "#5A341F",
+      "alt_ru": "Тёплый коридор галереи с картинами вдоль стены"
+    },
+    {
+      "path": "/images/events/festival-1.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Sergei Shilenko",
+      "source_url": "https://www.pexels.com/photo/a-large-bonfire-with-people-around-it-27771877/",
+      "avg_color": "#896B52",
+      "alt_ru": "Народное гулянье: горит масленичное чучело, вокруг собрались люди"
+    },
+    {
+      "path": "/images/events/festival-2.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Van Anh Nguyen",
+      "source_url": "https://www.pexels.com/photo/festive-outdoor-market-with-string-lights-at-night-29907502/",
+      "avg_color": "#693510",
+      "alt_ru": "Вечерняя ярмарка под гирляндами огней"
+    },
+    {
+      "path": "/images/events/festival-3.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Fatih Güney",
+      "source_url": "https://www.pexels.com/photo/view-of-a-crowded-street-in-sunlight-18480708/",
+      "avg_color": "#5D4E3D",
+      "alt_ru": "Зрители на празднике под открытым небом в закатном свете"
+    },
+    {
+      "path": "/images/events/festival-4.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Alexey Wineman",
+      "source_url": "https://www.pexels.com/photo/a-man-in-traditional-wear-playing-the-balalaika-during-the-maslenita-festival-8590431/",
+      "avg_color": "#5E4436",
+      "alt_ru": "Музыкант в народном костюме с балалайкой у костра на зимнем празднике"
+    },
+    {
+      "path": "/images/events/kids-1.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "cottonbro studio",
+      "source_url": "https://www.pexels.com/photo/family-building-a-home-theatre-5801307/",
+      "avg_color": "#614838",
+      "alt_ru": "Дети у домашней сцены с красным занавесом и гирляндами"
+    },
+    {
+      "path": "/images/events/kids-2.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Vlada Karpovich",
+      "source_url": "https://www.pexels.com/photo/children-watching-puppet-show-7356472/",
+      "avg_color": "#968C7E",
+      "alt_ru": "Двое детей смотрят кукольный спектакль"
+    },
+    {
+      "path": "/images/events/kids-3.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Vlada Karpovich",
+      "source_url": "https://www.pexels.com/photo/close-up-shot-of-a-puppet-show-7356563/",
+      "avg_color": "#A59D96",
+      "alt_ru": "Куклы лисы и зайца в окне кукольного театра"
+    },
+    {
+      "path": "/images/events/kids-4.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Caleb Oquendo",
+      "source_url": "https://www.pexels.com/photo/unrecognizable-spectators-in-concert-hall-during-performance-7626321/",
+      "avg_color": "#51313F",
+      "alt_ru": "Ребёнок в зрительном зале смотрит на освещённую сцену"
+    },
+    {
+      "path": "/images/events/museum-1.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Alyona Nagel",
+      "source_url": "https://www.pexels.com/photo/elegant-historic-hallway-with-ornate-ceiling-in-malta-37125513/",
+      "avg_color": "#AC7F59",
+      "alt_ru": "Музейная галерея с расписным потолком и рыцарскими доспехами"
+    },
+    {
+      "path": "/images/events/museum-2.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Cansu  C",
+      "source_url": "https://www.pexels.com/photo/ornamented-interior-of-building-in-budapest-20742028/",
+      "avg_color": "#463429",
+      "alt_ru": "Парадный зал музея с узорным полом и аркадами"
+    },
+    {
+      "path": "/images/events/museum-3.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Lokman Sevim",
+      "source_url": "https://www.pexels.com/photo/golden-vase-in-museum-14950665/",
+      "avg_color": "#0E151C",
+      "alt_ru": "Древний сосуд в подсвеченной витрине тёмного музейного зала"
+    },
+    {
+      "path": "/images/events/museum-4.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "caffeine",
+      "source_url": "https://www.pexels.com/photo/vintage-ceramic-artifacts-displayed-in-museum-39544428/",
+      "avg_color": "#633818",
+      "alt_ru": "Керамические сосуды на музейных постаментах"
+    },
+    {
+      "path": "/images/events/theatre-1.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Ann Hannes",
+      "source_url": "https://www.pexels.com/photo/empty-seats-in-theater-12616962/",
+      "avg_color": "#460E1B",
+      "alt_ru": "Театральный зал: ряды кресел перед красным занавесом в свете софитов"
+    },
+    {
+      "path": "/images/events/theatre-2.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Blue Arauz",
+      "source_url": "https://www.pexels.com/photo/balconies-inside-a-theater-13331292/",
+      "avg_color": "#4E2D20",
+      "alt_ru": "Ложи и балкон старинного театра с бархатными драпировками"
+    },
+    {
+      "path": "/images/events/theatre-3.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "cottonbro studio",
+      "source_url": "https://www.pexels.com/photo/man-and-woman-on-the-stage-6899772/",
+      "avg_color": "#290F13",
+      "alt_ru": "Сцена из спектакля: актёры в исторических костюмах у красного занавеса"
+    },
+    {
+      "path": "/images/events/theatre-4.webp",
+      "width": 900,
+      "height": 1200,
+      "source": "pexels",
+      "author": "Инесса",
+      "source_url": "https://www.pexels.com/photo/inside-a-musical-theater-8994700/",
+      "avg_color": "#541E15",
+      "alt_ru": "Вид из ложи на сцену театра с красным занавесом"
+    },
+    {
+      "path": "/images/scenes/desk-angle.webp",
+      "width": 2000,
+      "height": 1125,
+      "source": "pexels-composite",
+      "author": "Chris Steele, Engin Akyurt, Masood Aslami",
+      "source_url": "https://www.pexels.com/photo/detailed-oak-wood-texture-with-natural-knots-37225886/",
+      "sources": [
+        {
+          "author": "Chris Steele",
+          "source_url": "https://www.pexels.com/photo/detailed-oak-wood-texture-with-natural-knots-37225886/"
+        },
+        {
+          "author": "Engin Akyurt",
+          "source_url": "https://www.pexels.com/photo/a-blue-textured-background-15429341/"
+        },
+        {
+          "author": "Masood Aslami",
+          "source_url": "https://www.pexels.com/photo/lights-in-bokeh-19969569/"
+        }
+      ],
+      "placeholder_for": "fal",
+      "note": "коллаж: тот же стол в перспективе, фон из фотографии с боке",
+      "avg_color": "#464A2D",
+      "alt_ru": "Стол зрителя под углом: зелёное сукно на дереве, тёплые огни в расфокусе на заднем плане"
+    },
+    {
+      "path": "/images/scenes/desk.webp",
+      "width": 2000,
+      "height": 1125,
+      "source": "pexels-composite",
+      "author": "Chris Steele, Engin Akyurt",
+      "source_url": "https://www.pexels.com/photo/detailed-oak-wood-texture-with-natural-knots-37225886/",
+      "sources": [
+        {
+          "author": "Chris Steele",
+          "source_url": "https://www.pexels.com/photo/detailed-oak-wood-texture-with-natural-knots-37225886/"
+        },
+        {
+          "author": "Engin Akyurt",
+          "source_url": "https://www.pexels.com/photo/a-blue-textured-background-15429341/"
+        }
+      ],
+      "placeholder_for": "fal",
+      "note": "коллаж: дерево и сукно из фотографий, бумага и карандаш нарисованы; бинокля нет",
+      "avg_color": "#4C6445",
+      "alt_ru": "Стол зрителя, вид сверху: тёмно-зелёное сукно на тёплой деревянной столешнице, программки, билеты и карандаш"
+    },
+    {
+      "path": "/images/scenes/hall.webp",
+      "width": 2000,
+      "height": 1125,
+      "source": "pexels",
+      "author": "Liz Henderson",
+      "source_url": "https://www.pexels.com/photo/the-auditorium-of-a-large-theatre-with-many-seats-28113394/",
+      "avg_color": "#50321C",
+      "alt_ru": "Большой театральный зал с ярусами балконов в тёплом свете"
+    },
+    {
+      "path": "/images/scenes/hand.webp",
+      "width": 1500,
+      "height": 2000,
+      "source": "pexels-composite",
+      "author": "Kathrine Birch",
+      "source_url": "https://www.pexels.com/photo/a-person-s-hand-on-a-black-background-12506706/",
+      "sources": [
+        {
+          "author": "Kathrine Birch",
+          "source_url": "https://www.pexels.com/photo/a-person-s-hand-on-a-black-background-12506706/"
+        }
+      ],
+      "placeholder_for": "fal",
+      "note": "фотография руки, переведённая в тёмно-медную гамму",
+      "avg_color": "#090402",
+      "alt_ru": "Тёмная рука, поднятая снизу, с пальцами, готовыми держать жетон, в оранжевом свете на чёрном фоне"
+    },
+    {
+      "path": "/images/scenes/macro.webp",
+      "width": 2000,
+      "height": 1125,
+      "source": "pexels-composite",
+      "author": "Caio Cardenas",
+      "source_url": "https://www.pexels.com/photo/metal-cymbals-with-geometric-pattern-on-surface-4232245/",
+      "sources": [
+        {
+          "author": "Caio Cardenas",
+          "source_url": "https://www.pexels.com/photo/metal-cymbals-with-geometric-pattern-on-surface-4232245/"
+        }
+      ],
+      "placeholder_for": "fal",
+      "note": "кадр из фотографии чеканного диска, затемнён; зелёного сукна в кадре нет",
+      "avg_color": "#3D190D",
+      "alt_ru": "Крупный план кромки чеканного диска медного оттенка, малая глубина резкости"
+    },
+    {
+      "path": "/images/scenes/panel-1.webp",
+      "width": 1125,
+      "height": 2000,
+      "source": "pexels",
+      "author": "Dario Avila",
+      "source_url": "https://www.pexels.com/photo/a-ballerina-doing-ballet-dance-13425706/",
+      "avg_color": "#793D0A",
+      "alt_ru": "Балерина за кулисами в золотом свете софитов"
+    },
+    {
+      "path": "/images/scenes/panel-2.webp",
+      "width": 1125,
+      "height": 2000,
+      "source": "pexels",
+      "author": "cottonbro studio",
+      "source_url": "https://www.pexels.com/photo/women-playing-violin-in-sn-orchestra-7097454/",
+      "avg_color": "#2B1D14",
+      "alt_ru": "Скрипачи оркестра во время выступления"
+    },
+    {
+      "path": "/images/scenes/panel-3.webp",
+      "width": 1125,
+      "height": 2000,
+      "source": "pexels",
+      "author": "Beyza Şükran DEMİRBAŞ",
+      "source_url": "https://www.pexels.com/photo/isiklar-golgeler-27410076/",
+      "avg_color": "#3E3D3B",
+      "alt_ru": "Музейная витрина с древними сосудами"
+    },
+    {
+      "path": "/images/scenes/panel-4.webp",
+      "width": 1125,
+      "height": 2000,
+      "source": "pexels",
+      "author": "Jannis Christmann",
+      "source_url": "https://www.pexels.com/photo/feuerwerk-landau-18470461/",
+      "avg_color": "#2F1F28",
+      "alt_ru": "Фейерверк над зрителями ночного фестиваля"
+    },
+    {
+      "path": "/images/scenes/panel-5.webp",
+      "width": 1125,
+      "height": 2000,
+      "source": "pexels",
+      "author": "Hacerrusa",
+      "source_url": "https://www.pexels.com/photo/pinoccio-wooden-figurines-18606230/",
+      "avg_color": "#554237",
+      "alt_ru": "Деревянные куклы-марионетки кукольного театра"
+    },
+    {
+      "path": "/images/scenes/texture.webp",
+      "width": 2000,
+      "height": 857,
+      "source": "pexels-composite",
+      "author": "Engin Akyurt, Caio Cardenas",
+      "source_url": "https://www.pexels.com/photo/surface-of-a-brown-carpet-16659340/",
+      "sources": [
+        {
+          "author": "Engin Akyurt",
+          "source_url": "https://www.pexels.com/photo/surface-of-a-brown-carpet-16659340/"
+        },
+        {
+          "author": "Caio Cardenas",
+          "source_url": "https://www.pexels.com/photo/metal-cymbals-with-geometric-pattern-on-surface-4232245/"
+        }
+      ],
+      "placeholder_for": "fal",
+      "note": "коллаж из двух фотографий фактур",
+      "avg_color": "#3E1C12",
+      "alt_ru": "Фактура крупным планом: тёмный войлок поверх тёплой чеканной меди"
+    },
+    {
+      "path": "/images/token-fallback.webp",
+      "width": 512,
+      "height": 512,
+      "source": "own-render",
+      "author": "Собственный рендер 3D-жетона проекта",
+      "avg_color": "#B86A3E",
+      "alt_ru": ""
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+.reanimate/
+.env.assets
+
+# зависимости и сборка
+node_modules/
+.next/
+out/
+test-results/
+next-env.d.ts
+*.tsbuildinfo
+
+# локальные переменные окружения
+.env*.local

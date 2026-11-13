@@ -1,0 +1,522 @@
+/*
+  Сцена popular (S12). Две раскладки:
+    лента   компьютер без «меньше движения»: панели в ряд на 80 % высоты окна, трек едет под прокрутку;
+    стопка  телефон и «меньше движения»: панели событий лежат одна на другой, следующая въезжает поверх.
+  Раскладку выбирает CSS (media), а не скрипт: до гидратации и без JS страница уже стоит верно.
+  Замеры из спецификации и кадров: полоса v 0,10-0,90; широкая панель 86vw (кадр 436), первая 69vw
+  (кадр 423: 0,128-0,823); узкая 33,5vw (кадры 425-429: 0,335-0,34); зазор 1vw;
+  заголовок с отступом 6,4vw от края панели на v 0,23; подписи на v 0,153 и 0,847.
+*/
+
+.root {
+  --pop-top: 10dvh;
+  --pop-h: 80dvh;
+  position: absolute;
+  inset: 0;
+}
+
+/*
+  Подложка под жетоном: тёплый тёмный фон и свечение сверху по центру (S11-S13 референса: эллипс около
+  30 % ширины, гаснет к трети высоты). Значения те же, что у соседней сцены cities: свечение не меняется на стыке.
+*/
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 34% 38% at 50% -4%,
+      oklch(0.62 0.13 45 / 0.95) 0%,
+      oklch(0.56 0.12 45 / 0.62) 34%,
+      oklch(0.45 0.09 47 / 0.26) 64%,
+      oklch(0.4 0.08 47 / 0) 100%
+    ),
+    var(--color-bg-lit);
+}
+
+/* ----------------------------------------------------------------------- Лента */
+
+.track {
+  position: absolute;
+  top: var(--pop-top);
+  left: 0;
+  display: flex;
+  gap: 1vw;
+  height: var(--pop-h);
+  will-change: transform;
+}
+
+.narrow,
+.wide {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--color-surface);
+}
+
+.narrow {
+  width: 33.5vw;
+}
+
+.wide {
+  display: block;
+  width: 86vw;
+  color: var(--color-fg);
+}
+
+/* Первая широкая панель уже остальных: при раскрытии справа от неё уже видна следующая узкая (кадры 422-426) */
+.wide[data-lead] {
+  width: 69vw;
+}
+
+/*
+  Засветка первых панелей, пока они ещё линии: линия в референсе светлая, а край нашей картинки тёмный.
+  Прозрачность ведёт таймлайн, в покое засветки нет.
+*/
+.flash {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-fg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+  Фокус с клавиатуры. Обычный outline панели перекрывают её же абсолютные слои (фото, затемнение),
+  поэтому кольцо рисует отдельный слой поверх всего содержимого панели, с отступом внутрь.
+*/
+.wide:focus-visible {
+  outline: none;
+}
+
+.wide:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 2px solid var(--color-fg);
+  border-radius: var(--radius-xs);
+  box-shadow: 0 0 0 2px oklch(0.16 0.01 50 / 0.7);
+  pointer-events: none;
+}
+
+.media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wide .media {
+  transition: scale var(--duration-slow) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .wide:hover .media {
+    scale: 1.025;
+  }
+}
+
+/*
+  Затемнение под текстом. Картинки событий разные и временные: читаемость заголовка держит не фото,
+  а эта плашка (слева плотнее, там стоит заголовок) и нижний градиент под подписями.
+*/
+.shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, oklch(0.162 0.006 39.3 / 0.86) 0%, oklch(0.162 0.006 39.3 / 0.66) 52%, oklch(0.162 0.006 39.3 / 0.26) 100%),
+    linear-gradient(to top, oklch(0.162 0.006 39.3 / 0.72) 0%, oklch(0.162 0.006 39.3 / 0) 38%),
+    linear-gradient(to bottom, oklch(0.162 0.006 39.3 / 0.55) 0%, oklch(0.162 0.006 39.3 / 0) 26%);
+}
+
+.narrow .shade {
+  background: oklch(0.162 0.006 39.3 / 0.18);
+}
+
+/* Пунктирная рамка внутри панели: только в стопке (так в мобильном оригинале) */
+.frame {
+  display: none;
+}
+
+.eyebrow {
+  position: absolute;
+  top: 5.3dvh;
+  left: 2vw;
+  color: var(--color-fg);
+}
+
+.title {
+  /*
+    --pop-word: длина самого длинного слова названия (пишет компонент). Слово не переносится, поэтому кегль
+    ограничен так, чтобы оно поместилось в ширину заголовка: буква Golos Text 600 занимает около 0,6 кегля.
+  */
+  --pop-word: 12;
+  --pop-max: 76vw;
+  --pop-fit: calc(var(--pop-max) / (var(--pop-word) * 0.6));
+  position: absolute;
+  top: 12.2dvh;
+  left: 6.4vw;
+  max-width: var(--pop-max);
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  /* Кегль по длине названия: короткое как в референсе (8,7vw), длинное мельче и в две-три строки */
+  font-size: min(6.4vw, 11.4dvh, var(--pop-fit));
+}
+
+.title[data-size='s'] {
+  font-size: min(8.7vw, 15.4dvh, var(--pop-fit));
+}
+
+.title[data-size='m'] {
+  font-size: min(7.4vw, 13.2dvh, var(--pop-fit));
+}
+
+/* Первая панель: заголовок крупнее и по центру высоты, отступ 3,5vw (кадры 421-426) */
+.wide[data-lead] .title {
+  --pop-max: 61.5vw;
+  top: 50%;
+  left: 3.5vw;
+  translate: 0 -50%;
+  font-size: min(8.2vw, 14.6dvh, var(--pop-fit));
+}
+
+.wide[data-lead] .title[data-size='s'] {
+  font-size: min(11.5vw, 20dvh, var(--pop-fit));
+}
+
+.wide[data-lead] .title[data-size='m'] {
+  font-size: min(9.4vw, 16.7dvh, var(--pop-fit));
+}
+
+.info {
+  position: absolute;
+  inset: 5.3dvh 4vw 5.3dvh 6.4vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.wide[data-lead] .info {
+  left: 3.5vw;
+}
+
+.caps {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr auto;
+  gap: 2vw;
+  align-items: start;
+  margin: 0;
+}
+
+.cap {
+  display: block;
+  min-width: 0;
+}
+
+.capLabel {
+  color: var(--color-fg-soft);
+}
+
+.capLabel::after {
+  content: ': ';
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.open {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/*
+  Первая пара панелей в ленте до раскрытия не видна: её проявляет таймлайн (opacity пишет инлайн
+  и перекрывает это правило). Без правила панели мигнули бы целиком до запуска скриптов.
+  Именно opacity, а не visibility: ссылка первой панели остаётся доступной с клавиатуры,
+  а фокус на ней доводит прокрутку до раскрытой панели.
+*/
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .track > [data-pop='lead-narrow'],
+  .track > [data-pop='lead-wide'] {
+    opacity: 0;
+  }
+}
+
+/* Подписи первой панели «печатаются» слева направо, когда панель раскрылась (по времени, 0,26 с) */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .root[data-motion='strip'] .wide[data-lead] .info > * {
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 260ms steps(16, end);
+  }
+
+  .root[data-motion='strip'][data-typed] .wide[data-lead] .info > * {
+    clip-path: inset(0 0 0 0);
+  }
+
+  .root[data-motion='strip'][data-typed] .wide[data-lead] .info > *:last-child {
+    transition-delay: 90ms;
+  }
+}
+
+/* ------------------------------------------------- Нижняя полоса под панелями */
+
+.below {
+  position: absolute;
+  inset: calc(var(--pop-top) + var(--pop-h)) var(--gutter) 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-fg);
+}
+
+/* Стрелка стоит в строке сразу за последним словом, даже когда подпись переносится на две строки */
+.cta svg {
+  display: inline-block;
+  margin-left: 8px;
+  vertical-align: -0.12em;
+  transition: translate var(--duration-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cta:hover svg {
+    translate: 3px 0;
+  }
+}
+
+.hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  translate: -50% -50%;
+  color: var(--color-fg);
+  white-space: nowrap;
+}
+
+.hintIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(18px, 1.9vw, 28px);
+  height: clamp(18px, 1.9vw, 28px);
+  border: 1px solid currentColor;
+  border-radius: 9999px;
+}
+
+.dots {
+  display: none;
+}
+
+/* Состояния без событий: загрузка, пусто, ошибка */
+.state {
+  position: absolute;
+  inset: var(--pop-top) var(--gutter) auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: center;
+  height: var(--pop-h);
+  padding-inline: clamp(20px, 6.4vw, 120px);
+  border: 1px dashed var(--color-line-strong);
+}
+
+/* ---------------------------------------------------------------------- Стопка */
+
+@media (max-width: 767.98px), (prefers-reduced-motion: reduce) {
+  .track {
+    right: var(--gutter);
+    left: var(--gutter);
+    display: block;
+    will-change: auto;
+  }
+
+  .narrow {
+    display: none;
+  }
+
+  .wide,
+  .wide[data-lead] {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    will-change: transform;
+  }
+
+  .eyebrow {
+    display: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .root {
+    --pop-top: calc(var(--header-h) + 12px);
+    --pop-h: calc(100dvh - var(--header-h) - 12px - 64px);
+  }
+
+  .shade {
+    background:
+      linear-gradient(to bottom, oklch(0.162 0.006 39.3 / 0.82) 0%, oklch(0.162 0.006 39.3 / 0.3) 44%, oklch(0.162 0.006 39.3 / 0.3) 56%, oklch(0.162 0.006 39.3 / 0.86) 100%);
+  }
+
+  .frame {
+    position: absolute;
+    inset: 16px;
+    display: block;
+    border: 1px dashed oklch(0.993 0.007 97.3 / 0.5);
+    pointer-events: none;
+  }
+
+  /* Мобильный оригинал: заголовок 27px (6,9 % ширины), вес 600, прописные, слева сверху внутри рамки */
+  .title,
+  .title[data-size='s'],
+  .title[data-size='m'],
+  .wide[data-lead] .title,
+  .wide[data-lead] .title[data-size='s'],
+  .wide[data-lead] .title[data-size='m'] {
+    top: 36px;
+    right: 36px;
+    left: 36px;
+    max-width: none;
+    translate: none;
+    font-size: clamp(24px, 6.93vw, 34px);
+    line-height: 1.07;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .info,
+  .wide[data-lead] .info {
+    inset: auto 36px 36px;
+    gap: 14px;
+    justify-content: flex-end;
+  }
+
+  /* Три строки подписи слева снизу, как у мобильной панели оригинала; статус над ними */
+  .caps {
+    order: 2;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .foot {
+    order: 1;
+  }
+
+  .open span {
+    display: none;
+  }
+
+  .below {
+    inset: auto var(--gutter) 10px;
+    height: 44px;
+  }
+
+  .hint {
+    display: none;
+  }
+
+  /* Индикатор из чёрточек справа под панелью: активная длиннее и акцентного цвета */
+  .dots {
+    display: flex;
+    flex-shrink: 0;
+    gap: 4px;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .dot {
+    position: relative;
+    width: 22px;
+    height: 2px;
+  }
+
+  .dot::before,
+  .dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform-origin: left center;
+    transition:
+      transform var(--duration-base) var(--ease-out),
+      opacity var(--duration-base) var(--ease-out);
+  }
+
+  .dot::before {
+    background-color: var(--color-fg-muted);
+    transform: scaleX(0.55);
+  }
+
+  .dot::after {
+    background-color: var(--color-accent);
+    opacity: 0;
+    transform: scaleX(0.55);
+  }
+
+  .dot[data-on]::before {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+
+  .dot[data-on]::after {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  .state {
+    padding-inline: 24px;
+  }
+}
+
+@media (min-width: 768px) and (prefers-reduced-motion: reduce) {
+  .frame {
+    display: none;
+  }
+}
+
+/*
+  «Меньше движения»: панели стопки не въезжают, а проявляются на месте по порогу прокрутки (по времени).
+  Верхняя панель помечена data-on скриптом; первая видна всегда, чтобы сцена не была пустой до скриптов.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .root[data-motion='fade'] .wide:not([data-pop='lead-wide']) {
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      opacity 240ms linear,
+      visibility 0s linear 240ms;
+  }
+
+  .root[data-motion='fade'] .wide[data-on] {
+    visibility: visible;
+    opacity: 1;
+    transition:
+      opacity 240ms linear,
+      visibility 0s;
+  }
+}
