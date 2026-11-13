@@ -17,10 +17,15 @@ import {
   validationError,
 } from '../../../../lib/api/http';
 import { clientIp, hitRate } from '../../../../lib/api/rate-limit';
+import { USES_REMOTE_API } from '../../../../lib/api/config';
+import { forwardToBackend } from '../../../../lib/api/forward';
 
 const MAX_BODY = 10_000;
 
 export async function POST(request: Request): Promise<Response> {
+  // Бэк подключён (NEXT_PUBLIC_API_BASE_URL): ответ берётся из него, моки ниже не участвуют.
+  if (USES_REMOTE_API) return forwardToBackend(request);
+
   const requestId = requestIdOf(request);
   try {
     const ip = clientIp(request);

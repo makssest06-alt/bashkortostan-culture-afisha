@@ -7,8 +7,13 @@ import { internalError, json, methodNotAllowed, preflight, requestIdOf, validati
 import { parseEventsQuery } from '../../../../lib/api/params';
 import { searchEvents } from '../../../../lib/api/search';
 import { toApiEventsList } from '../../../../lib/api/wire';
+import { USES_REMOTE_API } from '../../../../lib/api/config';
+import { forwardToBackend } from '../../../../lib/api/forward';
 
-export function GET(request: Request): Response {
+export function GET(request: Request): Response | Promise<Response> {
+  // Бэк подключён (NEXT_PUBLIC_API_BASE_URL): ответ берётся из него, моки ниже не участвуют.
+  if (USES_REMOTE_API) return forwardToBackend(request);
+
   const requestId = requestIdOf(request);
   try {
     const parsed = parseEventsQuery(new URL(request.url).searchParams);

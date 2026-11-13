@@ -1,0 +1,20 @@
+# В образ идёт только то, что нужно для сборки сайта.
+node_modules
+.next
+out
+test-results
+*.tsbuildinfo
+next-env.d.ts
+
+# Переменные окружения и ключи не попадают в образ. Пример оставлен как справка.
+.env*
+!.env.example
+
+# Служебное и локальное
+.git
+.reanimate
+*.log
+*.pid
+Dockerfile
+.dockerignore
+compose.yaml

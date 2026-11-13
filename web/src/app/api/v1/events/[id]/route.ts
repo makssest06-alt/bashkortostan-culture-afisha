@@ -14,10 +14,15 @@ import {
   requestIdOf,
 } from '../../../../../lib/api/http';
 import { toApiEvent } from '../../../../../lib/api/wire';
+import { USES_REMOTE_API } from '../../../../../lib/api/config';
+import { forwardToBackend } from '../../../../../lib/api/forward';
 
 const ID_PATTERN = /^[a-z0-9_-]{1,64}$/;
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
+  // Бэк подключён (NEXT_PUBLIC_API_BASE_URL): ответ берётся из него, моки ниже не участвуют.
+  if (USES_REMOTE_API) return forwardToBackend(request);
+
   const requestId = requestIdOf(request);
   try {
     const { id } = await context.params;

@@ -21,8 +21,17 @@ export const SESSION_MAX_AGE = 12 * 60 * 60;
 
 export type AdminMode = 'token' | 'open' | 'disabled';
 
-export function adminMode(): AdminMode {
+/** Заглушка из .env.example. Скопированный без правки пример не должен открывать админку известным всем токеном. */
+export const EXAMPLE_ADMIN_TOKEN = 'change-me-to-a-long-random-string';
+
+/** Токен модератора из ADMIN_TOKEN; заглушка из примера считается незаданным токеном. */
+export function configuredAdminToken(): string | undefined {
   const token = process.env.ADMIN_TOKEN?.trim();
+  return token && token !== EXAMPLE_ADMIN_TOKEN ? token : undefined;
+}
+
+export function adminMode(): AdminMode {
+  const token = configuredAdminToken();
   if (token && token.length >= 12) return 'token';
   if (process.env.NODE_ENV !== 'production' || process.env.ADMIN_OPEN === '1') return 'open';
   return 'disabled';
@@ -38,11 +47,11 @@ function safeEqual(a: string, b: string): boolean {
 
 /** Значение cookie сессии: хеш токена, сам токен в браузер не попадает. */
 export function sessionValue(): string {
-  return digest(`afisha-admin-session:${process.env.ADMIN_TOKEN?.trim() ?? ''}`).toString('hex');
+  return digest(`afisha-admin-session:${configuredAdminToken() ?? ''}`).toString('hex');
 }
 
 export function tokenMatches(candidate: string): boolean {
-  const token = process.env.ADMIN_TOKEN?.trim();
+  const token = configuredAdminToken();
   return Boolean(token) && safeEqual(candidate.trim(), token as string);
 }
 

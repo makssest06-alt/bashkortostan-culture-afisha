@@ -1,0 +1,38 @@
+# Сайт афиши в Docker.
+#
+#   cd web
+#   docker compose up --build                     сайт на моках: http://localhost:3210
+#   NEXT_PUBLIC_API_BASE_URL=http://host.docker.internal:8000 docker compose up --build
+#                                                 сайт с бэком, запущенным на этой машине
+#
+# Значения можно положить в web/.env рядом с этим файлом: compose читает его сам.
+# Когда в корне появится docker-compose.yml с бэком, он подключит этот файл так:
+#
+#   include:
+#     - web/compose.yaml
+#
+# и задаст NEXT_PUBLIC_API_BASE_URL=http://api:8000 (имя сервиса бэка внутри сети compose).
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        NEXT_PUBLIC_DATA_MODE: ${NEXT_PUBLIC_DATA_MODE:-demo}
+        NEXT_PUBLIC_TELEGRAM_BOT_URL: ${NEXT_PUBLIC_TELEGRAM_BOT_URL:-}
+    image: afisha-web:local
+    ports:
+      - "${WEB_PORT:-3210}:3210"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      ADMIN_OPEN: ${ADMIN_OPEN:-}
+      ASSISTANT_DISABLED: ${ASSISTANT_DISABLED:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - afisha-web-data:/data
+    restart: unless-stopped
+
+volumes:
+  afisha-web-data:

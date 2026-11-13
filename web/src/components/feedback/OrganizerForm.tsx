@@ -11,7 +11,7 @@ import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { Button, Field, Input, Textarea } from '@/components/ui';
-import type { ApiErrorDetail } from '@/lib/api/types';
+import { ApiClientError, sendFeedback } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useT } from '@/lib/i18n';
 import { pick } from '@/lib/i18n/lang';
@@ -84,24 +84,23 @@ export function OrganizerForm({ defaultKind = 'organizer_application', eventId, 
     setGeneral(null);
     setErrors({});
     try {
-      const response = await fetch('/api/v1/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ kind, event_id: eventId ?? null, ...values, organization: values.organization || null }),
-      });
-      const body = (await response.json().catch(() => null)) as
-        | { id?: string; message?: string; details?: ApiErrorDetail[] }
-        | null;
-      if (response.ok && body?.id) {
-        setSent(body.id);
-        setValues({ name: '', contact: '', organization: '', text: '', website: '' });
+      const accepted = await sendFeedback({ kind, event_id: eventId ?? null, ...values, organization: values.organization || null });
+      if (!accepted?.id) {
+        setGeneral(p(COPY.failed));
         return;
       }
-      const fields = Object.fromEntries((body?.details ?? []).map((detail) => [detail.field, detail.message]));
+      setSent(accepted.id);
+      setValues({ name: '', contact: '', organization: '', text: '', website: '' });
+    } catch (error) {
+      if (!(error instanceof ApiClientError) || error.code === 'network_error') {
+        setGeneral(p(COPY.network));
+        return;
+      }
+      const fields = Object.fromEntries((error.details ?? []).map((detail) => [detail.field, detail.message]));
       setErrors(fields);
-      if (!Object.keys(fields).length || response.status === 429) setGeneral(body?.message ?? p(COPY.failed));
-    } catch {
-      setGeneral(p(COPY.network));
+      if (!Object.keys(fields).length || error.status === 429) {
+        setGeneral(error.code === 'http_error' ? p(COPY.failed) : error.message);
+      }
     } finally {
       setBusy(false);
     }

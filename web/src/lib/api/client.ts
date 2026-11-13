@@ -3,12 +3,16 @@
  *
  *   import { listEvents, askAssistant } from '@/lib/api/client';
  *
- * В браузере функции ходят в /api/v1 через fetch. Если их вызвали на сервере
- * (например, из серверного компонента по ошибке), они берут данные напрямую
- * из ./server без сетевого запроса. Для серверного кода есть и прямой импорт:
- * `@/lib/api/server` с теми же именами функций.
+ * Куда идут запросы, решает NEXT_PUBLIC_API_BASE_URL (./config):
+ * - в браузере fetch всегда идёт на /api/v1 этого же сайта; при подключённом бэке сайт
+ *   пересылает эти запросы в бэк, без бэка отвечают моки;
+ * - на сервере при подключённом бэке fetch идёт прямо в `${адрес}/api/v1/...`, без бэка
+ *   функции берут данные из ./server без сетевого запроса.
+ * Для серверного кода есть прямой импорт `@/lib/api/server` с теми же именами функций.
  */
 
+import type { ApplicationKind } from '../admin/types';
+import { API_BASE_URL } from './config';
 import { eventsQueryToParams } from './params';
 import { fromApiAssistantResponse, fromApiEvent, fromApiEventsList } from './wire';
 import type { ApiAssistantResponse, ApiEvent, ApiEventsListResponse } from './wire';
@@ -28,7 +32,7 @@ import type {
 export const API_BASE_PATH = '/api/v1';
 
 export interface ClientOptions {
-  /** Адрес сайта афиши для вызова с чужого домена: `https://afisha.example`. По умолчанию текущий сайт. */
+  /** Адрес API без /api/v1: `https://afisha.example`. По умолчанию в браузере текущий сайт, на сервере NEXT_PUBLIC_API_BASE_URL. */
   baseUrl?: string;
   /** Сигнал отмены: пригодится, когда пользователь быстро меняет фильтры. */
   signal?: AbortSignal;
@@ -57,9 +61,19 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
   return typeof body.code === 'string' && typeof body.message === 'string';
 }
 
-/** Нужно ли обойтись без сети: код выполняется на сервере и чужой адрес не задан. */
+/**
+ * Браузер всегда ходит на адрес самого сайта: при подключённом бэке сайт пересылает /api/v1/* в него
+ * (./forward.ts). Так бэку не нужен CORS и его адрес может быть внутренним, например http://api:8000.
+ * Сервер сайта ходит в бэк напрямую.
+ */
+function baseOf(options: ClientOptions): string {
+  const fallback = typeof window === 'undefined' ? API_BASE_URL : '';
+  return (options.baseUrl ?? fallback).replace(/\/+$/, '');
+}
+
+/** Нужно ли обойтись без сети: код выполняется на сервере, а бэк не задан (сайт на моках). */
 function runsOnServer(options: ClientOptions): boolean {
-  return typeof window === 'undefined' && !options.baseUrl;
+  return typeof window === 'undefined' && !baseOf(options);
 }
 
 interface RequestSetup {
@@ -69,10 +83,9 @@ interface RequestSetup {
 }
 
 async function request<T>(path: string, options: ClientOptions, setup: RequestSetup = {}): Promise<T> {
-  const base = (options.baseUrl ?? '').replace(/\/+$/, '');
   let response: Response;
   try {
-    response = await fetch(`${base}${API_BASE_PATH}${path}`, {
+    response = await fetch(`${baseOf(options)}${API_BASE_PATH}${path}`, {
       method: setup.method ?? 'GET',
       body: setup.body,
       signal: options.signal,
@@ -145,6 +158,32 @@ export async function askAssistant(
     body: JSON.stringify(payload),
   });
   return fromApiAssistantResponse(response);
+}
+
+/** Тело POST /feedback. `website` — ловушка для ботов: люди оставляют поле пустым. */
+export interface FeedbackPayload {
+  kind: ApplicationKind;
+  event_id: string | null;
+  name: string;
+  contact: string;
+  organization: string | null;
+  text: string;
+  website: string;
+}
+
+/** Ответ 202 на обращение: номер и статус. */
+export interface FeedbackAccepted {
+  id: string;
+  status: string;
+}
+
+/** Заявка организатора, исправление или вопрос с формы сайта. Ошибки полей приходят в ApiClientError.details. */
+export async function sendFeedback(payload: FeedbackPayload, options: ClientOptions = {}): Promise<FeedbackAccepted> {
+  return request<FeedbackAccepted>('/feedback', options, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 /** Проверка, что API отвечает. */

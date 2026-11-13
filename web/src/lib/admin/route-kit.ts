@@ -3,8 +3,10 @@
  * журнал сервера и ответ 500 без подробностей наружу.
  */
 
+import { USES_REMOTE_API } from '../api/config';
 import { internalError, logEvent, requestIdOf } from '../api/http';
 import { requireAdmin } from './auth';
+import { forwardAdmin } from './forward';
 
 export interface AdminContext {
   requestId: string;
@@ -19,7 +21,8 @@ export async function withAdmin(
   try {
     const auth = requireAdmin(request, requestId);
     if (!auth.ok) return auth.response;
-    const response = await handler({ requestId, actor: auth.actor });
+    // Бэк подключён: данные админки живут в нём, сайт только проверяет сессию и пересылает запрос.
+    const response = USES_REMOTE_API ? await forwardAdmin(request, requestId) : await handler({ requestId, actor: auth.actor });
     if (request.method !== 'GET') {
       // В журнал сервера идут метод, адрес и код ответа: без тела запроса и персональных данных.
       logEvent('info', 'admin_request', {
