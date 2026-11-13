@@ -1571,7 +1571,7 @@ paths:
                 - id: 3f98d35c-450f-4cb2-b909-3027dbc5a7a0
                   at: '2026-11-13T15:00:00+05:00'
                   actor: moderator:demo
-                  action: status_change
+                  action: status
                   entity_type: event
                   entity_id: 37f67e9c-7aa5-463c-ab52-16b58ca0beaf
                   changes:
@@ -1595,6 +1595,123 @@ paths:
       - lang: Shell
         label: curl
         source: 'curl "$API/admin/audit?entity_id=37f67e9c-7aa5-463c-ab52-16b58ca0beaf" -H "Authorization: Bearer $ADMIN_TOKEN"'
+  /assistant/query:
+    post:
+      operationId: assistantQuery
+      tags:
+      - assistant
+      summary: ИИ-подбор событий (уровень 3)
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/RequestIdIn'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantQueryRequest'
+      responses:
+        '200':
+          description: Ответ ассистента со списком событий, уточнением или подтверждением.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantQueryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          description: ИИ-ассистент временно отключён или недоступен.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /assistant/confirm:
+    post:
+      operationId: assistantConfirm
+      tags:
+      - assistant
+      summary: Подтверждение или отмена действия ассистента (подписка/отзыв)
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/RequestIdIn'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantConfirmRequest'
+      responses:
+        '200':
+          description: Результат подтверждения или отмены действия.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/traces:
+    get:
+      operationId: adminListTraces
+      tags:
+      - admin
+      summary: Журнал трассировок ИИ-ассистента
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Список последних трассировок.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTraceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /admin/traces/{id}:
+    get:
+      operationId: adminGetTrace
+      tags:
+      - admin
+      summary: Подробная трассировка одного обращения к ИИ-агенту
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/EventId'
+      - $ref: '#/components/parameters/RequestIdIn'
+      responses:
+        '200':
+          description: Подробная запись трассировки с шагами и планом.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTrace'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     bearerAuth:
@@ -2086,6 +2203,10 @@ components:
           minimum: 0
         facets:
           $ref: '#/components/schemas/Facets'
+        applied:
+          type: object
+          description: Активные фильтры, применённые к выборке.
+          additionalProperties: true
         relaxations:
           type: array
           description: Как ослабить условия, если `total = 0`. У каждого варианта посчитанное число событий. Сервер сам условия
@@ -2208,8 +2329,22 @@ components:
             - query
           description: Все ослабленные условия.
         label:
-          type: string
+          oneOf:
+          - type: string
+          - type: object
+            required:
+            - ru
+            - ba
+            properties:
+              ru:
+                type: string
+              ba:
+                type: string
           description: 'Подпись без числа: «Без ограничения цены».'
+        patch:
+          type: object
+          description: Изменение ограничений ассистента для применения ослабления.
+          additionalProperties: true
         query:
           type: object
           description: Параметры `GET /events` с уже ослабленным условием.
@@ -2221,6 +2356,7 @@ components:
             - type: array
               items:
                 type: string
+            - type: 'null'
         count:
           type: integer
           minimum: 1
@@ -2920,5 +3056,209 @@ components:
           type: integer
           minimum: 0
         total_pages:
+          type: integer
+          minimum: 0
+    AssistantQueryRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          maxLength: 1000
+        previous:
+          type: object
+          additionalProperties: true
+        patch:
+          type: object
+          additionalProperties: true
+        answering:
+          type: string
+        history:
+          type: array
+          maxItems: 12
+          items:
+            type: object
+            required:
+            - role
+            - content
+            properties:
+              role:
+                type: string
+                enum:
+                - user
+                - assistant
+              content:
+                type: string
+        user_ref:
+          type: string
+          maxLength: 128
+        channel:
+          type: string
+          enum:
+          - web
+          - telegram
+          - api
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 12
+    AssistantQueryResponse:
+      type: object
+      required:
+      - action
+      - message
+      - constraints
+      - chips
+      - assumptions
+      - reference_date
+      - timezone
+      - engine
+      properties:
+        action:
+          type: string
+          enum:
+          - search
+          - clarify
+          - out_of_scope
+          - confirmation_required
+        message:
+          type: string
+        constraints:
+          type: object
+          additionalProperties: true
+        chips:
+          type: array
+          items:
+            type: object
+        assumptions:
+          type: array
+          items:
+            type: object
+        clarify:
+          type: object
+        results:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+        hidden_unknown_price:
+          type: integer
+        hidden_unknown_age:
+          type: integer
+        relaxations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Relaxation'
+        unsupported_actions:
+          type: array
+          items:
+            type: string
+        confirmation:
+          type: object
+          additionalProperties: true
+        events_query:
+          type: object
+          additionalProperties: true
+        reference_date:
+          type: string
+          format: date
+        timezone:
+          type: string
+        engine:
+          type: string
+    AssistantConfirmRequest:
+      type: object
+      required:
+      - confirmation_id
+      properties:
+        confirmation_id:
+          type: string
+          minLength: 4
+        confirm:
+          type: boolean
+        decision:
+          type: string
+          enum:
+          - approve
+          - reject
+    AgentTrace:
+      type: object
+      required:
+      - id
+      - request_id
+      - created_at
+      - engine
+      - action
+      - user_query_masked
+      - duration_ms
+      - fallback_used
+      properties:
+        id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+        created_at:
+          $ref: ./event.schema.json#/$defs/dateTime
+        channel:
+          type: string
+        user_ref:
+          type:
+          - string
+          - 'null'
+        engine:
+          type: string
+        model:
+          type:
+          - string
+          - 'null'
+        prompt_version:
+          type:
+          - string
+          - 'null'
+        action:
+          type: string
+        user_query_masked:
+          type: string
+        duration_ms:
+          type: integer
+          minimum: 0
+        cost_rub:
+          type:
+          - number
+          - 'null'
+        fallback_used:
+          type: boolean
+        error:
+          type:
+          - string
+          - 'null'
+        grounding_ids:
+          type: array
+          items:
+            type: string
+        token_usage:
+          type:
+          - object
+          - 'null'
+        steps:
+          type: array
+          items:
+            type: object
+        plan:
+          type:
+          - object
+          - 'null'
+    AgentTraceList:
+      type: object
+      required:
+      - items
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentTrace'
+        total:
           type: integer
           minimum: 0

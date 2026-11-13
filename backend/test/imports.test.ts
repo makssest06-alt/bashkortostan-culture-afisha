@@ -88,7 +88,7 @@ describe('Imports Pipeline (CSV / JSON / Multipart / Dedup / Idempotency)', () =
     );
     expect(winterItem).toBeDefined();
     expect(winterItem.event.status).toBe('draft');
-    expect(winterItem.reasons).toContain('price_unknown');
+    expect(winterItem.reasons).toContain('Не указана цена');
 
     // Проверяем, что у свёрнутой карточки Демо-вечера стало 2 источника
     const poetryRow = rep.rows.find((r: { outcome: string }) => r.outcome === 'added');
@@ -118,5 +118,34 @@ describe('Imports Pipeline (CSV / JSON / Multipart / Dedup / Idempotency)', () =
     expect(rep.file_name).toBe('events.csv');
     expect(rep.added).toBe(1);
     expect(rep.rejected).toHaveLength(0);
+  });
+
+  it('imports web ImportTab CSV template with space dates, Russian language name, synthetic=false and intra-file duplicates', async () => {
+    const csv = [
+      'title,category,city,venue,date_start,price_min,price_max,age_limit,language,description,source_url',
+      'Осенний джаз в ГКЗ,concert,Уфа,Государственный концертный зал «Башкортостан»,2026-12-05 19:00,600,1500,6+,русский,Большой вечер башкирского и российского джаза с живым оркестром.,https://example.invalid/jazz-ufa',
+      'Осенний джаз в ГКЗ,concert,Уфа,Государственный концертный зал «Башкортостан»,2026-12-05 19:00,600,1500,6+,русский,Большой вечер башкирского и российского джаза с живым оркестром.,https://example.invalid/jazz-ufa',
+    ].join('\n');
+
+    const res = await ctx.adminReq('/api/v1/admin/imports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+      body: csv,
+    });
+    expect(res.status).toBe(200);
+    const rep = await res.json();
+    validators.assertValid('ImportReport', rep);
+    expect(rep.received).toBe(2);
+    expect(rep.added).toBe(1);
+    expect(rep.unchanged).toBe(1);
+    expect(rep.rejected).toHaveLength(0);
+
+    const addedId = rep.rows.find((r: { outcome: string }) => r.outcome === 'added').id;
+    const cardRes = await ctx.adminReq(`/api/v1/admin/events/${addedId}`);
+    expect(cardRes.status).toBe(200);
+    const card = await cardRes.json();
+    expect(card.synthetic).toBe(false);
+    expect(card.language).toBe('ru');
+    expect(card.date_start).toBe('2026-12-05T19:00:00+05:00');
   });
 });

@@ -15,7 +15,8 @@ import {
   toVenueSlug,
 } from './identity.js';
 import { cleanupExpiredFeedback, KIND_LABEL, type FeedbackKind } from './feedback.js';
-import { formatRfc3339Local } from './time.js';
+import { normalizeLanguage, parseDateField } from './imports.js';
+import { TZ_OFFSET, formatRfc3339Local } from './time.js';
 import type {
   AdminEvent,
   AgeLimit,
@@ -40,8 +41,15 @@ function safeEquals(a: string, b: string): boolean {
 
 function sanitizeActor(raw: string | undefined): string | null {
   if (!raw) return null;
-  const trimmed = raw.trim();
-  return /^[A-Za-z0-9:._-]{2,64}$/.test(trimmed) ? trimmed : null;
+  let decoded = raw.trim();
+  try {
+    if (decoded.includes('%')) decoded = decodeURIComponent(decoded).trim();
+  } catch {
+    // Оставляем исходное значение, если percent-encoding некорректен
+  }
+  const normalized = decoded.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (normalized.length < 2 || normalized.length > 64) return null;
+  return /^[\p{L}\p{N}:._\- ]+$/u.test(normalized) ? normalized : null;
 }
 
 export function checkAdminAuth(
@@ -196,11 +204,68 @@ const EventPatchSchema = z
         reasons: z.array(z.string()).optional(),
       })
       .optional(),
+    expected_updated_at: z.string().trim().min(10).optional(),
   })
   .strict();
 
 function isValidRfc3339(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function coercePatchInt(val: unknown): unknown {
+  if (val === undefined || val === null || typeof val === 'number') return val;
+  if (typeof val !== 'string') return val;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  const cleaned = trimmed.replace(/\s+/g, '').replace(/(₽|руб\.?|р\.?|\+)$/i, '');
+  if (!/^-?\d+$/.test(cleaned)) return val;
+  return Number.parseInt(cleaned, 10);
+}
+
+function coercePatchFloat(val: unknown): unknown {
+  if (val === undefined || val === null || typeof val === 'number') return val;
+  if (typeof val !== 'string') return val;
+  const trimmed = val.trim().replace(',', '.');
+  if (!trimmed) return null;
+  const num = Number(trimmed);
+  return Number.isFinite(num) ? num : val;
+}
+
+function coercePatchDate(val: unknown): unknown {
+  if (val === undefined || val === null || typeof val !== 'string') return val;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  if (isValidRfc3339(trimmed)) return trimmed;
+  const parsed = parseDateField(trimmed, '');
+  if (!parsed) return val;
+  return `${parsed.ymd}T${parsed.hm ?? '00:00'}:00${TZ_OFFSET}`;
+}
+
+function normalizePatchPayload(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...raw };
+  for (const field of ['price_min', 'price_max', 'age_limit', 'duration_min'] as const) {
+    if (field in out) out[field] = coercePatchInt(out[field]);
+  }
+  for (const field of ['lat', 'lon'] as const) {
+    if (field in out) out[field] = coercePatchFloat(out[field]);
+  }
+  for (const field of ['date_start', 'date_end'] as const) {
+    if (field in out) out[field] = coercePatchDate(out[field]);
+  }
+  if ('language' in out) {
+    if (typeof out.language === 'string' && out.language.trim() === '') {
+      out.language = null;
+    } else if (out.language !== null && out.language !== undefined) {
+      const normalized = normalizeLanguage(out.language);
+      if (normalized) out.language = normalized;
+    }
+  }
+  for (const field of ['title_ba', 'address', 'org_link', 'organizer', 'image'] as const) {
+    if (typeof out[field] === 'string' && (out[field] as string).trim() === '') {
+      out[field] = null;
+    }
+  }
+  return out;
 }
 
 export async function patchAdminEvent(
@@ -212,7 +277,7 @@ export async function patchAdminEvent(
   now: Date = new Date(),
 ): Promise<
   | { ok: true; event: AdminEvent; changes: { field: string; from: unknown; to: unknown }[] }
-  | { ok: false; status: 400 | 404 | 412; code: string; message: string; details?: ApiErrorDetail[] }
+  | { ok: false; status: 400 | 404 | 409 | 412; code: string; message: string; details?: ApiErrorDetail[] }
 > {
   if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
     return {
@@ -225,7 +290,8 @@ export async function patchAdminEvent(
   }
 
   const keys = Object.keys(rawBody as Record<string, unknown>);
-  if (keys.length === 0) {
+  const mutableKeys = keys.filter((k) => k !== 'expected_updated_at');
+  if (mutableKeys.length === 0) {
     return {
       ok: false,
       status: 400,
@@ -247,7 +313,8 @@ export async function patchAdminEvent(
     }
   }
 
-  const parsed = EventPatchSchema.safeParse(rawBody);
+  const normalizedBody = normalizePatchPayload(rawBody as Record<string, unknown>);
+  const parsed = EventPatchSchema.safeParse(normalizedBody);
   if (!parsed.success) {
     return {
       ok: false,
@@ -272,6 +339,15 @@ export async function patchAdminEvent(
   }
 
   const current = found.event;
+  const patch = parsed.data;
+  if (!ifMatchHeader && !patch.expected_updated_at) {
+    return {
+      ok: false,
+      status: 409,
+      code: 'conflict',
+      message: 'Передайте заголовок If-Match (ETag) или expected_updated_at для защиты от конфликта правок.',
+    };
+  }
   if (ifMatchHeader && !etagMatches(ifMatchHeader, current.etag)) {
     return {
       ok: false,
@@ -280,8 +356,15 @@ export async function patchAdminEvent(
       message: 'Карточка была изменена другим пользователем. Обновите страницу и повторите правку.',
     };
   }
+  if (patch.expected_updated_at && patch.expected_updated_at !== current.updated_at) {
+    return {
+      ok: false,
+      status: 409,
+      code: 'conflict',
+      message: 'Карточка была изменена другим пользователем. Обновите страницу и повторите правку.',
+    };
+  }
 
-  const patch = parsed.data;
   const details: ApiErrorDetail[] = [];
 
   if (patch.date_start !== undefined && patch.date_start !== null && !isValidRfc3339(patch.date_start)) {
@@ -499,7 +582,7 @@ export async function patchAdminEvent(
           randomUUID(),
           nowIso,
           actor,
-          patch.status !== undefined && changes.length === 1 ? 'status_change' : 'update',
+          patch.status !== undefined && changes.length === 1 ? 'status' : 'update',
           current.id,
           nextTitle,
           JSON.stringify(changes),
@@ -945,17 +1028,76 @@ export async function resetDemoData(
   return { reset: true, events: result.eventsCount };
 }
 
+function parseJsonField<T>(val: unknown, fallback: T): T {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return val as T;
+}
+
+function normalizeTraceRow(row: Record<string, unknown>, includeDetails: boolean) {
+  const base = {
+    id: String(row.id),
+    request_id: String(row.request_id),
+    created_at:
+      row.created_at instanceof Date ? formatRfc3339Local(row.created_at) : String(row.created_at),
+    channel: typeof row.channel === 'string' && row.channel ? row.channel : 'web',
+    user_ref: row.user_ref ? String(row.user_ref) : null,
+    engine: String(row.engine),
+    model: row.model ? String(row.model) : null,
+    prompt_version: row.prompt_version ? String(row.prompt_version) : null,
+    action: String(row.action),
+    user_query_masked: String(row.user_query_masked ?? ''),
+    duration_ms: Number(row.duration_ms ?? 0),
+    cost_rub:
+      row.cost_rub !== null && row.cost_rub !== undefined && Number.isFinite(Number(row.cost_rub))
+        ? Number(row.cost_rub)
+        : null,
+    fallback_used: Boolean(row.fallback_used),
+    error: row.error ? String(row.error) : null,
+    grounding_ids: parseJsonField<string[]>(row.grounding_ids, []),
+    token_usage: parseJsonField<{ prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null>(
+      row.token_usage,
+      null,
+    ),
+  };
+
+  if (!includeDetails) return base;
+  return {
+    ...base,
+    steps: parseJsonField<unknown[]>(row.steps, []),
+    plan: parseJsonField<Record<string, unknown> | null>(row.plan, null),
+  };
+}
+
 export async function listAgentTraces(db: Database, limit = 50) {
-  const res = await db.query(
-    `SELECT id, request_id, created_at, engine, action, user_query_masked, duration_ms, fallback_used, error
-     FROM agent_traces ORDER BY created_at DESC LIMIT $1`,
-    [Math.min(Math.max(1, limit), 100)],
-  );
-  return { items: res.rows, total: res.rows.length };
+  const clamped = Math.min(Math.max(1, limit), 100);
+  const [res, countRes] = await Promise.all([
+    db.query<Record<string, unknown>>(
+      `SELECT id, request_id, created_at, channel, user_ref, engine, model, prompt_version,
+              action, user_query_masked, duration_ms, grounding_ids, token_usage, cost_rub, fallback_used, error
+       FROM agent_traces ORDER BY created_at DESC LIMIT $1`,
+      [clamped],
+    ),
+    db.query<{ cnt: string | number }>('SELECT COUNT(*) AS cnt FROM agent_traces'),
+  ]);
+  const total = Number(countRes.rows[0]?.cnt ?? res.rows.length);
+  return {
+    items: res.rows.map((row) => normalizeTraceRow(row, false)),
+    total,
+  };
 }
 
 export async function getAgentTrace(db: Database, id: string) {
   if (!UUID_PATTERN.test(id)) return null;
-  const res = await db.query('SELECT * FROM agent_traces WHERE id = $1', [id.toLowerCase()]);
-  return res.rows[0] ?? null;
+  const res = await db.query<Record<string, unknown>>('SELECT * FROM agent_traces WHERE id = $1', [
+    id.toLowerCase(),
+  ]);
+  if (!res.rows[0]) return null;
+  return normalizeTraceRow(res.rows[0], true);
 }

@@ -10,7 +10,7 @@ import type { ApiEvent } from '@/lib/api/wire';
 
 import { AdminError, adminFetch, jsonBody } from './api';
 import { Empty, LoadingRows, Notice, StatusPill } from './bits';
-import { categoryLabel, eventWhen } from './format';
+import { categoryLabel, eventWhen, reasonText } from './format';
 
 interface Item {
   event: ApiEvent & { etag: string };
@@ -69,7 +69,7 @@ function Card({ item, titles, onResolved }: { item: Item; titles: Map<string, st
         <p className="text-[0.8125rem] text-fg-soft">Почему спорная</p>
         <ul className="mt-1 flex list-disc flex-col gap-1 pl-5 text-[0.9375rem]">
           {item.reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
+            <li key={reason}>{reasonText(reason)}</li>
           ))}
         </ul>
         <p className="mt-2 text-[0.8125rem] text-fg-soft">

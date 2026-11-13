@@ -1,0 +1,10 @@
+ALTER TABLE agent_traces
+  ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'web',
+  ADD COLUMN IF NOT EXISTS user_ref TEXT,
+  ADD COLUMN IF NOT EXISTS model TEXT,
+  ADD COLUMN IF NOT EXISTS prompt_version TEXT,
+  ADD COLUMN IF NOT EXISTS plan JSONB,
+  ADD COLUMN IF NOT EXISTS cost_rub NUMERIC(10, 4);
+
+CREATE INDEX IF NOT EXISTS idx_agent_traces_created_at
+  ON agent_traces (created_at DESC);

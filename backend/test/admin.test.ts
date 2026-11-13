@@ -44,6 +44,15 @@ describe('Admin, Moderation, Audit, Subscriptions & Feedback Privacy', () => {
     const etag = getRes.headers.get('etag')!;
     expect(etag).toBeTruthy();
 
+    // Отсутствует If-Match и expected_updated_at -> 409
+    const missingPrecondRes = await ctx.adminReq(`/api/v1/admin/events/${target.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price_min: '750' }),
+    });
+    expect(missingPrecondRes.status).toBe(409);
+    validators.assertValid('Error', await missingPrecondRes.json());
+
     // Устаревший If-Match -> 412
     const staleRes = await ctx.adminReq(`/api/v1/admin/events/${target.id}`, {
       method: 'PATCH',
@@ -53,11 +62,15 @@ describe('Admin, Moderation, Audit, Subscriptions & Feedback Privacy', () => {
     expect(staleRes.status).toBe(412);
     validators.assertValid('Error', await staleRes.json());
 
-    // Валидный If-Match -> 200 + audit
+    // Валидный If-Match + строковые числа + кириллический X-Actor -> 200 + audit
     const okRes = await ctx.adminReq(`/api/v1/admin/events/${target.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'If-Match': etag },
-      body: JSON.stringify({ price_min: 750, price_max: 1200 }),
+      headers: {
+        'Content-Type': 'application/json',
+        'If-Match': etag,
+        'X-Actor': encodeURIComponent('Модератор Анна'),
+      },
+      body: JSON.stringify({ price_min: '750', price_max: '1200' }),
     });
     expect(okRes.status).toBe(200);
     const patchBody = await okRes.json();
@@ -70,6 +83,8 @@ describe('Admin, Moderation, Audit, Subscriptions & Feedback Privacy', () => {
     const auditBody = await auditRes.json();
     validators.assertValid('AuditList', auditBody);
     expect(auditBody.total).toBeGreaterThanOrEqual(1);
+    expect(auditBody.items[0].actor).toBe('Модератор Анна');
+    expect(auditBody.items[0].action).toBe('update');
   });
 
   it('supports moderation publish and merge without polluting event.review schema', async () => {

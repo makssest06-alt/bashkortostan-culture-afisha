@@ -19,6 +19,7 @@ import { EventsTab } from './EventsTab';
 import { ImportTab } from './ImportTab';
 import { LoginForm } from './LoginForm';
 import { ModerationTab } from './ModerationTab';
+import { TracesTab } from './TracesTab';
 import { useSession } from './useSession';
 
 const TABS = [
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'moderation', label: 'Спорные' },
   { id: 'applications', label: 'Заявки' },
   { id: 'audit', label: 'Журнал' },
+  { id: 'traces', label: 'Трассы ИИ' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -160,6 +162,7 @@ export function AdminApp() {
             <AuditList />
           </section>
         ) : null}
+        {tab === 'traces' ? <TracesTab /> : null}
       </div>
     </div>
   );

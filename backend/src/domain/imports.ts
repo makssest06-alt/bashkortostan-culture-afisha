@@ -337,20 +337,63 @@ function parseBool(value: unknown): boolean | null {
   return null;
 }
 
-function parseDateField(
+const LANGUAGE_ALIASES: Record<string, string> = {
+  ru: 'ru',
+  rus: 'ru',
+  russian: 'ru',
+  рус: 'ru',
+  русский: 'ru',
+  ba: 'ba',
+  bak: 'ba',
+  bashkir: 'ba',
+  баш: 'ba',
+  башкирский: 'ba',
+  башкорт: 'ba',
+  tt: 'tt',
+  tat: 'tt',
+  tatar: 'tt',
+  тат: 'tt',
+  татарский: 'tt',
+  en: 'en',
+  eng: 'en',
+  english: 'en',
+  анг: 'en',
+  английский: 'en',
+};
+
+export function normalizeLanguage(raw: unknown): string | null {
+  const s = asString(raw).toLowerCase().replace(/\s+/g, '');
+  if (!s) return null;
+  if (LANGUAGE_ALIASES[s]) return LANGUAGE_ALIASES[s];
+  return /^[a-z]{2,3}$/.test(s) ? s : null;
+}
+
+export function parseDateField(
   rawDate: string,
   rawTime: string,
 ): { ymd: string; hm: string | null; precision: TimePrecision } | null {
-  if (!rawDate) return null;
+  const trimmedDate = rawDate.trim();
+  const trimmedTime = rawTime.trim();
+  if (!trimmedDate) return null;
 
-  const isoMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})?$/i.exec(rawDate);
+  const isoMatch = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?(Z|[+-]\d{2}:\d{2})?$/i.exec(
+    trimmedDate,
+  );
   if (isoMatch) {
-    const [, ymd, hm] = isoMatch;
+    let [, ymd, hm, tz] = isoMatch;
     if (!isValidYmd(ymd) || !isValidHm(hm)) return null;
-    if (rawTime && isValidHm(rawTime.slice(0, 5))) {
-      return { ymd, hm: rawTime.slice(0, 5), precision: 'minute' };
+    if (tz && tz !== TZ_OFFSET) {
+      const parsedInstant = new Date(trimmedDate.replace(' ', 'T'));
+      if (!Number.isNaN(parsedInstant.getTime())) {
+        const localIso = formatRfc3339Local(parsedInstant);
+        ymd = localIso.slice(0, 10);
+        hm = localIso.slice(11, 16);
+      }
     }
-    const isMidnightWithoutTime = hm === '00:00' && !rawTime;
+    if (trimmedTime && isValidHm(trimmedTime.slice(0, 5))) {
+      return { ymd, hm: trimmedTime.slice(0, 5), precision: 'minute' };
+    }
+    const isMidnightWithoutTime = hm === '00:00' && !trimmedTime;
     return {
       ymd,
       hm: isMidnightWithoutTime ? null : hm,
@@ -359,21 +402,27 @@ function parseDateField(
   }
 
   let ymd: string | null = null;
-  if (isValidYmd(rawDate)) {
-    ymd = rawDate;
+  let embeddedHm: string | null = null;
+  if (isValidYmd(trimmedDate)) {
+    ymd = trimmedDate;
   } else {
-    const ruMatch = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(rawDate);
+    const ruMatch = /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2})(?::\d{2})?)?$/.exec(trimmedDate);
     if (ruMatch) {
       const candidate = `${ruMatch[3]}-${ruMatch[2]}-${ruMatch[1]}`;
-      if (isValidYmd(candidate)) ymd = candidate;
+      if (isValidYmd(candidate)) {
+        ymd = candidate;
+        if (ruMatch[4] && isValidHm(ruMatch[4])) {
+          embeddedHm = ruMatch[4];
+        }
+      }
     }
   }
   if (!ymd) return null;
 
-  if (rawTime) {
-    const cleanTime = rawTime.slice(0, 5);
-    if (!isValidHm(cleanTime)) return null;
-    return { ymd, hm: cleanTime, precision: 'minute' };
+  const timeCandidate = trimmedTime ? trimmedTime.slice(0, 5) : embeddedHm;
+  if (timeCandidate) {
+    if (!isValidHm(timeCandidate)) return null;
+    return { ymd, hm: timeCandidate, precision: 'minute' };
   }
   return { ymd, hm: null, precision: 'date' };
 }
@@ -740,10 +789,10 @@ function validateAndNormalizeRow(
 
   const description = asString(raw.description);
   const reviewReasons: string[] = [];
-  if (priceMin === null) reviewReasons.push('price_unknown');
-  if (ageLimit === null) reviewReasons.push('age_unknown');
-  if (!matchedVenue) reviewReasons.push('venue_unmatched');
-  if (description.length < 15) reviewReasons.push('missing_description');
+  if (priceMin === null) reviewReasons.push('Не указана цена');
+  if (ageLimit === null) reviewReasons.push('Не указано возрастное ограничение');
+  if (!matchedVenue) reviewReasons.push(`Площадки «${venue}» нет в справочнике`);
+  if (description.length < 15) reviewReasons.push('Нет подробного описания');
 
   const disputed = reviewReasons.length > 0;
   const rawStatus = asString(raw.status);
@@ -757,8 +806,7 @@ function validateAndNormalizeRow(
   const durationNum = Number(asString(raw.duration_min));
   const durationMin = Number.isInteger(durationNum) && durationNum >= 1 ? durationNum : null;
 
-  const rawLang = asString(raw.language).toLowerCase();
-  const language = /^[a-z]{2,3}$/.test(rawLang) ? rawLang : null;
+  const language = normalizeLanguage(raw.language);
 
   const rawSourceType = asString(raw.source_type) as SourceType;
   const sourceType: SourceType = VALID_SOURCE_TYPES.has(rawSourceType) ? rawSourceType : 'import';
@@ -798,7 +846,7 @@ function validateAndNormalizeRow(
     );
 
   const eventId = uuidFromCode(`imp:${sourceUrlRaw}:${sourceHash}`);
-  const synthetic = parseBool(raw.synthetic) ?? true;
+  const synthetic = parseBool(raw.synthetic) ?? false;
   const tags = parseTags(raw.tags);
   if (isFree && !tags.includes('бесплатно')) tags.push('бесплатно');
 

@@ -108,3 +108,51 @@ export function formatRuDay(ymd: string): string {
   ];
   return `${d} ${months[m - 1] ?? ''}`.trim();
 }
+
+export function dateParts(ymd: string): { year: number; month: number; day: number } {
+  const [year, month, day] = ymd.split('-').map(Number);
+  return { year, month, day };
+}
+
+export function makeDate(year: number, month: number, day: number): string {
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+export function endOfMonth(year: number, month: number): string {
+  const dt = new Date(Date.UTC(year, month, 0));
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+}
+
+export function mondayOf(ymd: string): string {
+  const dow = weekdayIndex(ymd);
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return addDays(ymd, diff);
+}
+
+export function minutesToTime(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${pad2(h)}:${pad2(m)}`;
+}
+
+const WEEKDAY_NOM = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+const WEEKDAY_ACC = ['в воскресенье', 'в понедельник', 'во вторник', 'в среду', 'в четверг', 'в пятницу', 'в субботу'];
+
+export function weekdayName(ymd: string): string {
+  return WEEKDAY_NOM[weekdayIndex(ymd)] ?? '';
+}
+
+export function weekdayInRu(ymd: string): string {
+  return WEEKDAY_ACC[weekdayIndex(ymd)] ?? '';
+}
+
+export function formatDateRangeRu(fromYmd: string, toYmd: string): string {
+  if (fromYmd === toYmd) return formatRuDay(fromYmd);
+  const [fy, fm] = fromYmd.split('-').map(Number);
+  const [ty, tm, td] = toYmd.split('-').map(Number);
+  if (fy === ty && fm === tm) {
+    const fromDay = Number(fromYmd.slice(8, 10));
+    return `${fromDay}–${td} ${formatRuDay(toYmd).split(' ')[1] ?? ''}`.trim();
+  }
+  return `${formatRuDay(fromYmd)} – ${formatRuDay(toYmd)}`;
+}

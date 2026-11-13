@@ -56,6 +56,8 @@ export async function createTestContext(
     feedbackRetentionDays: 90,
     metricsRatePerMinute: 60,
     trustProxy: true,
+    llmCostInRubPer1k: 0.015,
+    llmCostOutRubPer1k: 0.06,
     ...overrides,
   };
 

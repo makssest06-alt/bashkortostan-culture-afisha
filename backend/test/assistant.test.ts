@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { MAX_TOOL_CALLS_PER_ANSWER, ToolRuntime } from '../src/domain/assistant/tools.js';
 import {
@@ -184,5 +184,186 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
     const trace = await traceRes.json();
     expect(trace.user_query_masked).not.toContain('secret@example.com');
     expect(trace.user_query_masked).toContain('[email]');
+  });
+
+  it('replays multi-turn history without previous and handles typos, homoglyphs, family budget, and age gating', async () => {
+    const historyRes = await ctx.req('/api/v1/assistant/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: 'Давай бесплатные на выходные',
+        channel: 'telegram',
+        user_ref: 'tg:123456',
+        history: [
+          { role: 'user', content: 'Что посмотреть в Стерлитомак?' },
+          { role: 'assistant', content: 'Уточните категорию.' },
+          { role: 'user', content: 'Интересуют концерты' },
+          { role: 'assistant', content: 'Подобрал концерты в Стерлитамаке.' },
+        ],
+      }),
+    });
+    expect(historyRes.status).toBe(200);
+    const historyBody = await historyRes.json();
+    validators.assertValid('AssistantQueryResponse', historyBody);
+    expect(historyBody.constraints.hard.cities).toContain('sterlitamak');
+    expect(historyBody.constraints.hard.categories_any).toContain('concert');
+    expect(historyBody.constraints.hard.free_only).toBe(true);
+    expect(historyBody.constraints.hard.date).toBeDefined();
+
+    // Homoglyph normalization (Latin 'a' inside 'Уфa') + age gating + family total budget
+    const familyRes = await ctx.req('/api/v1/assistant/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: 'В Уфa мне 17 лет, 2 взрослых и ребёнок 8 лет, бюджет до 1500 ₽ на всех',
+      }),
+    });
+    expect(familyRes.status).toBe(200);
+    const familyBody = await familyRes.json();
+    validators.assertValid('AssistantQueryResponse', familyBody);
+    expect(familyBody.constraints.hard.cities).toContain('ufa');
+    expect(familyBody.constraints.hard.max_total_price).toBe(1500);
+    expect(familyBody.constraints.hard.participants?.adults).toBe(2);
+    expect(familyBody.constraints.hard.participants?.children_count).toBe(1);
+    expect(familyBody.constraints.hard.participants?.children_ages).toContain(8);
+    for (const r of familyBody.results ?? []) {
+      expect(r.event.age_limit).not.toBe(18);
+      expect(r.event.age_limit).not.toBeNull();
+    }
+    expect(
+      (familyBody.assumptions ?? []).some((a: { key?: string }) => a.key === 'mixed_script_normalization'),
+    ).toBe(true);
+  });
+
+  it('runs mocked LLM tool-calling loop with zero-hallucination grounding, cost_rub tracking, trace inspection, and HTTP 500 fallback', async () => {
+    const llmCtx = await createTestContext({
+      llmApiKey: 'test-llm-key',
+      llmModel: 'gpt-4o-mini',
+      llmCostInRubPer1k: 0.015,
+      llmCostOutRubPer1k: 0.06,
+    });
+
+    const originalFetch = globalThis.fetch;
+    let callCount = 0;
+
+    try {
+      const fetchMock = vi.fn(async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return new Response(
+            JSON.stringify({
+              model: 'gpt-4o-mini',
+              usage: { prompt_tokens: 1000, completion_tokens: 500 },
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    content: '',
+                    tool_calls: [
+                      {
+                        id: 'call_search_1',
+                        type: 'function',
+                        function: {
+                          name: 'search_events',
+                          arguments: JSON.stringify({ city_id: 'ufa', limit: 3 }),
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+
+        if (callCount === 2) {
+          // Probe real grounded event id from seeded catalog via API? Even better: ask llmCtx what exists, or return 1 real + 1 fake ID
+          const evRes = await llmCtx.req('/api/v1/events?city_id=ufa&limit=1');
+          const evList = await evRes.json();
+          const realId = evList.items[0].id as string;
+
+          return new Response(
+            JSON.stringify({
+              model: 'gpt-4o-mini',
+              usage: { prompt_tokens: 1000, completion_tokens: 500 },
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    content: JSON.stringify({
+                      message: 'Подобрал мероприятия в Уфе из подтверждённого каталога.',
+                      selected_event_ids: [realId, 'evt-hallucinated-999'],
+                      reasons: {
+                        [realId]: ['Подходит под ваш запрос в Уфе'],
+                        'evt-hallucinated-999': ['Выдуманное событие'],
+                      },
+                    }),
+                  },
+                },
+              ],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+
+        return new Response(JSON.stringify({ error: { message: 'Upstream down' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const llmRes = await llmCtx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Что интересного в Уфе?',
+          channel: 'web',
+          user_ref: 'web-user-1',
+        }),
+      });
+      expect(llmRes.status).toBe(200);
+      const llmBody = await llmRes.json();
+      validators.assertValid('AssistantQueryResponse', llmBody);
+      expect(llmBody.engine).toBe('llm:gpt-4o-mini');
+      expect(llmBody.results?.length).toBeGreaterThanOrEqual(1);
+      expect(
+        llmBody.results?.some((r: { event: { id: string } }) => r.event.id === 'evt-hallucinated-999'),
+      ).toBe(false);
+
+      // Verify full admin traces list & detail
+      const listRes = await llmCtx.adminReq('/api/v1/admin/traces');
+      expect(listRes.status).toBe(200);
+      const listBody = await listRes.json();
+      validators.assertValid('AgentTraceList', listBody);
+      expect(listBody.total).toBeGreaterThanOrEqual(1);
+
+      const traceRes = await llmCtx.adminReq(`/api/v1/admin/traces/${llmBody.trace_id}`);
+      expect(traceRes.status).toBe(200);
+      const trace = await traceRes.json();
+      validators.assertValid('AgentTrace', trace);
+      expect(trace.channel).toBe('web');
+      expect(trace.model).toBe('gpt-4o-mini');
+      expect(trace.prompt_version).toBe('afisha-agent-v2');
+      expect(Array.isArray(trace.steps)).toBe(true);
+      expect(trace.steps.some((s: { tool: string }) => s.tool === 'search_events')).toBe(true);
+      expect(trace.cost_rub).toBeGreaterThan(0);
+
+      // Next call returns HTTP 500 -> graceful rules-fallback-v2
+      const fallbackRes = await llmCtx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Концерты в Уфе' }),
+      });
+      expect(fallbackRes.status).toBe(200);
+      const fallbackBody = await fallbackRes.json();
+      validators.assertValid('AssistantQueryResponse', fallbackBody);
+      expect(fallbackBody.engine).toBe('rules-fallback-v2');
+    } finally {
+      globalThis.fetch = originalFetch;
+      await llmCtx.close();
+    }
   });
 });

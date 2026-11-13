@@ -66,6 +66,8 @@ function formOf(event: AdminEvent): FormState {
 }
 
 /** Изменённые поля в формате API: пустые строки становятся null, числа числами. */
+const NUMERIC_FIELDS = new Set(['price_min', 'price_max', 'age_limit', 'duration_min', 'lat', 'lon']);
+
 function changedFields(before: FormState, after: FormState, datesEditable: boolean): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   const keys = Object.keys(after) as (keyof FormState)[];
@@ -75,7 +77,10 @@ function changedFields(before: FormState, after: FormState, datesEditable: boole
     const value = after[key];
     if (key === 'tags') patch.tags = String(value).split(',').map((tag) => tag.trim()).filter(Boolean);
     else if (key === 'is_free') patch.is_free = value;
-    else if (typeof value === 'string' && value.trim() === '' && key !== 'description') patch[key] = null;
+    else if (NUMERIC_FIELDS.has(key)) {
+      const trimmed = String(value ?? '').trim();
+      patch[key] = trimmed === '' ? null : Number(trimmed);
+    } else if (typeof value === 'string' && value.trim() === '' && key !== 'description') patch[key] = null;
     else patch[key] = value;
   }
   return patch;

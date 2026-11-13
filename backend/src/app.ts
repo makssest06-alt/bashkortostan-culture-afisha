@@ -47,6 +47,7 @@ import { SLUG_PATTERN } from './domain/identity.js';
 import { clientIpFromHeaders, SlidingRateLimiter } from './domain/rate-limit.js';
 import {
   buildCatalogRelaxations,
+  buildAppliedFilters,
   computeOpenApiFacets,
   computeWebFacets,
   findSimilarEvents,
@@ -404,9 +405,12 @@ export function createApp(options: CreateAppOptions) {
         total,
         total_pages: totalPages,
         facets,
+        applied: buildAppliedFilters(f),
         relaxations,
         hidden_unknown_price: searchOutcome.hidden_unknown_price,
         hidden_unknown_age: searchOutcome.hidden_unknown_age,
+        reference_date: today,
+        timezone: 'Asia/Yekaterinburg',
       },
       CACHE_NO_STORE,
     );

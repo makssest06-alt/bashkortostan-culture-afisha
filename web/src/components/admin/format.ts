@@ -50,6 +50,17 @@ export const FIELD_LABEL: Record<string, string> = {
   'review.disputed': 'Спорная',
 };
 
+export const REASON_LABEL: Record<string, string> = {
+  price_unknown: 'Не указана цена',
+  age_unknown: 'Не указано возрастное ограничение',
+  venue_unmatched: 'Площадка не найдена в справочнике',
+  missing_description: 'Нет описания события',
+};
+
+export function reasonText(reason: string): string {
+  return REASON_LABEL[reason] ?? reason;
+}
+
 export function categoryLabel(id: CategoryId | string): string {
   return CATEGORIES.find((entry) => entry.id === id)?.name_one.ru ?? String(id);
 }

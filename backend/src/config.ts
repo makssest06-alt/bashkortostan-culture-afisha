@@ -20,6 +20,14 @@ export interface AppConfig {
   feedbackRetentionDays: number;
   metricsRatePerMinute: number;
   trustProxy: boolean;
+  llmCostInRubPer1k?: number;
+  llmCostOutRubPer1k?: number;
+}
+
+function parseOptionalRate(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const num = Number.parseFloat(raw.trim().replace(',', '.'));
+  return Number.isFinite(num) && num >= 0 ? num : fallback;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -42,5 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     feedbackRetentionDays: Math.max(1, Number.parseInt(env.FEEDBACK_RETENTION_DAYS ?? '90', 10) || 90),
     metricsRatePerMinute: Math.max(10, Number.parseInt(env.METRICS_RATE_LIMIT ?? '120', 10) || 120),
     trustProxy: env.TRUST_PROXY !== '0',
+    llmCostInRubPer1k: parseOptionalRate(env.LLM_COST_IN_RUB_PER_1K, 0.015),
+    llmCostOutRubPer1k: parseOptionalRate(env.LLM_COST_OUT_RUB_PER_1K, 0.06),
   };
 }

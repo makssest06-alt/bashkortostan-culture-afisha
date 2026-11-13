@@ -7,7 +7,7 @@ import type { MetricsRegistry } from '../../observability/metrics.js';
 import type { SlidingRateLimiter } from '../rate-limit.js';
 import { formatRfc3339Local } from '../time.js';
 import type { ApiErrorDetail } from '../types.js';
-import { runLlmAgent } from './llm.js';
+import { PROMPT_VERSION, runLlmAgent } from './llm.js';
 import {
   maskPii,
   MAX_MESSAGE_LENGTH,
@@ -45,10 +45,19 @@ const AssistantRequestSchema = z.object({
     .nullable()
     .optional(),
   answering: ClarifyEnum.nullable().optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().max(MAX_MESSAGE_LENGTH),
+      }),
+    )
+    .max(12)
+    .optional(),
   limit: z.number().int().min(1).max(MAX_RESULT_LIMIT).nullable().optional(),
   confirmation_token: z.string().optional(),
-  user_ref: z.string().optional(),
-  channel: z.enum(['telegram', 'web']).optional(),
+  user_ref: z.string().max(128).optional(),
+  channel: z.enum(['telegram', 'web', 'api']).optional(),
 });
 
 export function parseAssistantRequestBody(
@@ -84,6 +93,7 @@ export function parseAssistantRequestBody(
       previous: parsed.data.previous as AssistantRequest['previous'],
       patch: parsed.data.patch as AssistantRequest['patch'],
       answering: parsed.data.answering ?? undefined,
+      history: parsed.data.history,
       limit: parsed.data.limit ?? undefined,
       confirmation_token: parsed.data.confirmation_token,
       user_ref: parsed.data.user_ref,
@@ -107,11 +117,13 @@ export async function runAssistantPipeline(
   const now = options.now ?? new Date();
   const startedMs = Date.now();
   const traceId = randomUUID();
+  const channel = request.channel ?? 'web';
+  const maskedUserRef = request.user_ref ? maskPii(request.user_ref).slice(0, 64) : null;
 
   const runtime = new ToolRuntime(db, {
     requestId: options.requestId,
     userRef: request.user_ref,
-    channel: request.channel ?? 'web',
+    channel,
     clientIp: options.clientIp,
     confirmationToken: request.confirmation_token,
     rateLimiter: options.rateLimiter,
@@ -122,6 +134,9 @@ export async function runAssistantPipeline(
 
   let payload: AssistantResponsePayload;
   let tokenUsage: Record<string, number> | null = null;
+  let costRub: number | null = null;
+  let modelUsed: string | null = null;
+  let planObj: Record<string, unknown> | null = null;
   let fallbackUsed = false;
   let errorText: string | null = null;
 
@@ -130,13 +145,18 @@ export async function runAssistantPipeline(
       const llmRes = await runLlmAgent(request, config, runtime, now);
       payload = llmRes.response;
       tokenUsage = llmRes.tokenUsage;
+      costRub = llmRes.costRub;
+      modelUsed = config.llmModel;
+      planObj = llmRes.plan;
     } catch (err) {
       fallbackUsed = true;
       errorText = err instanceof Error ? err.message : 'LLM error';
-      payload = await runDeterministicAssistant(request, runtime, now, 'rules-fallback-v1');
+      payload = await runDeterministicAssistant(request, runtime, now, 'rules-fallback-v2');
+      planObj = { constraints: payload.constraints, fallback: true };
     }
   } else {
-    payload = await runDeterministicAssistant(request, runtime, now, 'rules-v1');
+    payload = await runDeterministicAssistant(request, runtime, now, 'rules-v2');
+    planObj = { constraints: payload.constraints };
   }
 
   payload.trace_id = traceId;
@@ -144,20 +164,26 @@ export async function runAssistantPipeline(
 
   await db.query(
     `INSERT INTO agent_traces (
-       id, request_id, created_at, engine, action, user_query_masked,
-       duration_ms, steps, grounding_ids, token_usage, fallback_used, error
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12)`,
+       id, request_id, created_at, channel, user_ref, engine, model, prompt_version, action,
+       user_query_masked, duration_ms, steps, grounding_ids, token_usage, plan, cost_rub, fallback_used, error
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15::jsonb,$16,$17,$18)`,
     [
       traceId,
       options.requestId,
       formatRfc3339Local(now),
+      channel,
+      maskedUserRef,
       payload.engine,
+      modelUsed,
+      PROMPT_VERSION,
       payload.action,
       request.message ? maskPii(request.message) : null,
       durationMs,
       JSON.stringify(runtime.steps),
       JSON.stringify([...runtime.groundedIds]),
       tokenUsage ? JSON.stringify(tokenUsage) : null,
+      planObj ? JSON.stringify(planObj) : null,
+      costRub,
       fallbackUsed,
       errorText,
     ],

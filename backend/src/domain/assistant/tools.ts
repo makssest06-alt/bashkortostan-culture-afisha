@@ -15,6 +15,7 @@ import {
   parseEventsSearchParams,
   runCatalogSearch,
   toListItem,
+  type EventsSearchFilters,
 } from '../search.js';
 import { createSubscription } from '../subscriptions.js';
 import { daysBetween, formatRfc3339Local, isValidYmd, localNow } from '../time.js';
@@ -23,6 +24,7 @@ import type { ApiEvent, CategoryId, CityId, DatePreset } from '../types.js';
 export const MAX_TOOL_CALLS_PER_ANSWER = 5;
 export const DESCRIPTION_MAX_CHARS = 300;
 export const CONFIRMATION_TTL_SECONDS = 600;
+export const TOOL_TIMEOUT_MS = 3000;
 
 export interface ToolError {
   code:
@@ -59,7 +61,7 @@ export interface TraceStep {
 export interface ToolRuntimeContext {
   requestId: string;
   userRef?: string;
-  channel?: 'telegram' | 'web';
+  channel?: 'telegram' | 'web' | 'api';
   clientIp?: string;
   confirmationToken?: string;
   confirmPayload?: {
@@ -75,7 +77,11 @@ export interface ToolRuntimeContext {
 
 /** Ограниченное представление события для контекста языковой модели (model_view из contracts/agent_tools.json). */
 export function toModelViewEvent(ev: ApiEvent): Record<string, unknown> {
-  const rawDesc = ev.description ?? '';
+  const rawDesc = (ev.description ?? '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/[<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   const trimmedDesc =
     rawDesc.length > DESCRIPTION_MAX_CHARS
       ? `${rawDesc.slice(0, DESCRIPTION_MAX_CHARS - 1)}…`
@@ -128,9 +134,17 @@ export const AGENT_TOOL_DEFINITIONS = [
           date_to: { type: 'string' },
           time_from: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' },
           time_to: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' },
+          fits_from: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' },
+          fits_to: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' },
+          category_exclude: {
+            type: 'array',
+            items: { enum: ['concert', 'performance', 'exhibition', 'festival', 'cinema', 'excursion', 'other'] },
+            maxItems: 7,
+          },
           price_max: { type: 'integer', minimum: 0 },
           free: { type: 'boolean' },
           age: { type: 'integer', minimum: 0, maximum: 120 },
+          age_rating: { type: 'array', items: { enum: ['0+', '6+', '12+', '16+', '18+'] }, maxItems: 5 },
           venue_id: { type: 'string', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
           language: { type: 'string', pattern: '^[a-z]{2,3}$' },
           q: { type: 'string', minLength: 1, maxLength: 200 },
@@ -243,9 +257,16 @@ const SearchSchema = z
     date_to: z.string().optional(),
     time_from: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
     time_to: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+    fits_from: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+    fits_to: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+    category_exclude: z
+      .array(z.enum(['concert', 'performance', 'exhibition', 'festival', 'cinema', 'excursion', 'other']))
+      .max(7)
+      .optional(),
     price_max: z.number().int().min(0).optional(),
     free: z.boolean().optional(),
     age: z.number().int().min(0).max(120).optional(),
+    age_rating: z.array(z.enum(['0+', '6+', '12+', '16+', '18+'])).max(5).optional(),
     venue_id: z.string().regex(SLUG_PATTERN).optional(),
     language: z.string().regex(/^[a-z]{2,3}$/).optional(),
     q: z.string().min(1).max(200).optional(),
@@ -274,15 +295,59 @@ const FeedbackToolSchema = z
 export class ToolRuntime {
   readonly steps: TraceStep[] = [];
   readonly groundedIds = new Set<string>();
+  readonly groundedEvents = new Map<string, ApiEvent>();
   private callCount = 0;
+  private readonly timeoutMs: number;
 
   constructor(
     private readonly db: Database,
-    private readonly ctx: ToolRuntimeContext,
-  ) {}
+    private readonly ctx: ToolRuntimeContext & { timeoutMs?: number },
+  ) {
+    this.timeoutMs = Math.max(50, ctx.timeoutMs ?? TOOL_TIMEOUT_MS);
+  }
 
   get callsUsed(): number {
     return this.callCount;
+  }
+
+  async searchWithConstraints(filters: EventsSearchFilters, today: string) {
+    const startMs = Date.now();
+    const now = this.ctx.now ?? new Date();
+    this.callCount += 1;
+    const { events } = await loadAllEvents(this.db, { statuses: ['published'], now });
+    const outcome = runCatalogSearch(events, filters);
+    const items = outcome.matches.map(toListItem);
+    const returnedIds = items.slice(0, filters.page_size).map((item) => item.id);
+    for (const item of items.slice(0, filters.page_size)) {
+      this.groundedIds.add(item.id);
+      this.groundedEvents.set(item.id, item);
+    }
+    const relaxations = items.length === 0 ? buildCatalogRelaxations(events, filters, today) : [];
+    this.steps.push({
+      step: this.callCount,
+      tool: 'search_events',
+      args: {
+        city: filters.cities,
+        category: filters.categories,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        price_max: filters.price_max,
+        max_total_price: filters.max_total_price ?? null,
+        free_only: filters.free_only,
+        age: filters.age,
+        q: filters.q,
+      },
+      ok: true,
+      duration_ms: Date.now() - startMs,
+      returned_ids: returnedIds,
+    });
+    return { outcome, items, allEvents: events, relaxations };
+  }
+
+  async getAllPublishedEvents(): Promise<ApiEvent[]> {
+    const now = this.ctx.now ?? new Date();
+    const { events } = await loadAllEvents(this.db, { statuses: ['published'], now });
+    return events;
   }
 
   async execute(name: string, rawArgs: unknown): Promise<ToolResult<unknown>> {
@@ -311,7 +376,18 @@ export class ToolRuntime {
     const returnedIds: string[] = [];
 
     try {
-      const result = await this.dispatch(name, rawArgs, returnedIds);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const result = await Promise.race([
+        this.dispatch(name, rawArgs, returnedIds),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(Object.assign(new Error(`Превышено время ожидания инструмента (${this.timeoutMs} мс)`), { code: 'timeout' }));
+          }, this.timeoutMs);
+        }),
+      ]).finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+
       for (const id of returnedIds) this.groundedIds.add(id);
       this.steps.push({
         step: this.callCount,
@@ -324,11 +400,12 @@ export class ToolRuntime {
       });
       return result;
     } catch (error) {
+      const isTimeout = Boolean(error && typeof error === 'object' && (error as { code?: string }).code === 'timeout');
       const err: ToolError = {
-        code: 'internal_error',
+        code: isTimeout ? 'timeout' : 'internal_error',
         message: error instanceof Error ? error.message : 'Ошибка выполнения инструмента',
-        retryable: false,
-        http_status: 500,
+        retryable: isTimeout,
+        http_status: isTimeout ? 504 : 500,
         request_id: this.ctx.requestId,
       };
       this.steps.push({
@@ -361,14 +438,18 @@ export class ToolRuntime {
       const url = new URL('http://local/events');
       if (p.city?.length) url.searchParams.set('city', p.city.join(','));
       if (p.category?.length) url.searchParams.set('category', p.category.join(','));
+      if (p.category_exclude?.length) url.searchParams.set('category_exclude', p.category_exclude.join(','));
       if (p.date) url.searchParams.set('date', p.date);
       if (p.date_from) url.searchParams.set('date_from', p.date_from);
       if (p.date_to) url.searchParams.set('date_to', p.date_to);
       if (p.time_from) url.searchParams.set('time_from', p.time_from);
       if (p.time_to) url.searchParams.set('time_to', p.time_to);
+      if (p.fits_from) url.searchParams.set('fits_from', p.fits_from);
+      if (p.fits_to) url.searchParams.set('fits_to', p.fits_to);
       if (p.price_max !== undefined) url.searchParams.set('price_max', String(p.price_max));
       if (p.free !== undefined) url.searchParams.set('free', String(p.free));
       if (p.age !== undefined) url.searchParams.set('age', String(p.age));
+      if (p.age_rating?.length) url.searchParams.set('age_rating', p.age_rating.join(','));
       if (p.venue_id) url.searchParams.set('venue_id', p.venue_id);
       if (p.language) url.searchParams.set('language', p.language);
       if (p.q) url.searchParams.set('q', p.q);
@@ -388,7 +469,10 @@ export class ToolRuntime {
       const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
       const offset = (validated.filters.page - 1) * pageSize;
       const slice = searchOutcome.matches.slice(offset, offset + pageSize).map(toListItem);
-      for (const item of slice) returnedIds.push(item.id);
+      for (const item of slice) {
+        returnedIds.push(item.id);
+        this.groundedEvents.set(item.id, item);
+      }
 
       const relaxations =
         total === 0 ? buildCatalogRelaxations(events, validated.filters, today) : [];
@@ -432,6 +516,7 @@ export class ToolRuntime {
         };
       }
       returnedIds.push(res.event.id);
+      this.groundedEvents.set(res.event.id, res.event);
       return { ok: true, data: res.event };
     }
 
@@ -472,7 +557,10 @@ export class ToolRuntime {
         date_to: dateTo,
         limit: pageSize,
       });
-      for (const item of similar) returnedIds.push(item.id);
+      for (const item of similar) {
+        returnedIds.push(item.id);
+        this.groundedEvents.set(item.id, item);
+      }
       return {
         ok: true,
         data: {
@@ -545,7 +633,10 @@ export class ToolRuntime {
           page_size: 50,
         },
       ).matches.map((m) => m.event);
-      for (const ev of matched) returnedIds.push(ev.id);
+      for (const ev of matched) {
+        returnedIds.push(ev.id);
+        this.groundedEvents.set(ev.id, ev);
+      }
 
       return {
         ok: true,
@@ -711,7 +802,8 @@ export async function confirmPendingAction(
   if (typeof token !== 'string' || !token.startsWith('cnf_')) {
     return invalidArgs('Передайте корректный confirmation_id', ctx.requestId);
   }
-  const confirm = (body as { confirm?: unknown })?.confirm;
+  const bodyObj = (body as { confirm?: unknown; decision?: unknown }) ?? {};
+  const rejected = bodyObj.confirm === false || bodyObj.decision === 'reject';
   const res = await db.query<{
     token: string;
     action: 'subscribe' | 'save_feedback';
@@ -763,18 +855,16 @@ export async function confirmPendingAction(
     };
   }
 
-  if (confirm === false) {
+  if (rejected) {
     await db.query('UPDATE agent_confirmations SET used_at = $2 WHERE token = $1', [
       token,
       formatRfc3339Local(now),
     ]);
     return {
-      ok: false,
-      error: {
-        code: 'confirmation_declined',
+      ok: true,
+      data: {
+        status: 'rejected',
         message: 'Действие отменено пользователем',
-        retryable: false,
-        request_id: ctx.requestId,
       },
     };
   }

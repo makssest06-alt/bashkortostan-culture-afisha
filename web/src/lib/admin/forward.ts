@@ -13,11 +13,14 @@ import { configuredAdminToken } from './auth';
 /** Импорт большого файла бэк может разбирать дольше обычного запроса. */
 const ADMIN_TIMEOUT_MS = 30_000;
 
-export function forwardAdmin(request: Request, requestId: string): Promise<Response> {
+export function forwardAdmin(request: Request, requestId: string, actor?: string): Promise<Response> {
   const token = configuredAdminToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (actor) headers['X-Actor'] = encodeURIComponent(actor);
   return forwardToBackend(request, {
     requestId,
     timeoutMs: ADMIN_TIMEOUT_MS,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
   });
 }

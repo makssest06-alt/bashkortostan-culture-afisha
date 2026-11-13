@@ -14,6 +14,35 @@ import type {
   SortKey,
 } from './types.js';
 
+export interface SoftFilterHints {
+  semantic_query?: string;
+  preferences?: string[];
+  preferred_categories?: string[];
+  category_priority?: string[];
+  avoid_categories?: string[];
+  price_direction?: 'lower';
+  prefer_free?: boolean;
+  less_travel?: boolean;
+  audience?: string;
+}
+
+export interface PartyParticipantsFilter {
+  total?: number;
+  adults?: number;
+  children_count?: number;
+  children_ages?: number[];
+  participant_ages?: number[];
+}
+
+export interface ConstraintsPatchShape {
+  reset: boolean;
+  set: {
+    hard?: Record<string, unknown>;
+    soft?: Record<string, unknown>;
+  };
+  unset: string[];
+}
+
 export interface EventsSearchFilters {
   cities: CityId[];
   categories: CategoryId[];
@@ -23,16 +52,25 @@ export interface EventsSearchFilters {
   date_to: string | null;
   time_from: string | null;
   time_to: string | null;
+  fits_from?: string | null;
+  fits_to?: string | null;
   price_max: number | null;
+  max_total_price?: number | null;
+  participants?: PartyParticipantsFilter | null;
   free_only: boolean;
   age: number | null;
   age_ratings: string[];
   audience: 'kids' | null;
   venue_id: string | null;
+  venue_query?: string | null;
+  geo_query?: string | null;
+  title_query?: string | null;
+  topic_query?: string | null;
   language: string | null;
   statuses: OccurrenceStatus[];
   statuses_explicit: boolean;
   q: string | null;
+  soft?: SoftFilterHints | null;
   sort: SortKey;
   page: number;
   page_size: number;
@@ -159,6 +197,28 @@ export function parseEventsSearchParams(
     issues.push({ field: 'time_to', message: 'Время time_to не может быть раньше time_from' });
   }
 
+  const fitsFrom = readSingleParam(url, 'fits_from') ?? null;
+  if (fitsFrom && !isValidHm(fitsFrom)) {
+    issues.push({ field: 'fits_from', message: 'Параметр fits_from должен быть в формате ЧЧ:ММ' });
+  }
+  const fitsTo = readSingleParam(url, 'fits_to') ?? null;
+  if (fitsTo && !isValidHm(fitsTo)) {
+    issues.push({ field: 'fits_to', message: 'Параметр fits_to должен быть в формате ЧЧ:ММ' });
+  }
+  if (fitsFrom && fitsTo && isValidHm(fitsFrom) && isValidHm(fitsTo) && fitsFrom > fitsTo) {
+    issues.push({ field: 'fits_to', message: 'Время fits_to не может быть раньше fits_from' });
+  }
+
+  const catsExcludeRaw = readListParam(url, 'category_exclude');
+  for (const cat of catsExcludeRaw) {
+    if (!isCategoryId(cat)) {
+      issues.push({
+        field: 'category_exclude',
+        message: `Неизвестная категория «${cat}»`,
+      });
+    }
+  }
+
   const priceMax = parseIntParam(url, 'price_max', 0, 1_000_000, issues) ?? null;
   const freeBool = parseBoolParam(url, 'free', issues);
   const freeOnlyBool = parseBoolParam(url, 'free_only', issues);
@@ -225,12 +285,14 @@ export function parseEventsSearchParams(
     filters: {
       cities: citiesRaw as CityId[],
       categories: catsRaw as CategoryId[],
-      categories_exclude: [],
+      categories_exclude: catsExcludeRaw as CategoryId[],
       date_preset: datePreset,
       date_from: dateFrom,
       date_to: dateTo,
       time_from: timeFrom,
       time_to: timeTo,
+      fits_from: fitsFrom,
+      fits_to: fitsTo,
       price_max: priceMax,
       free_only: freeOnly,
       age,
@@ -248,7 +310,23 @@ export function parseEventsSearchParams(
   };
 }
 
-export function occurrenceMatches(occ: ApiOccurrence, f: EventsSearchFilters): boolean {
+function hmToMinutes(hm: string): number {
+  const [h, m] = hm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minutesToHm(mins: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, mins));
+  const h = String(Math.floor(clamped / 60)).padStart(2, '0');
+  const m = String(clamped % 60).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+export function occurrenceMatches(
+  occ: ApiOccurrence,
+  f: EventsSearchFilters,
+  fallbackDurationMin?: number | null,
+): boolean {
   if (occ.is_past) return false;
   if (!f.statuses.includes(occ.status)) return false;
 
@@ -273,12 +351,41 @@ export function occurrenceMatches(occ: ApiOccurrence, f: EventsSearchFilters): b
     if (f.time_to && hm > f.time_to) return false;
   }
 
+  if (f.fits_from || f.fits_to) {
+    if (occ.time_precision !== 'minute') return false;
+    const startHm = occ.date_start.slice(11, 16);
+    if (f.fits_from && startHm < f.fits_from) return false;
+    let endHm: string;
+    if (occ.date_end && occ.date_end.slice(0, 10) === startYmd) {
+      endHm = occ.date_end.slice(11, 16);
+    } else if (occ.date_end && occ.date_end.slice(0, 10) > startYmd) {
+      endHm = '23:59';
+    } else {
+      endHm = minutesToHm(hmToMinutes(startHm) + (fallbackDurationMin ?? 90));
+    }
+    if (f.fits_to && endHm > f.fits_to) return false;
+  }
+
   return true;
 }
 
-function textMatchesEvent(event: ApiEvent, query: string): boolean {
+function stemToken(word: string): string {
+  const w = normalizeText(word);
+  if (w.length >= 6) return w.slice(0, w.length - 2);
+  if (w.length >= 4) return w.slice(0, w.length - 1);
+  return w;
+}
+
+function textMatchesFields(haystack: string, query: string): boolean {
   const needle = normalizeText(query);
   if (!needle) return true;
+  if (haystack.includes(needle)) return true;
+  const words = needle.split(/\s+/).filter((w) => w.length >= 2);
+  if (words.length === 0) return true;
+  return words.every((w) => haystack.includes(w) || haystack.includes(stemToken(w)));
+}
+
+function textMatchesEvent(event: ApiEvent, query: string): boolean {
   const haystack = normalizeText(
     [
       event.title,
@@ -286,20 +393,95 @@ function textMatchesEvent(event: ApiEvent, query: string): boolean {
       event.title_ba ?? '',
       event.description,
       event.venue,
+      event.address ?? '',
       event.city,
       event.tags.join(' '),
       event.organizer ?? '',
     ].join(' '),
   );
-  if (haystack.includes(needle)) return true;
-  const words = needle.split(/\s+/).filter(Boolean);
-  return words.length > 1 && words.every((w) => haystack.includes(w));
+  return textMatchesFields(haystack, query);
+}
+
+export function computePartyCost(
+  event: ApiEvent,
+  participants?: PartyParticipantsFilter | null,
+): number | null {
+  if (event.is_free) return 0;
+  if (event.price_min === null) return null;
+
+  const childrenCount =
+    participants?.children_count ?? participants?.children_ages?.length ?? 0;
+  const totalCount =
+    participants?.total ??
+    (participants?.adults !== undefined || childrenCount > 0
+      ? (participants?.adults ?? 0) + childrenCount
+      : 1);
+  const adultsCount = participants?.adults ?? Math.max(0, totalCount - childrenCount);
+
+  if (totalCount <= 1 && childrenCount === 0) return event.price_min;
+
+  const offers = event.offers ?? [];
+  const childPrices = offers
+    .filter((o) => o.audience === 'child' || o.audience === 'reduced')
+    .map((o) => (o.is_free ? 0 : o.price))
+    .filter((p): p is number => p !== null);
+  const adultPrices = offers
+    .filter((o) => o.audience === 'adult' || !o.audience)
+    .map((o) => (o.is_free ? 0 : o.price))
+    .filter((p): p is number => p !== null);
+
+  const unitAdult = adultPrices.length > 0 ? Math.min(...adultPrices) : event.price_min;
+  const unitChild = childPrices.length > 0 ? Math.min(...childPrices) : event.price_min;
+
+  return adultsCount * unitAdult + childrenCount * unitChild;
+}
+
+function computeSoftScore(event: ApiEvent, soft?: SoftFilterHints | null): number {
+  if (!soft) return 0;
+  let score = 0;
+
+  if (soft.preferred_categories?.includes(event.category)) score += 6;
+  if (soft.category_priority) {
+    const idx = soft.category_priority.indexOf(event.category);
+    if (idx !== -1) score += Math.max(2, 10 - idx * 3);
+  }
+  if (soft.avoid_categories?.includes(event.category)) score -= 8;
+
+  if (soft.prefer_free || soft.price_direction === 'lower') {
+    if (event.is_free) score += 7;
+    else if (event.price_min !== null) {
+      if (event.price_min <= 300) score += 4;
+      else if (event.price_min <= 700) score += 2;
+      else score -= 1;
+    }
+  }
+
+  if (soft.preferences?.includes('family_friendly') || soft.audience === 'kids') {
+    const hasKidsTag = event.tags.some((t) => /дет|семь|семейн|сказ/i.test(t));
+    if (hasKidsTag) score += 4;
+    if (event.age_limit !== null && event.age_limit <= 6) score += 3;
+  }
+
+  if (soft.semantic_query) {
+    const haystack = normalizeText(
+      [event.title, event.description, event.tags.join(' '), event.venue, event.category].join(' '),
+    );
+    const words = normalizeText(soft.semantic_query)
+      .split(/\s+/)
+      .filter((w) => w.length >= 3);
+    for (const w of words) {
+      if (haystack.includes(w) || haystack.includes(stemToken(w))) score += 4;
+    }
+  }
+
+  return score;
 }
 
 export interface SearchMatch {
   event: ApiEvent;
   matchedOccurrences: ApiOccurrence[];
   primaryOccurrence: ApiOccurrence;
+  score?: number;
 }
 
 export interface SearchOutcome {
@@ -324,19 +506,36 @@ export function runCatalogSearch(events: readonly ApiEvent[], f: EventsSearchFil
       const hasKidsTag = event.tags.some((t) => normalizeText(t) === 'дети');
       if (!hasKidsTag && event.age_limit !== 0 && event.age_limit !== 6) continue;
     }
+    if (f.venue_query) {
+      const venueHay = normalizeText(`${event.venue} ${event.address ?? ''}`);
+      if (!textMatchesFields(venueHay, f.venue_query)) continue;
+    }
+    if (f.geo_query) {
+      const geoHay = normalizeText(`${event.city} ${event.address ?? ''} ${event.venue} ${event.description} ${event.tags.join(' ')}`);
+      if (!textMatchesFields(geoHay, f.geo_query)) continue;
+    }
+    if (f.title_query) {
+      const titleHay = normalizeText(`${event.title} ${event.title_ba ?? ''} ${event.tags.join(' ')}`);
+      if (!textMatchesFields(titleHay, f.title_query)) continue;
+    }
+    if (f.topic_query && !textMatchesEvent(event, f.topic_query)) continue;
     if (f.q && !textMatchesEvent(event, f.q)) continue;
 
-    const matchedOccs = event.occurrences.filter((occ) => occurrenceMatches(occ, f));
+    const matchedOccs = event.occurrences.filter((occ) => occurrenceMatches(occ, f, event.duration_min));
     if (matchedOccs.length === 0) continue;
 
     // Неизвестная цена (null) НЕ считается 0 / бесплатно и учитывается отдельно
-    if (f.free_only || f.price_max !== null) {
+    if (f.free_only || f.price_max !== null || (f.max_total_price !== undefined && f.max_total_price !== null)) {
       if (event.price_min === null) {
         hiddenUnknownPrice += 1;
         continue;
       }
       if (f.free_only && !event.is_free) continue;
       if (f.price_max !== null && event.price_min > f.price_max) continue;
+      if (f.max_total_price !== undefined && f.max_total_price !== null) {
+        const partyCost = computePartyCost(event, f.participants);
+        if (partyCost === null || partyCost > f.max_total_price) continue;
+      }
     }
 
     // Неизвестный возраст (null) НЕ считается 0+ и учитывается отдельно
@@ -353,10 +552,13 @@ export function runCatalogSearch(events: readonly ApiEvent[], f: EventsSearchFil
       event,
       matchedOccurrences: matchedOccs,
       primaryOccurrence: matchedOccs[0],
+      score: computeSoftScore(event, f.soft),
     });
   }
 
   matches.sort((a, b) => {
+    const scoreDiff = (b.score ?? 0) - (a.score ?? 0);
+    if (scoreDiff !== 0) return scoreDiff;
     if (f.sort === 'price') {
       const pa = a.event.price_min === null ? Number.MAX_SAFE_INTEGER : a.event.price_min;
       const pb = b.event.price_min === null ? Number.MAX_SAFE_INTEGER : b.event.price_min;
@@ -485,10 +687,50 @@ function toBaseWebQuery(f: EventsSearchFilters): Record<string, unknown> {
   return q;
 }
 
+export function buildAppliedFilters(f: EventsSearchFilters) {
+  const active: string[] = [];
+  if (f.cities.length > 0) active.push('city');
+  if (f.categories.length > 0) active.push('category');
+  if (f.date_preset) active.push('date');
+  else if (f.date_from || f.date_to) {
+    if (f.date_from) active.push('date_from');
+    if (f.date_to) active.push('date_to');
+  }
+  if (f.time_from) active.push('time_from');
+  if (f.time_to) active.push('time_to');
+  if (f.price_max !== null) active.push('price_max');
+  if (f.free_only) active.push('free_only');
+  if (f.age !== null) active.push('age');
+  if (f.age_ratings.length > 0) active.push('age_rating');
+  if (f.audience) active.push('audience');
+  if (f.statuses_explicit) active.push('status');
+  if (f.q) active.push('q');
+
+  return {
+    city: [...f.cities],
+    category: [...f.categories],
+    date: f.date_preset,
+    date_from: f.date_from,
+    date_to: f.date_to,
+    time_from: f.time_from,
+    time_to: f.time_to,
+    price_max: f.price_max,
+    free_only: f.free_only,
+    age: f.age,
+    age_rating: [...f.age_ratings],
+    audience: f.audience,
+    status: [...f.statuses],
+    q: f.q,
+    sort: f.sort,
+    active,
+  };
+}
+
 export interface ApiRelaxation {
   code: 'date' | 'time' | 'budget' | 'city' | 'venue' | 'category' | 'age' | 'status' | 'query';
   codes: Array<'date' | 'time' | 'budget' | 'city' | 'venue' | 'category' | 'age' | 'status' | 'query'>;
-  label: string | LocalizedText;
+  label: LocalizedText;
+  patch: ConstraintsPatchShape;
   query: Record<string, unknown>;
   count: number;
 }
@@ -502,30 +744,39 @@ export function buildCatalogRelaxations(
   const baseQuery = toBaseWebQuery(f);
   const candidates: Array<{
     code: ApiRelaxation['code'];
-    label: string;
+    label: LocalizedText;
+    patch: ConstraintsPatchShape;
     next: EventsSearchFilters;
     queryMutate: (q: Record<string, unknown>) => void;
     removal: boolean;
   }> = [];
 
-  if (f.q) {
+  if (f.q || f.title_query || f.topic_query || f.soft?.semantic_query) {
     candidates.push({
       code: 'query',
-      label: 'Без поискового запроса',
-      next: { ...f, q: null },
+      label: { ru: 'Без поискового запроса', ba: 'Эҙләү һорауынан башҡа' },
+      patch: {
+        reset: false,
+        set: {},
+        unset: ['soft.semantic_query', 'hard.title_query', 'hard.topic_query'],
+      },
+      next: { ...f, q: null, title_query: null, topic_query: null, soft: f.soft ? { ...f.soft, semantic_query: undefined } : f.soft },
       queryMutate: (q) => delete q.q,
       removal: true,
     });
   }
 
-  if (f.time_from || f.time_to) {
+  if (f.time_from || f.time_to || f.fits_from || f.fits_to) {
     candidates.push({
       code: 'time',
-      label: 'В любое время',
-      next: { ...f, time_from: null, time_to: null },
+      label: { ru: 'В любое время', ba: 'Теләһә ҡайһы ваҡытта' },
+      patch: { reset: false, set: {}, unset: ['hard.time'] },
+      next: { ...f, time_from: null, time_to: null, fits_from: null, fits_to: null },
       queryMutate: (q) => {
         delete q.time_from;
         delete q.time_to;
+        delete q.fits_from;
+        delete q.fits_to;
       },
       removal: true,
     });
@@ -540,9 +791,11 @@ export function buildCatalogRelaxations(
         (d) => runCatalogSearch(events, { ...f, date_preset: null, date_from: d, date_to: d }).matches.length > 0,
       );
       if (found) {
+        const dayStr = formatRuDay(found);
         candidates.push({
           code: 'date',
-          label: `Другая дата: ${formatRuDay(found)}`,
+          label: { ru: `Другая дата: ${dayStr}`, ba: `Башҡа көн: ${dayStr}` },
+          patch: { reset: false, set: { hard: { date: { from: found, to: found } } }, unset: [] },
           next: { ...f, date_preset: null, date_from: found, date_to: found },
           queryMutate: (q) => {
             delete q.date;
@@ -556,7 +809,8 @@ export function buildCatalogRelaxations(
     }
     candidates.push({
       code: 'date',
-      label: 'В любой день',
+      label: { ru: 'В любой день', ba: 'Теләһә ҡайһы көндә' },
+      patch: { reset: false, set: {}, unset: ['hard.date'] },
       next: { ...f, date_preset: null, date_from: null, date_to: null },
       queryMutate: (q) => {
         delete q.date;
@@ -568,7 +822,7 @@ export function buildCatalogRelaxations(
   }
 
   if (f.price_max !== null && !f.free_only) {
-    const noPrice = runCatalogSearch(events, { ...f, price_max: null, free_only: false }).matches;
+    const noPrice = runCatalogSearch(events, { ...f, price_max: null, max_total_price: null, free_only: false }).matches;
     const higher = noPrice
       .map((m) => m.event.price_min)
       .filter((p): p is number => p !== null && p > (f.price_max as number));
@@ -576,8 +830,13 @@ export function buildCatalogRelaxations(
       const raised = Math.ceil(Math.min(...higher) / 100) * 100;
       candidates.push({
         code: 'budget',
-        label: `До ${raised} ₽`,
-        next: { ...f, price_max: raised },
+        label: { ru: `До ${raised} ₽`, ba: `${raised} ₽ тиклем` },
+        patch: {
+          reset: false,
+          set: { hard: { max_price_per_person: raised } },
+          unset: ['hard.max_total_price', 'hard.free_only'],
+        },
+        next: { ...f, price_max: raised, max_total_price: null },
         queryMutate: (q) => {
           q.price_max = raised;
         },
@@ -589,21 +848,27 @@ export function buildCatalogRelaxations(
   if (f.free_only) {
     candidates.push({
       code: 'budget',
-      label: 'Включая платные',
+      label: { ru: 'Включая платные', ba: 'Түләүлеләрен дә индереп' },
+      patch: { reset: false, set: {}, unset: ['hard.free_only'] },
       next: { ...f, free_only: false },
       queryMutate: (q) => {
         delete q.free_only;
         delete q.free;
       },
-      removal: f.price_max === null,
+      removal: f.price_max === null && f.max_total_price == null,
     });
   }
 
-  if (f.price_max !== null) {
+  if (f.price_max !== null || (f.max_total_price !== undefined && f.max_total_price !== null)) {
     candidates.push({
       code: 'budget',
-      label: 'Без ограничения цены',
-      next: { ...f, price_max: null, free_only: false },
+      label: { ru: 'Без ограничения цены', ba: 'Хаҡ сикләүһеҙ' },
+      patch: {
+        reset: false,
+        set: {},
+        unset: ['hard.max_price_per_person', 'hard.max_total_price', 'hard.free_only'],
+      },
+      next: { ...f, price_max: null, max_total_price: null, free_only: false },
       queryMutate: (q) => {
         delete q.price_max;
         delete q.free_only;
@@ -616,18 +881,20 @@ export function buildCatalogRelaxations(
   if (f.cities.length > 0) {
     candidates.push({
       code: 'city',
-      label: 'По всей республике',
+      label: { ru: 'По всей республике', ba: 'Бөтә республика буйынса' },
+      patch: { reset: false, set: { hard: { region: 'bashkortostan' } }, unset: ['hard.cities'] },
       next: { ...f, cities: [] },
       queryMutate: (q) => delete q.city,
       removal: true,
     });
   }
 
-  if (f.venue_id) {
+  if (f.venue_id || f.venue_query || f.geo_query) {
     candidates.push({
       code: 'venue',
-      label: 'На любой площадке',
-      next: { ...f, venue_id: null },
+      label: { ru: 'На любой площадке', ba: 'Теләһә ҡайһы майҙансыҡта' },
+      patch: { reset: false, set: {}, unset: ['hard.venue_query', 'hard.geo_query'] },
+      next: { ...f, venue_id: null, venue_query: null, geo_query: null },
       queryMutate: (q) => delete q.venue_id,
       removal: true,
     });
@@ -636,7 +903,8 @@ export function buildCatalogRelaxations(
   if (f.categories.length > 0) {
     candidates.push({
       code: 'category',
-      label: 'Любая категория',
+      label: { ru: 'Любая категория', ba: 'Теләһә ниндәй категория' },
+      patch: { reset: false, set: {}, unset: ['hard.categories_any'] },
       next: { ...f, categories: [] },
       queryMutate: (q) => delete q.category,
       removal: true,
@@ -646,7 +914,8 @@ export function buildCatalogRelaxations(
   if (f.age !== null || f.age_ratings.length > 0 || f.audience !== null) {
     candidates.push({
       code: 'age',
-      label: 'Без фильтра по возрасту',
+      label: { ru: 'Без фильтра по возрасту', ba: 'Йәш буйынса сикләүһеҙ' },
+      patch: { reset: false, set: {}, unset: ['hard.required_age_rating', 'soft.audience'] },
       next: { ...f, age: null, age_ratings: [], audience: null },
       queryMutate: (q) => {
         delete q.age;
@@ -660,7 +929,8 @@ export function buildCatalogRelaxations(
   if (f.statuses_explicit) {
     candidates.push({
       code: 'status',
-      label: 'Только актуальные сеансы',
+      label: { ru: 'Только актуальные сеансы', ba: 'Тик көнүҙәк сеанстар' },
+      patch: { reset: false, set: {}, unset: ['hard.statuses'] },
       next: { ...f, statuses: [...DEFAULT_OCCURRENCE_STATUSES], statuses_explicit: false },
       queryMutate: (q) => delete q.status,
       removal: true,
@@ -678,6 +948,7 @@ export function buildCatalogRelaxations(
         code: cand.code,
         codes: [cand.code],
         label: cand.label,
+        patch: cand.patch,
         query: q,
         count: cnt,
       });
@@ -690,31 +961,42 @@ export function buildCatalogRelaxations(
   let current = { ...f };
   const qCombined = { ...baseQuery };
   const usedCodes: ApiRelaxation['code'][] = [];
-  const usedLabels: string[] = [];
+  const usedLabelsRu: string[] = [];
+  const usedLabelsBa: string[] = [];
+  const combinedUnset = new Set<string>();
+  const combinedSetHard: Record<string, unknown> = {};
 
   for (const cand of candidates) {
     if (!cand.removal) continue;
     cand.queryMutate(qCombined);
-    // Пересчитываем изменение последовательно
-    if (cand.code === 'query') current = { ...current, q: null };
-    if (cand.code === 'time') current = { ...current, time_from: null, time_to: null };
+    for (const u of cand.patch.unset) combinedUnset.add(u);
+    if (cand.patch.set.hard) Object.assign(combinedSetHard, cand.patch.set.hard);
+
+    if (cand.code === 'query') current = { ...current, q: null, title_query: null, topic_query: null };
+    if (cand.code === 'time') current = { ...current, time_from: null, time_to: null, fits_from: null, fits_to: null };
     if (cand.code === 'date') current = { ...current, date_preset: null, date_from: null, date_to: null };
-    if (cand.code === 'budget') current = { ...current, price_max: null, free_only: false };
+    if (cand.code === 'budget') current = { ...current, price_max: null, max_total_price: null, free_only: false };
     if (cand.code === 'city') current = { ...current, cities: [] };
-    if (cand.code === 'venue') current = { ...current, venue_id: null };
+    if (cand.code === 'venue') current = { ...current, venue_id: null, venue_query: null, geo_query: null };
     if (cand.code === 'category') current = { ...current, categories: [] };
     if (cand.code === 'age') current = { ...current, age: null, age_ratings: [], audience: null };
     if (cand.code === 'status') current = { ...current, statuses: [...DEFAULT_OCCURRENCE_STATUSES], statuses_explicit: false };
 
     usedCodes.push(cand.code);
-    usedLabels.push(cand.label.toLowerCase());
+    usedLabelsRu.push(cand.label.ru.toLowerCase());
+    usedLabelsBa.push(cand.label.ba.toLowerCase());
     const cnt = runCatalogSearch(events, current).matches.length;
     if (cnt > 0) {
       return [
         {
           code: usedCodes[0],
           codes: [...new Set(usedCodes)],
-          label: usedLabels.join(', '),
+          label: { ru: usedLabelsRu.join(', '), ba: usedLabelsBa.join(', ') },
+          patch: {
+            reset: false,
+            set: Object.keys(combinedSetHard).length > 0 ? { hard: combinedSetHard } : {},
+            unset: [...combinedUnset],
+          },
           query: qCombined,
           count: cnt,
         },

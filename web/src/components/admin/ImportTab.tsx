@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 
 import { AdminError, adminFetch } from './api';
 import { Empty, Notice } from './bits';
-import { stamp } from './format';
+import { reasonText, stamp } from './format';
 
 /** Шаблон CSV: колонки п. 8.1 и одна условная строка-пример. */
 const TEMPLATE = [
@@ -21,13 +21,14 @@ const TEMPLATE = [
 ].join('\n');
 
 function Summary({ report }: { report: ImportReport }) {
+  const rejectedCount = Array.isArray(report.rejected) ? report.rejected.length : 0;
   const cells: [string, number, string?][] = [
     ['Получено строк', report.received],
     ['Добавлено', report.added, 'text-status-ok'],
     ['Обновлено', report.updated],
     ['Источник добавлен к карточке', report.merged ?? 0],
     ['Без изменений', report.unchanged],
-    ['Отклонено', report.rejected.length, report.rejected.length ? 'text-status-cancelled' : undefined],
+    ['Отклонено', rejectedCount, rejectedCount ? 'text-status-cancelled' : undefined],
   ];
   return (
     <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-line bg-line sm:grid-cols-3 xl:grid-cols-6">
@@ -42,6 +43,8 @@ function Summary({ report }: { report: ImportReport }) {
 }
 
 function ReportView({ report, onOpenModeration }: { report: ImportReport; onOpenModeration: () => void }) {
+  const rejected = Array.isArray(report.rejected) ? report.rejected : [];
+  const disputed = Array.isArray(report.disputed) ? report.disputed : [];
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -54,7 +57,7 @@ function ReportView({ report, onOpenModeration }: { report: ImportReport; onOpen
       </div>
       <Summary report={report} />
 
-      {report.rejected.length ? (
+      {rejected.length ? (
         <div>
           <h4 className="t-ui mb-3 text-fg">Отклонено и почему</h4>
           <div className="overflow-x-auto rounded-sm border border-line">
@@ -66,7 +69,7 @@ function ReportView({ report, onOpenModeration }: { report: ImportReport; onOpen
                 </tr>
               </thead>
               <tbody>
-                {report.rejected.map((item) => (
+                {rejected.map((item) => (
                   <tr key={`${item.row}-${item.reason_code}`} className="border-t border-line align-top">
                     <td className="px-4 py-2 tabular-nums">{item.row}</td>
                     <td className="px-4 py-2">{item.reason}</td>
@@ -78,16 +81,18 @@ function ReportView({ report, onOpenModeration }: { report: ImportReport; onOpen
         </div>
       ) : null}
 
-      {report.disputed.length ? (
+      {disputed.length ? (
         <div>
           <h4 className="t-ui mb-3 text-fg">Спорные: сохранены черновиками и ждут модерации</h4>
           <ul className="flex flex-col gap-2">
-            {report.disputed.map((item) => (
+            {disputed.map((item) => (
               <li key={item.id} className="rounded-sm border border-line px-4 py-3">
                 <Link href={`/admin/events/${item.id}`} className="font-medium underline decoration-line-strong underline-offset-4 hover:decoration-fg">
                   Строка {item.row}: {item.title}
                 </Link>
-                <p className="mt-1 text-[0.875rem] text-fg-soft">{item.reasons.join('; ')}</p>
+                <p className="mt-1 text-[0.875rem] text-fg-soft">
+                  {(Array.isArray(item.reasons) ? item.reasons : []).map(reasonText).join('; ')}
+                </p>
               </li>
             ))}
           </ul>
