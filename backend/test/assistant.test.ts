@@ -196,7 +196,7 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
       body: JSON.stringify({
         message: 'Давай бесплатные на выходные',
         channel: 'telegram',
-        user_ref: 'tg:123456',
+        user_ref: 'tg_user_00000123',
         history: [
           { role: 'user', content: 'Что посмотреть в Стерлитомак?' },
           { role: 'assistant', content: 'Уточните категорию.' },
@@ -324,7 +324,7 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
         body: JSON.stringify({
           message: 'Что интересного в Уфе?',
           channel: 'web',
-          user_ref: 'web-user-1',
+          user_ref: 'web_user_0000000001',
         }),
       });
       expect(llmRes.status).toBe(200);

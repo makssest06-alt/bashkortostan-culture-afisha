@@ -107,7 +107,6 @@ export interface AssistantRequest {
   answering?: ClarifyCode;
   history?: AssistantHistoryItem[];
   limit?: number;
-  confirmation_token?: string;
   user_ref?: string;
   channel?: 'telegram' | 'web' | 'api';
 }

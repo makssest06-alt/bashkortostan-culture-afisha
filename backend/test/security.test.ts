@@ -229,6 +229,33 @@ describe('P0-3: лимиты и бюджет ассистента', () => {
 });
 
 describe('P0-4: confirmation-токены привязаны к user_ref и хранятся хешем', () => {
+  it('не принимает confirmation_token в /assistant/query и не обходит подтверждение', async () => {
+    const ctx = await createTestContext();
+    const userRef = 'u_bypass_regression_01';
+    try {
+      const res = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Подпиши меня на концерты в Уфе на выходных',
+          user_ref: userRef,
+          confirmation_token: 'fake-token-must-be-ignored',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.action).toBe('confirmation_required');
+      expect(body.subscription).toBeUndefined();
+
+      const subs = await ctx.req('/api/v1/subscriptions', {
+        headers: { Authorization: `Bearer ${userRef}` },
+      });
+      expect((await subs.json()).items).toHaveLength(0);
+    } finally {
+      await ctx.close();
+    }
+  });
+
   it('≥128 бит энтропии, в БД хеш, чужой user_ref → 404, повтор → 409', async () => {
     const ctx = await createTestContext();
     const userRef = 'u_confirm_owner_00001';

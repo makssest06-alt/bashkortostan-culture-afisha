@@ -6,6 +6,7 @@ import type { Database } from '../../db/adapter.js';
 import { logEvent } from '../../observability/logger.js';
 import type { MetricsRegistry } from '../../observability/metrics.js';
 import type { SlidingRateLimiter } from '../rate-limit.js';
+import { USER_REF_PATTERN } from '../subscriptions.js';
 import { formatRfc3339Local, localNow, TZ_OFFSET } from '../time.js';
 import type { ApiErrorDetail } from '../types.js';
 import { PROMPT_VERSION, runLlmAgent } from './llm.js';
@@ -41,7 +42,7 @@ const AssistantRequestSchema = z.object({
     .object({
       reset: z.boolean().optional(),
       set: z.record(z.unknown()).optional(),
-      unset: z.array(z.string()).optional(),
+      unset: z.array(z.string()).max(50).optional(),
     })
     .nullable()
     .optional(),
@@ -56,8 +57,10 @@ const AssistantRequestSchema = z.object({
     .max(12)
     .optional(),
   limit: z.number().int().min(1).max(MAX_RESULT_LIMIT).nullable().optional(),
-  confirmation_token: z.string().optional(),
-  user_ref: z.string().max(128).optional(),
+  user_ref: z
+    .string()
+    .regex(USER_REF_PATTERN, 'user_ref должен содержать 16–128 символов [A-Za-z0-9_-]')
+    .optional(),
   channel: z.enum(['telegram', 'web', 'api']).optional(),
 });
 
@@ -96,7 +99,6 @@ export function parseAssistantRequestBody(
       answering: parsed.data.answering ?? undefined,
       history: parsed.data.history,
       limit: parsed.data.limit ?? undefined,
-      confirmation_token: parsed.data.confirmation_token,
       user_ref: parsed.data.user_ref,
       channel: parsed.data.channel,
     },
@@ -137,7 +139,8 @@ export async function runAssistantPipeline(
     userRef: request.user_ref,
     channel,
     clientIp: options.clientIp,
-    confirmationToken: request.confirmation_token,
+    // P0: подтверждение выдаётся только через /assistant/confirm.
+    // Токен из тела query-запроса больше не принимается и не может обойти confirm.
     rateLimiter: options.rateLimiter,
     retentionDays: config.feedbackRetentionDays,
     metrics: options.metrics,
