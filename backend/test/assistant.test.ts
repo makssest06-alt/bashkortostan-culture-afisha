@@ -252,7 +252,7 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
     try {
       const fetchMock = vi.fn(async () => {
         callCount += 1;
-        if (callCount === 1) {
+        if (callCount === 1 || callCount === 3) {
           return new Response(
             JSON.stringify({
               model: 'gpt-4o-mini',
@@ -364,6 +364,10 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
       const fallbackBody = await fallbackRes.json();
       validators.assertValid('AssistantQueryResponse', fallbackBody);
       expect(fallbackBody.engine).toBe('rules-fallback-v2');
+      const fallbackTraceRes = await llmCtx.adminReq(`/api/v1/admin/traces/${fallbackBody.trace_id}`);
+      const fallbackTrace = await fallbackTraceRes.json();
+      expect(fallbackTrace.cost_rub).toBeGreaterThan(0);
+      expect(fallbackTrace.error).toContain('LLM HTTP 500');
     } finally {
       globalThis.fetch = originalFetch;
       await llmCtx.close();

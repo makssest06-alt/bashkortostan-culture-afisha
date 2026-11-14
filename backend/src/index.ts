@@ -16,6 +16,7 @@ function retentionPolicyOf(config: {
   assistantTraceRetentionDays: number;
   confirmationRetentionDays: number;
   rawRecordRetentionDays: number;
+  importRetentionDays: number;
   auditRetentionDays: number;
   subscriptionInactiveDays: number;
 }): RetentionPolicy {
@@ -24,6 +25,7 @@ function retentionPolicyOf(config: {
     assistantTraceRetentionDays: config.assistantTraceRetentionDays,
     confirmationRetentionDays: config.confirmationRetentionDays,
     rawRecordRetentionDays: config.rawRecordRetentionDays,
+    importRetentionDays: config.importRetentionDays,
     auditRetentionDays: config.auditRetentionDays,
     subscriptionInactiveDays: config.subscriptionInactiveDays,
   };

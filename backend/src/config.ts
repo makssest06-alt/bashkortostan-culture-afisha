@@ -27,6 +27,8 @@ export interface AppConfig {
   metricsRatePerMinute: number;
   /** Bearer-токен для /metrics. В production без него метрики скрыты. */
   metricsToken: string | undefined;
+  /** Лимит публичных GET на IP в минуту (backstop от scraping/amplification). */
+  readRatePerMinute: number;
   trustProxy: boolean;
   /** Сколько доверенных прокси стоит между клиентом и API (по умолчанию 1). */
   trustedProxyHops: number;
@@ -38,6 +40,7 @@ export interface AppConfig {
   assistantTraceRetentionDays: number;
   confirmationRetentionDays: number;
   rawRecordRetentionDays: number;
+  importRetentionDays: number;
   auditRetentionDays: number;
   subscriptionInactiveDays: number;
   llmCostInRubPer1k?: number;
@@ -101,6 +104,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         `В production ADMIN_TOKEN должен быть не короче ${MIN_PRODUCTION_ADMIN_TOKEN_LENGTH} символов. Сгенерируйте: openssl rand -hex 32`,
       );
     }
+    const metricsToken = env.METRICS_TOKEN?.trim();
+    if (metricsToken && metricsToken.length < MIN_PRODUCTION_ADMIN_TOKEN_LENGTH) {
+      throw new Error(
+        `В production METRICS_TOKEN должен быть не короче ${MIN_PRODUCTION_ADMIN_TOKEN_LENGTH} символов.`,
+      );
+    }
   }
 
   return {
@@ -120,6 +129,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     feedbackRetentionDays: Math.max(1, Number.parseInt(env.FEEDBACK_RETENTION_DAYS ?? '90', 10) || 90),
     metricsRatePerMinute: Math.max(10, Number.parseInt(env.METRICS_RATE_LIMIT ?? '120', 10) || 120),
     metricsToken: env.METRICS_TOKEN?.trim() || undefined,
+    readRatePerMinute: Math.max(60, Number.parseInt(env.READ_RATE_LIMIT ?? '600', 10) || 600),
     trustProxy: proxy.trustProxy,
     trustedProxyHops: proxy.trustedProxyHops,
     assistantRatePer10Min: parsePositiveInt(env.ASSISTANT_RATE_LIMIT_10M, 20),
@@ -130,6 +140,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     assistantTraceRetentionDays: parsePositiveInt(env.ASSISTANT_TRACE_RETENTION_DAYS, 30),
     confirmationRetentionDays: parsePositiveInt(env.CONFIRMATION_RETENTION_DAYS, 7),
     rawRecordRetentionDays: parsePositiveInt(env.RAW_RECORD_RETENTION_DAYS, 180),
+    importRetentionDays: parsePositiveInt(env.IMPORT_RETENTION_DAYS, 180),
     auditRetentionDays: parsePositiveInt(env.AUDIT_RETENTION_DAYS, 365),
     subscriptionInactiveDays: parsePositiveInt(env.SUBSCRIPTION_INACTIVE_DAYS, 180),
     llmCostInRubPer1k: parseOptionalRate(env.LLM_COST_IN_RUB_PER_1K, 0.015),

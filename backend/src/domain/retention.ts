@@ -6,6 +6,7 @@ export interface RetentionPolicy {
   assistantTraceRetentionDays: number;
   confirmationRetentionDays: number;
   rawRecordRetentionDays: number;
+  importRetentionDays: number;
   auditRetentionDays: number;
   subscriptionInactiveDays: number;
 }
@@ -37,12 +38,14 @@ export async function cleanupExpiredData(
   const rawRecords = await db.query('DELETE FROM raw_records WHERE fetched_at <= $1', [
     cutoff(now, policy.rawRecordRetentionDays),
   ]);
+  const imports = await db.query('DELETE FROM imports WHERE created_at <= $1', [
+    cutoff(now, policy.importRetentionDays),
+  ]);
   const audit = await db.query('DELETE FROM audit_log WHERE at <= $1', [
     cutoff(now, policy.auditRetentionDays),
   ]);
   const subscriptions = await db.query(
-    `DELETE FROM subscriptions
-     WHERE COALESCE(last_used_at, created_at) <= $1`,
+    'DELETE FROM subscriptions WHERE last_used_at <= $1',
     [cutoff(now, policy.subscriptionInactiveDays)],
   );
 
@@ -51,6 +54,7 @@ export async function cleanupExpiredData(
     confirmations: confirmations.rowCount,
     traces: traces.rowCount,
     raw_records: rawRecords.rowCount,
+    imports: imports.rowCount,
     audit_log: audit.rowCount,
     subscriptions: subscriptions.rowCount,
   };

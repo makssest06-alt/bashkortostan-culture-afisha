@@ -50,10 +50,12 @@ npm run dev
 | `ASSISTANT_TRACE_RETENTION_DAYS` | `30` | Срок хранения трасс ассистента |
 | `CONFIRMATION_RETENTION_DAYS` | `7` | Срок хранения использованных подтверждений |
 | `RAW_RECORD_RETENTION_DAYS` | `180` | Срок хранения сырых импортированных записей |
+| `IMPORT_RETENTION_DAYS` | `180` | Срок хранения журналов импорта |
 | `AUDIT_RETENTION_DAYS` | `365` | Срок хранения журнала аудита |
 | `SUBSCRIPTION_INACTIVE_DAYS` | `180` | Удаление подписок без активности |
 | `METRICS_RATE_LIMIT` | `120` | Лимит обращений к `/metrics` (req/min) |
-| `METRICS_TOKEN` | пусто | Bearer-токен `/metrics`; в production без него — 404 |
+| `METRICS_TOKEN` | пусто | Bearer-токен `/metrics` (≥32 в production); без него — 404 |
+| `READ_RATE_LIMIT` | `600` | Лимит публичных GET на IP в минуту |
 | `TRUST_PROXY` | `0` | `0` — брать адрес из сокета; `1` — один доверенный прокси; N — N прокси (адрес с конца `X-Forwarded-For`) |
 
 ## Основные группы эндпоинтов

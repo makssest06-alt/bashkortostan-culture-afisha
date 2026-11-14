@@ -11,7 +11,7 @@
       "max": 5
     },
     "tool_timeout_ms": 3000,
-    "confirmation_ttl_s": 600,
+    "confirmation_ttl_s": 300,
     "$comment": "max_tool_calls_per_answer, dialog_memory_turns_min и cards_per_answer — из ТЗ п. 7.1 и 7.3. tool_timeout_ms и confirmation_ttl_s — рекомендации, владелец агента может поменять."
   },
   "result_envelope": {

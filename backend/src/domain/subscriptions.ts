@@ -226,12 +226,22 @@ export async function deleteSubscription(
     };
   }
 
-  const delRes = await db.query('DELETE FROM subscriptions WHERE id = $1 AND user_ref = $2', [
-    id.toLowerCase(),
-    userRef,
-  ]);
+  const at = formatRfc3339Local(new Date());
+  const deleted = await db.transaction(async (tx) => {
+    const delRes = await tx.query('DELETE FROM subscriptions WHERE id = $1 AND user_ref = $2', [
+      id.toLowerCase(),
+      userRef,
+    ]);
+    if (delRes.rowCount === 0) return false;
+    await tx.query(
+      `INSERT INTO audit_log (id, at, actor, action, entity_type, entity_id, changes)
+       VALUES ($1, $2, 'system', 'delete', 'subscription', $3, '[]'::jsonb)`,
+      [randomUUID(), at, id.toLowerCase()],
+    );
+    return true;
+  });
 
-  if (delRes.rowCount === 0) {
+  if (!deleted) {
     return {
       ok: false,
       status: 404,
@@ -239,12 +249,6 @@ export async function deleteSubscription(
       message: 'Подписка не найдена',
     };
   }
-
-  await db.query(
-    `INSERT INTO audit_log (id, at, actor, action, entity_type, entity_id, changes)
-     VALUES ($1, $2, 'system', 'delete', 'subscription', $3, '[]'::jsonb)`,
-    [randomUUID(), formatRfc3339Local(new Date()), id.toLowerCase()],
-  );
 
   return { ok: true };
 }
