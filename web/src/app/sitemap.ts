@@ -4,7 +4,7 @@ import type { MetadataRoute } from 'next';
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = (process.env.PUBLIC_WEB_URL ?? 'http://localhost:3210').replace(/\/+$/, '');
   const now = new Date();
-  return ['/', '/events', '/about', '/widget', '/developers'].map((path) => ({
+  return ['/', '/events', '/ask', '/about', '/widget', '/developers'].map((path) => ({
     url: `${base}${path}`,
     lastModified: now,
     changeFrequency: path === '/events' ? 'daily' : 'monthly',
