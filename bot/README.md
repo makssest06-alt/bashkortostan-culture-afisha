@@ -21,9 +21,9 @@ npm start
 Проверки:
 
 ```bash
-npm run check              # typecheck + 199 тестов + build
+npm run check              # typecheck + 202 теста + build
 npm run typecheck          # tsc по src и test
-npm test                   # 199 тестов в 12 файлах
+npm test                   # 202 теста в 12 файлах
 npm run build
 npm run smoke              # проверка живого API, нужен запущенный бэкенд
 ```

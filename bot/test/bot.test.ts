@@ -8,7 +8,7 @@ import type { Callback } from '../src/callbacks.js';
 import { createBot } from '../src/bot.js';
 import type { BotConfig } from '../src/config.js';
 import { DirectoryService } from '../src/directory-service.js';
-import { createLogger, type LogSink } from '../src/logger.js';
+import { createLogger, redactSecrets, type LogSink } from '../src/logger.js';
 import { SessionStore } from '../src/session.js';
 import { BOT_COMMANDS } from '../src/texts.js';
 import { telegramUserRef } from '../src/user-ref.js';
@@ -72,6 +72,14 @@ function messageUpdate(text: string, updateId = 1): Update {
         : {}),
     },
   } as unknown as Update;
+}
+
+function groupMessageUpdate(text: string, updateId = 1): Update {
+  const update = messageUpdate(text, updateId) as unknown as {
+    message: { chat: { id: number; type: string } };
+  };
+  update.message.chat = { id: -1001234567890, type: 'group' };
+  return update as unknown as Update;
 }
 
 function callbackUpdate(data: string, updateId = 10): Update {
@@ -1426,5 +1434,18 @@ describe('сценарии бота', () => {
     expect(harness.searchEvents).toHaveBeenLastCalledWith(
       expect.objectContaining({ date_from: '2026-11-20', date_to: '2026-11-25' }),
     );
+  });
+
+  it('в группе не показывает подписки и черновики', async () => {
+    const harness = await makeHarness();
+    await harness.run(groupMessageUpdate('/subscriptions', 180));
+    expect(harness.lastText()).toContain('только в личном чате');
+    expect(harness.lastText()).not.toContain('Концерты · Уфа');
+  });
+
+  it('redactSecrets убирает токен из URL/префикса и Bearer', () => {
+    const token = '12345:AAHfake_token_for_tests_1234567890';
+    expect(redactSecrets(`bot${token}/getMe`)).not.toContain(token);
+    expect(redactSecrets(`Authorization: Bearer ${token}`)).not.toContain(token);
   });
 });

@@ -186,6 +186,11 @@ export function createBot(
     new RateLimiter({ limit: config.rateLimitPerMinute ?? 20 });
   const publicWebUrl = telegramSafeHttpUrl(config.publicWebUrl);
   const logHashSecret = config.logHashSecret ?? config.telegramBotToken;
+  if (!config.userRefSecret) {
+    logger.warn('user_ref_secret_default', {
+      message: 'USER_REF_SECRET не задан: используется токен бота. Ротация токена осиротит подписки.',
+    });
+  }
   if ((config.userRefMode ?? 'hmac') === 'legacy') {
     logger.warn('user_ref_legacy_mode', {
       message: 'USER_REF_MODE=legacy делает user_ref предсказуемым; используйте только для отката',
@@ -806,7 +811,17 @@ export function createBot(
     );
   }
 
+  const PRIVATE_ONLY_TEXT =
+    'Подписки и черновики доступны только в личном чате с ботом. Откройте бота в личке и повторите.';
+
+  async function ensurePrivateChat(ctx: Context): Promise<boolean> {
+    if (!ctx.chat || ctx.chat.type === 'private') return true;
+    await sendLong(ctx, PRIVATE_ONLY_TEXT, mainMenuKeyboard(issueFor(ctx), { publicWebUrl }));
+    return false;
+  }
+
   async function showSubscriptions(ctx: Context): Promise<void> {
+    if (!(await ensurePrivateChat(ctx))) return;
     await typing(ctx);
     const subscriptions = await api.listSubscriptions(userRefFor(ctx));
     await sendLong(
@@ -828,6 +843,7 @@ export function createBot(
   }
 
   async function startSubscriptionDraft(ctx: Context): Promise<void> {
+    if (!(await ensurePrivateChat(ctx))) return;
     const userId = userIdOf(ctx);
     const draft = createSubscriptionDraft();
     sessions.update(userId, (session) => {
@@ -842,6 +858,7 @@ export function createBot(
   }
 
   async function saveDraft(ctx: Context): Promise<void> {
+    if (!(await ensurePrivateChat(ctx))) return;
     const userId = userIdOf(ctx);
     const draft = sessions.get(userId).draft;
     if (!draft) {
@@ -914,7 +931,7 @@ export function createBot(
       if (error instanceof ApiError && error.status === 409) {
         await sendLong(
           ctx,
-          `Подписка «${directories.categoryName(category) ?? category} · ${directories.cityName(city) ?? city}» уже есть.`,
+          `Подписка «${escapeHtml(directories.categoryName(category) ?? category)} · ${escapeHtml(directories.cityName(city) ?? city)}» уже есть.`,
           subscriptionSavedKeyboard(issueFor(ctx)),
         );
         return;
@@ -924,6 +941,7 @@ export function createBot(
   }
 
   async function showSubscriptionEvents(ctx: Context, id: string): Promise<void> {
+    if (!(await ensurePrivateChat(ctx))) return;
     await typing(ctx);
     const subscriptions = await api.listSubscriptions(userRefFor(ctx));
     const subscription = subscriptions.find((item) => item.id === id);
@@ -949,6 +967,7 @@ export function createBot(
   }
 
   async function deleteSubscription(ctx: Context, id: string): Promise<void> {
+    if (!(await ensurePrivateChat(ctx))) return;
     try {
       await typing(ctx);
       await api.deleteSubscription(id, userRefFor(ctx));
@@ -1399,6 +1418,7 @@ export function createBot(
     ctx: Context,
     callback: Extract<Callback, { type: 'subscribe' }>,
   ): Promise<void> {
+    if (!(await ensurePrivateChat(ctx))) return;
     const userId = userIdOf(ctx);
     if (callback.action === 'add') {
       await startSubscriptionDraft(ctx);
@@ -1850,7 +1870,7 @@ export function createBot(
     if (!city) {
       await sendLong(
         ctx,
-        `Не знаю город «${escapeHtml(value)}». Доступны: ${directories.cities.map((city) => city.name).join(', ')}.`,
+        `Не знаю город «${escapeHtml(value)}». Доступны: ${directories.cities.map((city) => escapeHtml(city.name)).join(', ')}.`,
         citiesKeyboard(issueFor(ctx), directories, 'filter'),
       );
       return;
@@ -1867,7 +1887,7 @@ export function createBot(
     if (!category) {
       await sendLong(
         ctx,
-        `Не знаю категорию «${escapeHtml(value)}». Доступны: ${directories.categories.map((category) => category.name.toLowerCase()).join(', ')}.`,
+        `Не знаю категорию «${escapeHtml(value)}». Доступны: ${directories.categories.map((category) => escapeHtml(category.name.toLowerCase())).join(', ')}.`,
         categoriesKeyboard(issueFor(ctx), directories, 'filter'),
       );
       return;
