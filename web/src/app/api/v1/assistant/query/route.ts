@@ -17,7 +17,7 @@ import {
 import { parseAssistantRequest } from '../../../../../lib/api/nlu/request';
 import { toApiAssistantResponse } from '../../../../../lib/api/wire';
 import { USES_REMOTE_API } from '../../../../../lib/api/config';
-import { forwardToBackend } from '../../../../../lib/api/forward';
+import { forwardToBackend, readLimitedBody } from '../../../../../lib/api/forward';
 
 /** Модель отвечает медленнее каталога: бэку ассистента дано больше времени. */
 const ASSISTANT_TIMEOUT_MS = 25_000;
@@ -36,7 +36,7 @@ export async function POST(request: Request): Promise<Response> {
     }
     // Бэк подключён (NEXT_PUBLIC_API_BASE_URL): ответ берётся из него, моки ниже не участвуют.
     if (USES_REMOTE_API) {
-      const forwarded = await forwardToBackend(request, { timeoutMs: ASSISTANT_TIMEOUT_MS });
+      const forwarded = await forwardToBackend(request, { timeoutMs: ASSISTANT_TIMEOUT_MS, maxBodyBytes: MAX_BODY_LENGTH });
       if (forwarded.status !== 404 && forwarded.status !== 405) return forwarded;
       // Ассистента нет в контракте v1. Если бэк его не реализует, сайт показывает обычный поиск, как при недоступной модели.
       return errorResponse(503, 'unavailable', 'ИИ-подбор пока не подключён. Поиск по фильтрам работает: GET /api/v1/events', undefined, {
@@ -44,10 +44,11 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    const raw = await request.text();
-    if (raw.length > MAX_BODY_LENGTH) {
+    const limited = await readLimitedBody(request, MAX_BODY_LENGTH);
+    if (!limited.ok) {
       return errorResponse(413, 'payload_too_large', 'Тело запроса слишком большое: не больше 20 000 знаков');
     }
+    const raw = new TextDecoder().decode(limited.body);
 
     let body: unknown;
     try {

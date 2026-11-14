@@ -6,7 +6,7 @@ import type { ApiErrorBody, ApiErrorDetail } from './types.js';
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, If-Match, If-None-Match, X-Request-Id, X-Assistant-Demo, X-Actor',
+  'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization, If-Match, If-None-Match, X-Request-Id, X-Assistant-Demo',
   'Access-Control-Expose-Headers': 'ETag, X-Request-Id, Retry-After, Location',
   'Access-Control-Max-Age': '86400',
 };
@@ -40,10 +40,12 @@ export function jsonResponse(
   options: { status?: number; cache?: string; headers?: Record<string, string> } = {},
 ): Response {
   const requestId = c.get('requestId') as string;
+  const adminPath = new URL(c.req.url).pathname.startsWith('/api/v1/admin/');
   const headers: Record<string, string> = {
-    ...CORS_HEADERS,
+    ...(adminPath ? {} : CORS_HEADERS),
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': options.cache ?? CACHE_NO_STORE,
+    'X-Content-Type-Options': 'nosniff',
     'X-Request-Id': requestId,
     ...(options.headers ?? {}),
   };
@@ -64,6 +66,7 @@ export function jsonWithEtag(c: Context, body: unknown, cache: string): Response
         ...CORS_HEADERS,
         ETag: etag,
         'Cache-Control': cache,
+        'X-Content-Type-Options': 'nosniff',
         'X-Request-Id': requestId,
       },
     });

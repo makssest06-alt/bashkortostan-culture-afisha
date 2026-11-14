@@ -22,5 +22,6 @@ export function forwardAdmin(request: Request, requestId: string, actor?: string
     requestId,
     timeoutMs: ADMIN_TIMEOUT_MS,
     headers,
+    maxBodyBytes: 6_000_000,
   });
 }

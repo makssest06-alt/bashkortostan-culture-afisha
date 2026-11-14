@@ -18,13 +18,13 @@ import {
 } from '../../../../lib/api/http';
 import { clientIp, hitRate } from '../../../../lib/api/rate-limit';
 import { USES_REMOTE_API } from '../../../../lib/api/config';
-import { forwardToBackend } from '../../../../lib/api/forward';
+import { forwardToBackend, readLimitedBody } from '../../../../lib/api/forward';
 
 const MAX_BODY = 10_000;
 
 export async function POST(request: Request): Promise<Response> {
   // Бэк подключён (NEXT_PUBLIC_API_BASE_URL): ответ берётся из него, моки ниже не участвуют.
-  if (USES_REMOTE_API) return forwardToBackend(request);
+  if (USES_REMOTE_API) return forwardToBackend(request, { maxBodyBytes: MAX_BODY });
 
   const requestId = requestIdOf(request);
   try {
@@ -43,10 +43,11 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const raw = await request.text();
-    if (raw.length > MAX_BODY) {
+    const limited = await readLimitedBody(request, MAX_BODY);
+    if (!limited.ok) {
       return errorResponse(413, 'payload_too_large', 'Обращение слишком длинное. Сократите текст до 2000 знаков', undefined, { requestId });
     }
+    const raw = new TextDecoder().decode(limited.body);
     let body: unknown;
     try {
       body = JSON.parse(raw);

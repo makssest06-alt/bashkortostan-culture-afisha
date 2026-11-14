@@ -144,3 +144,9 @@ export function internalError(error: unknown, requestId?: string): Response {
 export function preflight(): Response {
   return new Response(null, { status: 204, headers: { ...CORS_HEADERS } });
 }
+
+/** Убирает публичные CORS-заголовки с ответов админки. */
+export function stripCorsHeaders(response: Response): Response {
+  for (const name of Object.keys(CORS_HEADERS)) response.headers.delete(name);
+  return response;
+}

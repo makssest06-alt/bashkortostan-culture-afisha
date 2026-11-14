@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { Context } from 'hono';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 import type { AppConfig } from './config.js';
 import type { Database } from './db/adapter.js';
@@ -150,6 +151,18 @@ function rateKeyHash(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
 
+function secureEquals(a: string, b: string): boolean {
+  const da = createHash('sha256').update(a).digest();
+  const db = createHash('sha256').update(b).digest();
+  return timingSafeEqual(da, db);
+}
+
+/** Метка маршрута для Prometheus: шаблон вместо UUID/произвольных сегментов. */
+function metricRouteOf(c: Context<Env>): string {
+  const route = c.req.routePath;
+  return !route || route === '/*' ? '/_unmatched' : route;
+}
+
 /** user_ref подписок передаётся только заголовком Authorization: Bearer, не в query string. */
 function userRefFromAuthorization(headers: Headers): { ok: true; userRef: string } | { ok: false } {
   const match = /^Bearer\s+(.+)$/i.exec(headers.get('authorization')?.trim() ?? '');
@@ -184,12 +197,34 @@ export function createApp(options: CreateAppOptions) {
   const assistantConfirmRules = [
     { suffix: '10m', max: config.assistantConfirmPer10Min, windowMs: 10 * 60_000 },
   ] as const;
+  // Сетевые backstop-лимиты: не дают одному IP выжечь сервис, но не блокируют
+  // всех пользователей бота/сайта, которые приходят с одного адреса прокси.
+  const assistantQueryIpBackstopRules = [
+    { suffix: '10m', max: 500, windowMs: 10 * 60_000 },
+    { suffix: '24h', max: 5_000, windowMs: 24 * 3_600_000 },
+  ] as const;
+  const assistantConfirmIpBackstopRules = [
+    { suffix: '10m', max: 200, windowMs: 10 * 60_000 },
+  ] as const;
   const subscriptionCreateRules = [
     { suffix: '10m', max: 10, windowMs: 10 * 60_000 },
+  ] as const;
+  const subscriptionCreateIpBackstopRules = [
+    { suffix: '10m', max: 200, windowMs: 10 * 60_000 },
   ] as const;
   const subscriptionDeleteRules = [
     { suffix: '10m', max: 30, windowMs: 10 * 60_000 },
   ] as const;
+  const subscriptionDeleteIpBackstopRules = [
+    { suffix: '10m', max: 200, windowMs: 10 * 60_000 },
+  ] as const;
+
+  function jsonBodyLimit(maxSize: number, message: string) {
+    return bodyLimit({
+      maxSize,
+      onError: (c) => errorResponse(c as Context<Env>, 413, 'payload_too_large', message),
+    });
+  }
 
   function rateLimited(scope: string, c: Context<Env>, retryAfterSeconds: number): Response {
     metrics.incRateLimited(scope);
@@ -210,12 +245,12 @@ export function createApp(options: CreateAppOptions) {
     c.set('requestId', requestId);
 
     if (c.req.method === 'OPTIONS') {
+      const adminPath = new URL(c.req.url).pathname.startsWith('/api/v1/admin/');
       return new Response(null, {
         status: 204,
-        headers: {
-          ...CORS_HEADERS,
-          'X-Request-Id': requestId,
-        },
+        headers: adminPath
+          ? { 'X-Request-Id': requestId }
+          : { ...CORS_HEADERS, 'X-Request-Id': requestId },
       });
     }
 
@@ -225,7 +260,7 @@ export function createApp(options: CreateAppOptions) {
     const status = c.res.status;
     const path = new URL(c.req.url).pathname;
 
-    metrics.observeHttp(c.req.method, path, status, durationSeconds);
+    metrics.observeHttp(c.req.method, metricRouteOf(c), status, durationSeconds);
     logEvent('info', 'http_request', {
       request_id: requestId,
       method: c.req.method,
@@ -252,6 +287,15 @@ export function createApp(options: CreateAppOptions) {
       { status: 500 },
     );
   });
+
+  // --- Лимиты размера тела (P1) ---
+
+  // Публичные JSON-тела маленькие: 16–32 КБ с запасом. Admin-импорт — до 5 МБ.
+  app.use('/api/v1/assistant/*', jsonBodyLimit(32 * 1024, 'Тело запроса ассистента слишком большое'));
+  app.use('/api/v1/subscriptions', jsonBodyLimit(16 * 1024, 'Тело запроса подписки слишком большое'));
+  app.use('/api/v1/subscriptions/*', jsonBodyLimit(16 * 1024, 'Тело запроса подписки слишком большое'));
+  app.use('/api/v1/feedback', jsonBodyLimit(32 * 1024, 'Обращение слишком длинное'));
+  app.use('/api/v1/admin/*', jsonBodyLimit(MAX_IMPORT_BYTES + 64 * 1024, 'Тело запроса админки слишком большое'));
 
   // --- Служебные маршруты ---
 
@@ -316,6 +360,16 @@ export function createApp(options: CreateAppOptions) {
   });
 
   const handleMetrics = (c: any) => {
+    // P1: в production метрики доступны только с METRICS_TOKEN; без токена — 404.
+    if (config.production && !config.metricsToken) {
+      return errorResponse(c, 404, 'not_found', 'Страница не найдена');
+    }
+    if (config.metricsToken) {
+      const auth = /^Bearer\s+(.+)$/i.exec(c.req.header('authorization')?.trim() ?? '');
+      if (!auth?.[1] || !secureEquals(auth[1].trim(), config.metricsToken)) {
+        return errorResponse(c, 401, 'unauthorized', 'Требуется METRICS_TOKEN');
+      }
+    }
     const ip = getClientIp(c, config);
     const check = metricsRateLimiter.checkAndConsume(
       `metrics:${ip}`,
@@ -331,9 +385,9 @@ export function createApp(options: CreateAppOptions) {
     return new Response(metrics.formatPrometheus(), {
       status: 200,
       headers: {
-        ...CORS_HEADERS,
         'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
         'Cache-Control': CACHE_NO_STORE,
+        'X-Content-Type-Options': 'nosniff',
         'X-Request-Id': c.get('requestId'),
       },
     });
@@ -660,13 +714,14 @@ export function createApp(options: CreateAppOptions) {
       typeof (body as { user_ref?: unknown })?.user_ref === 'string'
         ? (body as { user_ref: string }).user_ref
         : '';
+    const hasUserRef = Boolean(bodyUserRef && USER_REF_PATTERN.test(bodyUserRef));
     const ipCheck = subscriptionCreateRateLimiter.consumeMulti(
       `subs:create:ip:${ip}`,
-      subscriptionCreateRules,
+      hasUserRef ? subscriptionCreateIpBackstopRules : subscriptionCreateRules,
       nowMs,
     );
     if (!ipCheck.ok) return rateLimited('subscription_create', c, ipCheck.retryAfter);
-    if (bodyUserRef) {
+    if (hasUserRef) {
       const userCheck = subscriptionCreateRateLimiter.consumeMulti(
         `subs:create:user:${rateKeyHash(bodyUserRef)}`,
         subscriptionCreateRules,
@@ -705,7 +760,7 @@ export function createApp(options: CreateAppOptions) {
         'Требуется заголовок Authorization: Bearer <user_ref>',
       );
     }
-    const res = await listSubscriptions(db, auth.userRef);
+    const res = await listSubscriptions(db, auth.userRef, nowFn());
     if (!res.ok) {
       return errorResponse(c, res.status, res.code, res.message, res.details);
     }
@@ -727,7 +782,7 @@ export function createApp(options: CreateAppOptions) {
     const ip = getClientIp(c, config);
     const ipCheck = subscriptionDeleteRateLimiter.consumeMulti(
       `subs:delete:ip:${ip}`,
-      subscriptionDeleteRules,
+      subscriptionDeleteIpBackstopRules,
       nowMs,
     );
     if (!ipCheck.ok) return rateLimited('subscription_delete', c, ipCheck.retryAfter);
@@ -810,9 +865,10 @@ export function createApp(options: CreateAppOptions) {
     // P0-3: лимит на query по IP и по user_ref (хеш, без ПДн в ключах).
     const now = nowFn();
     const ip = getClientIp(c, config);
+    const hasUserRef = Boolean(parsed.value.user_ref);
     const ipCheck = assistantQueryRateLimiter.consumeMulti(
       `assistant:query:ip:${ip}`,
-      assistantQueryRules,
+      hasUserRef ? assistantQueryIpBackstopRules : assistantQueryRules,
       now.getTime(),
     );
     if (!ipCheck.ok) return rateLimited('assistant_query', c, ipCheck.retryAfter);
@@ -849,17 +905,18 @@ export function createApp(options: CreateAppOptions) {
     // P0-3/P0-4: отдельный лимит на confirm, чтобы нельзя было перебирать токены.
     const now = nowFn();
     const ip = getClientIp(c, config);
-    const ipCheck = assistantConfirmRateLimiter.consumeMulti(
-      `assistant:confirm:ip:${ip}`,
-      assistantConfirmRules,
-      now.getTime(),
-    );
-    if (!ipCheck.ok) return rateLimited('assistant_confirm', c, ipCheck.retryAfter);
     const bodyUserRef =
       typeof (body as { user_ref?: unknown })?.user_ref === 'string'
         ? (body as { user_ref: string }).user_ref
         : '';
-    if (bodyUserRef) {
+    const hasUserRef = Boolean(bodyUserRef && USER_REF_PATTERN.test(bodyUserRef));
+    const ipCheck = assistantConfirmRateLimiter.consumeMulti(
+      `assistant:confirm:ip:${ip}`,
+      hasUserRef ? assistantConfirmIpBackstopRules : assistantConfirmRules,
+      now.getTime(),
+    );
+    if (!ipCheck.ok) return rateLimited('assistant_confirm', c, ipCheck.retryAfter);
+    if (hasUserRef) {
       const userCheck = assistantConfirmRateLimiter.consumeMulti(
         `assistant:confirm:user:${rateKeyHash(bodyUserRef)}`,
         assistantConfirmRules,

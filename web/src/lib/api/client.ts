@@ -198,6 +198,8 @@ export async function confirmAssistantAction(
 export interface FeedbackPayload {
   kind: ApplicationKind;
   event_id: string | null;
+  /** Псевдоним браузера для per-user лимита; в ответах и логах не используется. */
+  user_ref?: string;
   name: string;
   contact: string;
   organization: string | null;

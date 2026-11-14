@@ -10,6 +10,8 @@ export const MIN_PRODUCTION_ADMIN_TOKEN_LENGTH = 32;
 
 export interface AppConfig {
   port: number;
+  /** Адрес, на котором слушает API. По умолчанию только localhost; в Docker — 0.0.0.0. */
+  host: string;
   databaseUrl: string;
   pgliteDataDir: string;
   adminToken: string | undefined;
@@ -23,6 +25,8 @@ export interface AppConfig {
   llmTimeoutMs: number;
   feedbackRetentionDays: number;
   metricsRatePerMinute: number;
+  /** Bearer-токен для /metrics. В production без него метрики скрыты. */
+  metricsToken: string | undefined;
   trustProxy: boolean;
   /** Сколько доверенных прокси стоит между клиентом и API (по умолчанию 1). */
   trustedProxyHops: number;
@@ -31,6 +35,11 @@ export interface AppConfig {
   assistantConfirmPer10Min: number;
   assistantMaxTokens: number;
   assistantDailyBudgetRub: number;
+  assistantTraceRetentionDays: number;
+  confirmationRetentionDays: number;
+  rawRecordRetentionDays: number;
+  auditRetentionDays: number;
+  subscriptionInactiveDays: number;
   llmCostInRubPer1k?: number;
   llmCostOutRubPer1k?: number;
 }
@@ -96,6 +105,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   return {
     port: Number.isFinite(port) && port > 0 ? port : 8000,
+    host: (env.HOST ?? '127.0.0.1').trim() || '127.0.0.1',
     databaseUrl: (env.DATABASE_URL ?? '').trim(),
     pgliteDataDir: (env.PGLITE_DATA_DIR ?? './data/pglite').trim(),
     adminToken,
@@ -109,6 +119,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     llmTimeoutMs: Math.max(1000, Number.parseInt(env.LLM_TIMEOUT_MS ?? '12000', 10) || 12000),
     feedbackRetentionDays: Math.max(1, Number.parseInt(env.FEEDBACK_RETENTION_DAYS ?? '90', 10) || 90),
     metricsRatePerMinute: Math.max(10, Number.parseInt(env.METRICS_RATE_LIMIT ?? '120', 10) || 120),
+    metricsToken: env.METRICS_TOKEN?.trim() || undefined,
     trustProxy: proxy.trustProxy,
     trustedProxyHops: proxy.trustedProxyHops,
     assistantRatePer10Min: parsePositiveInt(env.ASSISTANT_RATE_LIMIT_10M, 20),
@@ -116,6 +127,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     assistantConfirmPer10Min: parsePositiveInt(env.ASSISTANT_CONFIRM_LIMIT_10M, 20),
     assistantMaxTokens: Math.min(4096, Math.max(64, parsePositiveInt(env.ASSISTANT_MAX_TOKENS, 800))),
     assistantDailyBudgetRub: parseOptionalRate(env.ASSISTANT_DAILY_BUDGET_RUB, 100),
+    assistantTraceRetentionDays: parsePositiveInt(env.ASSISTANT_TRACE_RETENTION_DAYS, 30),
+    confirmationRetentionDays: parsePositiveInt(env.CONFIRMATION_RETENTION_DAYS, 7),
+    rawRecordRetentionDays: parsePositiveInt(env.RAW_RECORD_RETENTION_DAYS, 180),
+    auditRetentionDays: parsePositiveInt(env.AUDIT_RETENTION_DAYS, 365),
+    subscriptionInactiveDays: parsePositiveInt(env.SUBSCRIPTION_INACTIVE_DAYS, 180),
     llmCostInRubPer1k: parseOptionalRate(env.LLM_COST_IN_RUB_PER_1K, 0.015),
     llmCostOutRubPer1k: parseOptionalRate(env.LLM_COST_OUT_RUB_PER_1K, 0.06),
   };

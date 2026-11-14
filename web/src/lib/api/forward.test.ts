@@ -92,6 +92,21 @@ describe('forwardToBackend', () => {
     expect(new Headers(eventsInit.headers).get('authorization')).toBeNull();
   });
 
+  it('не читает в память тело больше лимита и отвечает 413', async () => {
+    const fetchMock = stubFetch(() => new Response('{}', { status: 200 }));
+    const response = await forwardToBackend(
+      new Request('http://site.local/api/v1/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'x'.repeat(2_000_000),
+      }),
+      { requestId: 'req-pub-body' },
+    );
+    expect(response.status).toBe(413);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ code: 'payload_too_large' });
+  });
+
   it('отдаёт 304 без тела и с ETag бэка', async () => {
     stubFetch(() => new Response(null, { status: 304, headers: { ETag: 'W/"abc"' } }));
     const response = await forwardToBackend(new Request('http://site.local/api/v1/events/1', { headers: { 'If-None-Match': 'W/"abc"' } }));

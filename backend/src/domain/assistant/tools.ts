@@ -7,6 +7,7 @@ import { isCategoryId, isCitySlug, findCity } from '../dictionaries.js';
 import { findEventByIdOrCode, loadAllEvents } from '../events-repo.js';
 import { submitFeedback } from '../feedback.js';
 import type { SlidingRateLimiter } from '../rate-limit.js';
+import { maskPii } from './nlu.js';
 import { UUID_PATTERN, SLUG_PATTERN } from '../identity.js';
 import {
   buildCatalogRelaxations,
@@ -345,7 +346,7 @@ export class ToolRuntime {
         max_total_price: filters.max_total_price ?? null,
         free_only: filters.free_only,
         age: filters.age,
-        q: filters.q,
+        q: filters.q ? maskPii(filters.q).slice(0, 200) : null,
       },
       ok: true,
       duration_ms: Date.now() - startMs,
@@ -373,7 +374,7 @@ export class ToolRuntime {
       this.steps.push({
         step: this.callCount,
         tool: name,
-        args: safeArgsRecord(rawArgs),
+        args: traceArgs(name, rawArgs),
         ok: false,
         error_code: err.code,
         duration_ms: Date.now() - startMs,
@@ -382,7 +383,6 @@ export class ToolRuntime {
       return { ok: false, error: err };
     }
 
-    const args = safeArgsRecord(rawArgs);
     const returnedIds: string[] = [];
 
     try {
@@ -402,7 +402,7 @@ export class ToolRuntime {
       this.steps.push({
         step: this.callCount,
         tool: name,
-        args,
+        args: traceArgs(name, rawArgs),
         ok: result.ok,
         ...(result.ok ? {} : { error_code: result.error.code }),
         duration_ms: Date.now() - startMs,
@@ -421,7 +421,7 @@ export class ToolRuntime {
       this.steps.push({
         step: this.callCount,
         tool: name,
-        args,
+        args: traceArgs(name, rawArgs),
         ok: false,
         error_code: err.code,
         duration_ms: Date.now() - startMs,
@@ -774,6 +774,7 @@ export class ToolRuntime {
         {
           kind: args.kind,
           event_id: args.event_id ?? null,
+          ...(this.ctx.userRef ? { user_ref: this.ctx.userRef } : {}),
           name: this.ctx.confirmPayload?.name ?? 'Пользователь ассистента',
           contact: this.ctx.confirmPayload?.contact ?? 'не указан',
           organization: this.ctx.confirmPayload?.organization ?? null,
@@ -905,6 +906,38 @@ export async function confirmPendingAction(
     ? `assistant:user:${createHash('sha256').update(requesterUserRef).digest('hex').slice(0, 12)}`
     : 'assistant:anonymous';
 
+  // Атомарно «забираем» токен до выполнения действия: два параллельных confirm
+  // не смогут выполнить одно действие дважды.
+  const claim = await db.query<{
+    action: 'subscribe' | 'save_feedback';
+    user_ref: string | null;
+    payload: Record<string, unknown> | string;
+    summary: string;
+  }>(
+    `UPDATE agent_confirmations
+     SET used_at = $2
+     WHERE token = $1
+       AND used_at IS NULL
+       AND expires_at > $2
+     RETURNING action, user_ref, payload, summary`,
+    [tokenHash, formatRfc3339Local(now)],
+  );
+
+  if (claim.rows.length === 0) {
+    return {
+      ok: false,
+      error: {
+        code: 'confirmation_expired',
+        message: 'Токен подтверждения уже использован',
+        retryable: false,
+        http_status: 409,
+        request_id: ctx.requestId,
+      },
+    };
+  }
+
+  const claimed = claim.rows[0];
+
   const writeAudit = async (decision: 'approve' | 'reject') => {
     await db.query(
       `INSERT INTO audit_log (id, at, actor, action, entity_type, entity_id, entity_title, changes)
@@ -914,9 +947,9 @@ export async function confirmPendingAction(
         formatRfc3339Local(now),
         auditActor,
         tokenHash,
-        row.summary.slice(0, 200),
+        claimed.summary.slice(0, 200),
         JSON.stringify([
-          { field: 'action', from: null, to: row.action },
+          { field: 'action', from: null, to: claimed.action },
           { field: 'decision', from: null, to: decision },
         ]),
       ],
@@ -924,10 +957,6 @@ export async function confirmPendingAction(
   };
 
   if (rejected) {
-    await db.query('UPDATE agent_confirmations SET used_at = $2 WHERE token = $1', [
-      tokenHash,
-      formatRfc3339Local(now),
-    ]);
     await writeAudit('reject');
     return {
       ok: true,
@@ -939,11 +968,13 @@ export async function confirmPendingAction(
   }
 
   const payloadObj =
-    typeof row.payload === 'string' ? (JSON.parse(row.payload) as Record<string, unknown>) : row.payload;
+    typeof claimed.payload === 'string'
+      ? (JSON.parse(claimed.payload) as Record<string, unknown>)
+      : claimed.payload;
   const confirmFields = bodyObj;
   const runtime = new ToolRuntime(db, {
     ...ctx,
-    userRef: row.user_ref ?? ctx.userRef,
+    userRef: claimed.user_ref ?? ctx.userRef,
     confirmationToken: token,
     confirmPayload: {
       name: typeof confirmFields.name === 'string' ? confirmFields.name : undefined,
@@ -952,12 +983,8 @@ export async function confirmPendingAction(
     },
   });
 
-  const execRes = await runtime.execute(row.action, payloadObj);
+  const execRes = await runtime.execute(claimed.action, payloadObj);
   if (execRes.ok) {
-    await db.query('UPDATE agent_confirmations SET used_at = $2 WHERE token = $1', [
-      tokenHash,
-      formatRfc3339Local(now),
-    ]);
     await writeAudit('approve');
   }
   return execRes;
@@ -981,4 +1008,31 @@ function safeArgsRecord(rawArgs: unknown): Record<string, unknown> {
     return rawArgs as Record<string, unknown>;
   }
   return {};
+}
+
+/**
+ * P1: в трассы не пишем сырые ПДн. Текст обращения сохраняем только длиной,
+ * остальные строки маскируем от email/телефонов и ограничиваем 200 символами.
+ */
+function traceArgs(name: string, rawArgs: unknown): Record<string, unknown> {
+  const args = safeArgsRecord(rawArgs);
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value === 'string') {
+      if (name === 'save_feedback' && key === 'text') {
+        out[key] = `[redacted ${value.length} chars]`;
+      } else if (['name', 'contact', 'phone', 'email', 'organization'].includes(key)) {
+        out[key] = '[redacted]';
+      } else {
+        out[key] = maskPii(value).slice(0, 200);
+      }
+    } else if (Array.isArray(value)) {
+      out[key] = value
+        .slice(0, 20)
+        .map((item) => (typeof item === 'string' ? maskPii(item).slice(0, 200) : item));
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
 }

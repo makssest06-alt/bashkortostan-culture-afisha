@@ -27,7 +27,7 @@ export function telegramUserRef(
     throw new UserRefError('Telegram user id должен состоять только из цифр');
   }
 
-  const mode = options.mode ?? 'legacy';
+  const mode = options.mode ?? 'hmac';
   let ref: string;
   if (mode === 'hmac') {
     if (!options.secret) {
@@ -70,5 +70,6 @@ export function hashTelegramUserId(
   telegramUserId: number | string,
   secret?: string | null,
 ): string {
-  return hashUserRef(telegramUserRef(telegramUserId), secret);
+  // Для лога достаточно старого детерминированного представления: секрет всё равно скрывает id.
+  return hashUserRef(telegramUserRef(telegramUserId, { mode: 'legacy' }), secret);
 }

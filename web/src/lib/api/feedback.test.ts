@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { POST } from '../../app/api/v1/feedback/route';
 import { readState, resetForTests } from '../admin/store';
@@ -26,9 +26,17 @@ function post(body: unknown, ip = '203.0.113.7'): Promise<Response> {
 }
 
 describe('форма заявки организатора (п. 6.3)', () => {
+  const previousTrust = process.env.TRUST_PROXY_CLIENT_IP;
   beforeEach(() => {
+    // Тест эмулирует доверенный прокси, который сам выставляет X-Forwarded-For.
+    process.env.TRUST_PROXY_CLIENT_IP = '1';
     resetForTests();
     resetRateForTests();
+  });
+
+  afterEach(() => {
+    if (previousTrust === undefined) delete process.env.TRUST_PROXY_CLIENT_IP;
+    else process.env.TRUST_PROXY_CLIENT_IP = previousTrust;
   });
 
   it('понятные ошибки по полям на русском', () => {

@@ -31,6 +31,8 @@ services:
       ASSISTANT_DISABLED: ${ASSISTANT_DISABLED:-}
       # P0-2: сайт пересылает адрес клиента в бэк только за доверенным reverse proxy.
       TRUST_PROXY_CLIENT_IP: ${TRUST_PROXY_CLIENT_IP:-0}
+      # Публичный origin сайта: приоритетнее Host/X-Forwarded-Host в canonical/OG.
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3210}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

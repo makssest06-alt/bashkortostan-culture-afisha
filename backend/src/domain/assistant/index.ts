@@ -35,13 +35,18 @@ const ClarifyEnum = z.enum([
   'contradiction',
 ]);
 
+/** Ограничение числа ключей: защита от раздутых JSON-объектов (zod CVE + память). */
+const BoundedRecord = z
+  .record(z.string(), z.unknown())
+  .refine((value) => Object.keys(value).length <= 100, 'Слишком много полей');
+
 const AssistantRequestSchema = z.object({
   message: z.string().max(MAX_MESSAGE_LENGTH, `Сообщение не длиннее ${MAX_MESSAGE_LENGTH} знаков`).optional(),
-  previous: z.record(z.unknown()).nullable().optional(),
+  previous: BoundedRecord.nullable().optional(),
   patch: z
     .object({
       reset: z.boolean().optional(),
-      set: z.record(z.unknown()).optional(),
+      set: BoundedRecord.optional(),
       unset: z.array(z.string()).max(50).optional(),
     })
     .nullable()
@@ -217,7 +222,7 @@ export async function runAssistantPipeline(
       modelUsed,
       PROMPT_VERSION,
       payload.action,
-      request.message ? maskPii(request.message) : null,
+      request.message ? maskPii(request.message).slice(0, 200) : null,
       durationMs,
       JSON.stringify(runtime.steps),
       JSON.stringify([...runtime.groundedIds]),

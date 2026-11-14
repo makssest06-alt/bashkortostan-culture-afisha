@@ -102,8 +102,8 @@ export async function createSubscription(
   try {
     await db.transaction(async (tx) => {
       await tx.query(
-        `INSERT INTO subscriptions (id, channel, user_ref, city, category, period, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO subscriptions (id, channel, user_ref, city, category, period, created_at, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
         [id, channel, user_ref, city, category, period, createdAt],
       );
 
@@ -159,6 +159,7 @@ interface SubRow {
 export async function listSubscriptions(
   db: Database,
   userRef: string | null | undefined,
+  now: Date = new Date(),
 ): Promise<
   | { ok: true; items: SubscriptionRecord[] }
   | { ok: false; status: 400; code: string; message: string; details: ApiErrorDetail[] }
@@ -177,6 +178,14 @@ export async function listSubscriptions(
     'SELECT * FROM subscriptions WHERE user_ref = $1 ORDER BY created_at DESC',
     [userRef],
   );
+
+  // Отметка активности: пользователь открыл список — подписка не считается брошенной.
+  if (res.rows.length > 0) {
+    await db.query('UPDATE subscriptions SET last_used_at = $2 WHERE user_ref = $1', [
+      userRef,
+      formatRfc3339Local(now),
+    ]);
+  }
 
   return {
     ok: true,

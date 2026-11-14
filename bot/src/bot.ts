@@ -186,6 +186,11 @@ export function createBot(
     new RateLimiter({ limit: config.rateLimitPerMinute ?? 20 });
   const publicWebUrl = telegramSafeHttpUrl(config.publicWebUrl);
   const logHashSecret = config.logHashSecret ?? config.telegramBotToken;
+  if ((config.userRefMode ?? 'hmac') === 'legacy') {
+    logger.warn('user_ref_legacy_mode', {
+      message: 'USER_REF_MODE=legacy делает user_ref предсказуемым; используйте только для отката',
+    });
+  }
   const bot = options.client ? new Bot(token, { client: options.client }) : new Bot(token);
 
   /** В логи попадает только HMAC-псевдоним, не telegram id и не user_ref. */

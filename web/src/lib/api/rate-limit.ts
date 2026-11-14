@@ -40,10 +40,20 @@ export function hitRate(key: string, limit: number, windowMs: number, now: numbe
   return { ok: true, retryAfter: 0, remaining: limit - bucket.length };
 }
 
-/** IP клиента за прокси: первый адрес X-Forwarded-For, иначе X-Real-IP. В журнал он не пишется. */
+/**
+ * IP клиента для лимитов сайта. Клиентский X-Forwarded-For не доверяем:
+ * без TRUST_PROXY_CLIENT_IP=1 все запросы попадают в общий ключ 'local',
+ * и подменить его заголовком нельзя. За доверенным прокси берём правый
+ * элемент цепочки — его дописал сам прокси.
+ */
 export function clientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  return forwarded || request.headers.get('x-real-ip')?.trim() || 'local';
+  if (process.env.TRUST_PROXY_CLIENT_IP !== '1') return 'local';
+  const chain = (request.headers.get('x-forwarded-for') ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (chain.length > 0) return chain[chain.length - 1];
+  return request.headers.get('x-real-ip')?.trim() || 'local';
 }
 
 export function resetRateForTests(): void {

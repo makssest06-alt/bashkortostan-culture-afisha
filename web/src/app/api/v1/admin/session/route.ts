@@ -16,7 +16,8 @@ import {
   sessionValue,
   tokenMatches,
 } from '../../../../../lib/admin/auth';
-import { errorResponse, internalError, json, methodNotAllowed, preflight, requestIdOf } from '../../../../../lib/api/http';
+import { errorResponse, internalError, json, methodNotAllowed, preflight, requestIdOf, stripCorsHeaders } from '../../../../../lib/api/http';
+import { readLimitedBody } from '../../../../../lib/api/forward';
 import { clientIp, hitRate } from '../../../../../lib/api/rate-limit';
 
 function cookie(name: string, value: string, maxAge: number, secure: boolean, httpOnly = true): string {
@@ -29,9 +30,11 @@ export function GET(request: Request): Response {
   const requestId = requestIdOf(request);
   const mode = adminMode();
   const auth = mode === 'disabled' ? null : requireAdmin(request, requestId);
-  return json(
-    { mode, authenticated: Boolean(auth?.ok), actor: auth?.ok ? auth.actor : null },
-    { requestId, cache: 'no-store' },
+  return stripCorsHeaders(
+    json(
+      { mode, authenticated: Boolean(auth?.ok), actor: auth?.ok ? auth.actor : null },
+      { requestId, cache: 'no-store' },
+    ),
   );
 }
 
@@ -50,8 +53,12 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
     let body: { token?: unknown; name?: unknown } = {};
+    const limited = await readLimitedBody(request, 4 * 1024);
+    if (!limited.ok) {
+      return errorResponse(413, 'payload_too_large', 'Тело входа слишком большое', undefined, { requestId });
+    }
     try {
-      body = (await request.json()) as typeof body;
+      body = JSON.parse(new TextDecoder().decode(limited.body)) as typeof body;
     } catch {
       return errorResponse(400, 'invalid_json', 'Ожидается JSON: { "token": "…", "name": "…" }', undefined, { requestId });
     }
@@ -66,11 +73,11 @@ export async function POST(request: Request): Promise<Response> {
         requestId,
       });
     }
-    const secure = isSecureRequest(request);
+    const secure = isSecureRequest(request) || process.env.NODE_ENV === 'production';
     const response = json({ mode, authenticated: true, actor: name }, { requestId });
     if (mode === 'token') response.headers.append('Set-Cookie', cookie(SESSION_COOKIE, sessionValue(), SESSION_MAX_AGE, secure));
     response.headers.append('Set-Cookie', cookie(NAME_COOKIE, encodeURIComponent(name), SESSION_MAX_AGE, secure));
-    return response;
+    return stripCorsHeaders(response);
   } catch (error) {
     return internalError(error, requestId);
   }
@@ -78,11 +85,11 @@ export async function POST(request: Request): Promise<Response> {
 
 export function DELETE(request: Request): Response {
   const requestId = requestIdOf(request);
-  const secure = isSecureRequest(request);
+  const secure = isSecureRequest(request) || process.env.NODE_ENV === 'production';
   const response = json({ authenticated: false }, { requestId });
   response.headers.append('Set-Cookie', cookie(SESSION_COOKIE, '', 0, secure));
   response.headers.append('Set-Cookie', cookie(NAME_COOKIE, '', 0, secure));
-  return response;
+  return stripCorsHeaders(response);
 }
 
 export function OPTIONS(): Response {

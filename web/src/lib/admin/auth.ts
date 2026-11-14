@@ -32,8 +32,11 @@ export function configuredAdminToken(): string | undefined {
 
 export function adminMode(): AdminMode {
   const token = configuredAdminToken();
-  if (token && token.length >= 12) return 'token';
-  if (process.env.NODE_ENV !== 'production' || process.env.ADMIN_OPEN === '1') return 'open';
+  // В production токен должен быть не короче 32 символов, как в бэкенде.
+  const minLength = process.env.NODE_ENV === 'production' ? 32 : 12;
+  if (token && token.length >= minLength) return 'token';
+  // Открытая админка — только вне production. ADMIN_OPEN=1 в бою игнорируется.
+  if (process.env.NODE_ENV !== 'production' && process.env.ADMIN_OPEN === '1') return 'open';
   return 'disabled';
 }
 

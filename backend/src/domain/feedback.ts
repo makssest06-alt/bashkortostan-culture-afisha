@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 
 import type { Database } from '../db/adapter.js';
 import type { MetricsRegistry } from '../observability/metrics.js';
 import { UUID_PATTERN } from './identity.js';
 import type { SlidingRateLimiter } from './rate-limit.js';
+import { USER_REF_PATTERN } from './subscriptions.js';
 import { formatRfc3339Local } from './time.js';
 import type { ApiErrorDetail } from './types.js';
 
@@ -14,6 +15,16 @@ export const FEEDBACK_RATE_RULES = [
   { suffix: '10m', max: 5, windowMs: 10 * 60_000 },
   { suffix: '24h', max: 20, windowMs: 24 * 3_600_000 },
 ] as const;
+
+/** Сетевой backstop: не блокирует всех пользователей одного прокси/бота. */
+export const FEEDBACK_IP_BACKSTOP_RULES = [
+  { suffix: '10m', max: 100, windowMs: 10 * 60_000 },
+  { suffix: '24h', max: 1_000, windowMs: 24 * 3_600_000 },
+] as const;
+
+function feedbackKeyHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 16);
+}
 
 export const KIND_LABEL: Record<FeedbackKind, string> = {
   organizer_application: 'Заявка организатора',
@@ -25,6 +36,8 @@ const FeedbackCreateSchema = z
   .object({
     kind: z.enum(['organizer_application', 'correction', 'question']),
     event_id: z.string().nullable().optional(),
+    /** Необязательный псевдоним для per-user лимита; в ответах и логах не используется. */
+    user_ref: z.string().regex(USER_REF_PATTERN, 'user_ref должен содержать 16–128 символов [A-Za-z0-9_-]').optional(),
     name: z.string().trim().min(1, 'Укажите имя').max(100, 'Имя не длиннее 100 символов'),
     contact: z
       .string()
@@ -79,22 +92,44 @@ export async function submitFeedback(
 > {
   const now = options.now ?? new Date();
   const nowMs = now.getTime();
+  const rawUserRef =
+    typeof (rawBody as { user_ref?: unknown })?.user_ref === 'string'
+      ? (rawBody as { user_ref: string }).user_ref
+      : '';
+  const userRef = rawUserRef && USER_REF_PATTERN.test(rawUserRef) ? rawUserRef : null;
 
   if (options.rateLimiter) {
-    const check = options.rateLimiter.consumeMulti(
-      `feedback:${options.clientIp}`,
-      FEEDBACK_RATE_RULES,
+    const ipCheck = options.rateLimiter.consumeMulti(
+      `feedback:ip:${options.clientIp}`,
+      userRef ? FEEDBACK_IP_BACKSTOP_RULES : FEEDBACK_RATE_RULES,
       nowMs,
     );
-    if (!check.ok) {
+    if (!ipCheck.ok) {
       options.metrics?.incFeedback('rate_limited');
       return {
         ok: false,
         status: 429,
         code: 'rate_limited',
         message: 'Слишком много обращений с вашего адреса. Попробуйте позже.',
-        retryAfterSeconds: check.retryAfter,
+        retryAfterSeconds: ipCheck.retryAfter,
       };
+    }
+    if (userRef) {
+      const userCheck = options.rateLimiter.consumeMulti(
+        `feedback:user:${feedbackKeyHash(userRef)}`,
+        FEEDBACK_RATE_RULES,
+        nowMs,
+      );
+      if (!userCheck.ok) {
+        options.metrics?.incFeedback('rate_limited');
+        return {
+          ok: false,
+          status: 429,
+          code: 'rate_limited',
+          message: 'Слишком много обращений. Попробуйте позже.',
+          retryAfterSeconds: userCheck.retryAfter,
+        };
+      }
     }
   }
 

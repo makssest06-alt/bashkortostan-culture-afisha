@@ -19,7 +19,7 @@ export function LoginForm({ mode, onDone }: { mode: SessionInfo['mode']; onDone:
   if (mode === 'disabled') {
     return (
       <Notice tone="info">
-        Админка выключена: на сервере не задан ADMIN_TOKEN. Задайте переменную окружения ADMIN_TOKEN (от 12 знаков) и
+        Админка выключена: на сервере не задан ADMIN_TOKEN. Задайте переменную окружения ADMIN_TOKEN (в production — от 32 знаков) и
         перезапустите сайт.
       </Notice>
     );

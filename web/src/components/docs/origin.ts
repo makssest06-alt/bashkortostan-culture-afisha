@@ -6,10 +6,14 @@
 
 import { headers } from 'next/headers';
 
+import { configuredSiteOrigin } from '../../lib/api/site-origin';
+
 const SAFE_HOST = /^[a-z0-9.-]+(?::\d{1,5})?$/i;
 const FALLBACK_HOST = 'localhost:3210';
 
 export async function getSiteOrigin(): Promise<string> {
+  const configured = configuredSiteOrigin();
+  if (configured) return configured.origin;
   const store = await headers();
   const forwarded = store.get('x-forwarded-host')?.split(',')[0]?.trim();
   const candidate = forwarded || store.get('host') || FALLBACK_HOST;

@@ -30,6 +30,7 @@ npm run dev
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
 | `PORT` | `8000` | Порт HTTP-сервера |
+| `HOST` | `127.0.0.1` | Адрес прослушивания. В Docker-образе — `0.0.0.0` |
 | `DATABASE_URL` | пусто | Строка PostgreSQL 16; если пуста — используется PGlite (`PGLITE_DATA_DIR=./data/pglite`) |
 | `ADMIN_TOKEN` | пусто | Bearer/header-токен модератора; заглушка из `.env.example` автоматически отклоняется. В production обязателен, ≥ 32 символов |
 | `ADMIN_OPEN` | пусто | `1` открывает админку без токена — только для локального демо. В production бэкенд с `ADMIN_OPEN=1` не стартует |
@@ -46,7 +47,13 @@ npm run dev
 | `ASSISTANT_MAX_TOKENS` | `800` | Максимум токенов ответа LLM (`max_tokens`) |
 | `ASSISTANT_DAILY_BUDGET_RUB` | `100` | Дневной бюджет LLM; при исчерпании — `rules-budget-v2` без вызова модели |
 | `FEEDBACK_RETENTION_DAYS` | `90` | Срок хранения записей обратной связи (дней) |
+| `ASSISTANT_TRACE_RETENTION_DAYS` | `30` | Срок хранения трасс ассистента |
+| `CONFIRMATION_RETENTION_DAYS` | `7` | Срок хранения использованных подтверждений |
+| `RAW_RECORD_RETENTION_DAYS` | `180` | Срок хранения сырых импортированных записей |
+| `AUDIT_RETENTION_DAYS` | `365` | Срок хранения журнала аудита |
+| `SUBSCRIPTION_INACTIVE_DAYS` | `180` | Удаление подписок без активности |
 | `METRICS_RATE_LIMIT` | `120` | Лимит обращений к `/metrics` (req/min) |
+| `METRICS_TOKEN` | пусто | Bearer-токен `/metrics`; в production без него — 404 |
 | `TRUST_PROXY` | `0` | `0` — брать адрес из сокета; `1` — один доверенный прокси; N — N прокси (адрес с конца `X-Forwarded-For`) |
 
 ## Основные группы эндпоинтов

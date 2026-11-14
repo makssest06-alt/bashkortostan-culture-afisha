@@ -2600,6 +2600,8 @@ components:
           - string
           - 'null'
           format: uuid
+        user_ref:
+          $ref: '#/components/schemas/UserRef'
         name:
           type: string
           minLength: 1

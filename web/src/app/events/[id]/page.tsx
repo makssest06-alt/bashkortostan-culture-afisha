@@ -6,6 +6,7 @@ import { EventView } from '@/components/event/EventView';
 import { EVENT_GLOW, MORE_LIMIT, catalogHrefFromParam, eventPath, eventTitle, metaDescription, pickMore } from '@/components/event/model';
 import { PageShell } from '@/components/shell/PageShell';
 import { getEvent, listEvents } from '@/lib/api/server';
+import { configuredSiteOrigin } from '@/lib/api/site-origin';
 import { localNow } from '@/lib/api/time';
 import { getServerT } from '@/lib/i18n/server';
 
@@ -21,6 +22,8 @@ type EventPageProps = {
 
 /** Адрес сайта из заголовков запроса: нужен, чтобы картинка в Open Graph получила полный адрес. */
 async function requestOrigin(): Promise<URL | undefined> {
+  const configured = configuredSiteOrigin();
+  if (configured) return configured;
   const headerList = await headers();
   const host = headerList.get('x-forwarded-host') ?? headerList.get('host');
   if (!host) return undefined;

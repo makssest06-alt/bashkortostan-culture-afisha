@@ -4,16 +4,16 @@ import { isUserRef, telegramUserRef, UserRefError, hashTelegramUserId } from '..
 
 describe('telegramUserRef', () => {
   it('строит user_ref из telegram id с дополнением до 8 цифр', () => {
-    expect(telegramUserRef(123)).toBe('telegram_00000123');
-    expect(isUserRef(telegramUserRef(123))).toBe(true);
+    expect(telegramUserRef(123, { mode: 'legacy' })).toBe('telegram_00000123');
+    expect(isUserRef(telegramUserRef(123, { mode: 'legacy' }))).toBe(true);
   });
 
   it('не обрезает длинные id', () => {
-    expect(telegramUserRef('123456789012')).toBe('telegram_123456789012');
+    expect(telegramUserRef('123456789012', { mode: 'legacy' })).toBe('telegram_123456789012');
   });
 
   it('принимает строковый id', () => {
-    expect(telegramUserRef(' 42 ')).toBe('telegram_00000042');
+    expect(telegramUserRef(' 42 ', { mode: 'legacy' })).toBe('telegram_00000042');
   });
 
   it('отклоняет нечисловой id', () => {
@@ -22,7 +22,7 @@ describe('telegramUserRef', () => {
   });
 
   it('не выходит за лимит длины API', () => {
-    const ref = telegramUserRef('9'.repeat(110));
+    const ref = telegramUserRef('9'.repeat(110), { mode: 'legacy' });
     expect(ref.length).toBeLessThanOrEqual(128);
     expect(isUserRef(ref)).toBe(true);
   });

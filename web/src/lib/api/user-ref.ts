@@ -12,11 +12,15 @@ let ephemeral: string | null = null;
 
 function generateUserRef(): string {
   const cryptoObj = typeof globalThis.crypto !== 'undefined' ? globalThis.crypto : undefined;
-  if (cryptoObj?.randomUUID) {
-    return `web_${cryptoObj.randomUUID().replace(/-/g, '')}`;
+  const bytes = new Uint8Array(16);
+  if (cryptoObj?.getRandomValues) {
+    // getRandomValues работает и в не-secure context, в отличие от randomUUID.
+    cryptoObj.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   }
-  const random = Math.random().toString(36).slice(2) + Date.now().toString(36);
-  return `web_${random.padEnd(24, '0').slice(0, 24)}`;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `web_${hex}`;
 }
 
 export function browserUserRef(): string {

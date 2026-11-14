@@ -43,6 +43,7 @@ export async function createTestContext(
 
   const config: AppConfig = {
     port: 8000,
+    host: '127.0.0.1',
     databaseUrl: 'memory://',
     pgliteDataDir: './data/pglite',
     adminToken: TEST_ADMIN_TOKEN,
@@ -56,6 +57,7 @@ export async function createTestContext(
     llmTimeoutMs: 5000,
     feedbackRetentionDays: 90,
     metricsRatePerMinute: 60,
+    metricsToken: undefined,
     trustProxy: true,
     trustedProxyHops: 1,
     assistantRatePer10Min: 1000,
@@ -63,6 +65,11 @@ export async function createTestContext(
     assistantConfirmPer10Min: 1000,
     assistantMaxTokens: 800,
     assistantDailyBudgetRub: 100,
+    assistantTraceRetentionDays: 30,
+    confirmationRetentionDays: 7,
+    rawRecordRetentionDays: 180,
+    auditRetentionDays: 365,
+    subscriptionInactiveDays: 180,
     llmCostInRubPer1k: 0.015,
     llmCostOutRubPer1k: 0.06,
     ...overrides,

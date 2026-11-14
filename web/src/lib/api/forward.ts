@@ -21,12 +21,15 @@ const REQUEST_HEADERS = ['accept', 'accept-language', 'content-type', 'if-match'
 const RESPONSE_HEADERS = ['content-type', 'etag', 'cache-control', 'last-modified', 'location', 'retry-after', 'x-request-id'];
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_MAX_BODY_BYTES = 1_000_000;
 
 export interface ForwardOptions {
   requestId?: string;
   /** Дополнительные заголовки к бэку, например Authorization для админки. */
   headers?: Record<string, string>;
   timeoutMs?: number;
+  /** Потолок тела запроса до чтения в память. */
+  maxBodyBytes?: number;
 }
 
 /** Адрес в бэке для запроса к сайту: тот же путь /api/v1/... и те же параметры. */
@@ -71,15 +74,58 @@ function trustedClientIpOf(request: Request): string | null {
   return request.headers.get('x-real-ip')?.trim() || null;
 }
 
+/** Читает тело с потолком, не доверяя только Content-Length (chunked). */
+export async function readLimitedBody(
+  request: Request,
+  maxBytes: number,
+): Promise<{ ok: true; body: Uint8Array } | { ok: false }> {  const declared = Number(request.headers.get('content-length') ?? '');
+  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
+  if (!request.body) return { ok: true, body: new Uint8Array(0) };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return { ok: false };
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, body };
+}
+
 export async function forwardToBackend(request: Request, options: ForwardOptions = {}): Promise<Response> {
   const requestId = options.requestId ?? requestIdOf(request);
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+  let body: Uint8Array | undefined;
+  if (hasBody) {
+    const limited = await readLimitedBody(request, maxBodyBytes);
+    if (!limited.ok) {
+      return errorResponse(413, 'payload_too_large', 'Тело запроса слишком большое', undefined, { requestId });
+    }
+    body = limited.body;
+  }
   let upstream: Response;
   try {
+    // ArrayBuffer — валидный BodyInit; Uint8Array<ArrayBufferLike> в новых типах TS им не является.
+    const bodyInit = body
+      ? (body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer)
+      : undefined;
     upstream = await fetch(backendUrlOf(request), {
       method: request.method,
       headers: upstreamHeaders(request, requestId, options.headers ?? {}),
-      body: hasBody ? await request.arrayBuffer() : undefined,
+      body: bodyInit,
       signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       cache: 'no-store',
       redirect: 'manual',

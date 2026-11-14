@@ -12,7 +12,8 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \
-    PORT=8000
+    PORT=8000 \
+    HOST=0.0.0.0
 
 COPY --from=builder --chown=node:node /app/package.json ./
 COPY --from=builder --chown=node:node /app/package-lock.json* ./

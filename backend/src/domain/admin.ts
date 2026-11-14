@@ -171,6 +171,11 @@ function computeEventEtag(ev: ApiEvent): string {
 
 const IMMUTABLE_FIELDS = new Set(['id', 'source_hash', 'created_at', 'updated_at']);
 
+const HttpUrl = z
+  .string()
+  .url()
+  .refine((value) => /^https?:\/\//i.test(value), 'Ссылка должна начинаться с http:// или https://');
+
 const EventPatchSchema = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
@@ -194,8 +199,8 @@ const EventPatchSchema = z
     is_free: z.boolean().optional(),
     age_limit: z.union([z.literal(0), z.literal(6), z.literal(12), z.literal(16), z.literal(18), z.null()]).optional(),
     language: z.string().regex(/^[a-z]{2,3}$/).nullable().optional(),
-    org_link: z.string().url().nullable().optional(),
-    source_url: z.string().url().optional(),
+    org_link: HttpUrl.nullable().optional(),
+    source_url: HttpUrl.optional(),
     status: z.enum(['published', 'draft', 'cancelled']).optional(),
     organizer: z.string().trim().max(200).nullable().optional(),
     kind: z.enum(['standalone', 'performance_run', 'exhibition', 'festival']).optional(),
@@ -203,7 +208,7 @@ const EventPatchSchema = z
     review: z
       .object({
         disputed: z.boolean().optional(),
-        reasons: z.array(z.string()).optional(),
+        reasons: z.array(z.string()).max(50).optional(),
       })
       .optional(),
     expected_updated_at: z.string().trim().min(10).optional(),
@@ -865,13 +870,22 @@ export async function listAuditEntries(
     conds.push(`action = $${params.length}`);
   }
   const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
-  const allRes = await db.query<AuditRow>(`SELECT * FROM audit_log ${where} ORDER BY at DESC`, params);
-
+  const countRes = await db.query<{ cnt: string | number }>(
+    `SELECT COUNT(*) AS cnt FROM audit_log ${where}`,
+    params,
+  );
+  const total = Number(countRes.rows[0]?.cnt ?? 0);
   const pageSize = Math.min(Math.max(1, options.page_size ?? 50), 50);
-  const total = allRes.rows.length;
   const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
   const page = Math.min(Math.max(1, options.page ?? 1), Math.max(1, totalPages));
-  const slice = allRes.rows.slice((page - 1) * pageSize, page * pageSize);
+  const offset = (page - 1) * pageSize;
+
+  const allRes = await db.query<AuditRow>(
+    `SELECT * FROM audit_log ${where} ORDER BY at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, pageSize, offset],
+  );
+
+  const slice = allRes.rows;
 
   const items = slice.map((r) => {
     let changes = r.changes;
@@ -924,9 +938,14 @@ export async function listApplications(db: Database, statusFilter?: string | nul
   const where = statusFilter === 'new' || statusFilter === 'done' ? 'WHERE status = $1' : '';
   if (where) params.push(statusFilter);
 
+  const countRes = await db.query<{ cnt: string | number }>(
+    `SELECT COUNT(*) AS cnt FROM feedback ${where}`,
+    params,
+  );
+  const total = Number(countRes.rows[0]?.cnt ?? 0);
   const res = await db.query<FeedbackRow>(
     `SELECT id, created_at, kind, event_id, event_title, name, contact, organization, text, status
-     FROM feedback ${where} ORDER BY created_at DESC`,
+     FROM feedback ${where} ORDER BY created_at DESC LIMIT 1000`,
     params,
   );
 
@@ -943,7 +962,7 @@ export async function listApplications(db: Database, statusFilter?: string | nul
     status: r.status,
   }));
 
-  return { items, total: items.length };
+  return { items, total };
 }
 
 export async function patchApplicationStatus(

@@ -4,7 +4,7 @@
  */
 
 import { USES_REMOTE_API } from '../api/config';
-import { internalError, logEvent, requestIdOf } from '../api/http';
+import { internalError, logEvent, requestIdOf, stripCorsHeaders } from '../api/http';
 import { requireAdmin } from './auth';
 import { forwardAdmin } from './forward';
 
@@ -20,7 +20,7 @@ export async function withAdmin(
   const requestId = requestIdOf(request);
   try {
     const auth = requireAdmin(request, requestId);
-    if (!auth.ok) return auth.response;
+    if (!auth.ok) return stripCorsHeaders(auth.response);
     // Бэк подключён: данные админки живут в нём, сайт только проверяет сессию и пересылает запрос.
     const response = USES_REMOTE_API
       ? await forwardAdmin(request, requestId, auth.actor)
@@ -34,9 +34,9 @@ export async function withAdmin(
         status: response.status,
       });
     }
-    return response;
+    return stripCorsHeaders(response);
   } catch (error) {
-    return internalError(error, requestId);
+    return stripCorsHeaders(internalError(error, requestId));
   }
 }
 

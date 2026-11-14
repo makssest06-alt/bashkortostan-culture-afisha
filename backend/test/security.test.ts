@@ -23,8 +23,7 @@ function feedbackBody(text = 'Вопрос из теста') {
   });
 }
 
-describe('P0-1: админка не открыта по умолчанию', () => {
-  it('production не стартует с ADMIN_OPEN=1 и без длинного ADMIN_TOKEN', () => {
+describe('P0-1: админка не открыта по умолчанию', () => {  it('production не стартует с ADMIN_OPEN=1 и без длинного ADMIN_TOKEN', () => {
     expect(() =>
       loadConfig({ NODE_ENV: 'production', ADMIN_OPEN: '1', ADMIN_TOKEN: LONG_TOKEN }),
     ).toThrow(/ADMIN_OPEN=1 запрещён/);
@@ -62,6 +61,48 @@ describe('P0-1: админка не открыта по умолчанию', () 
     expect(webCompose).not.toMatch(/ADMIN_OPEN:\s*\$\{ADMIN_OPEN:-1\}/);
     expect(envExample).not.toMatch(/^ADMIN_OPEN=1$/m);
   });
+
+  it('CORS админки не отдаёт Access-Control-Allow-Origin: *', async () => {
+    const ctx = await createTestContext();
+    try {
+      const adminPreflight = await ctx.req('/api/v1/admin/events', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'GET' },
+      });
+      expect(adminPreflight.status).toBe(204);
+      expect(adminPreflight.headers.get('access-control-allow-origin')).toBeNull();
+
+      const admin401 = await ctx.req('/api/v1/admin/events');
+      expect(admin401.status).toBe(401);
+      expect(admin401.headers.get('access-control-allow-origin')).toBeNull();
+
+      const publicPreflight = await ctx.req('/api/v1/events', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://partner.example', 'Access-Control-Request-Method': 'GET' },
+      });
+      expect(publicPreflight.headers.get('access-control-allow-origin')).toBe('*');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('PATCH события не принимает javascript: в org_link/source_url', async () => {
+    const ctx = await createTestContext();
+    try {
+      const list = await ctx.adminReq('/api/v1/admin/events?page_size=1');
+      const target = (await list.json()).items[0] as { id: string };
+      const detail = await ctx.adminReq(`/api/v1/admin/events/${target.id}`);
+      const etag = detail.headers.get('etag');
+      const res = await ctx.adminReq(`/api/v1/admin/events/${target.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'If-Match': etag ?? '' },
+        body: JSON.stringify({ org_link: 'javascript:alert(1)', source_url: 'data:text/html,evil' }),
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 describe('P0-2: подменённый X-Forwarded-For не меняет ключ лимита', () => {
@@ -93,6 +134,8 @@ describe('P0-2: подменённый X-Forwarded-For не меняет клю�
     const headers = new Headers({ 'X-Forwarded-For': '1.2.3.4, 203.0.113.7' });
     expect(clientIpFromHeaders(headers, 1)).toBe('203.0.113.7');
     expect(clientIpFromHeaders(headers, 2)).toBe('1.2.3.4');
+    // Короткая цепочка при двух доверенных прокси — не доверяем, берём сокет.
+    expect(clientIpFromHeaders(headers, 3, '10.0.0.5')).toBe('10.0.0.5');
     expect(normalizeClientIp('::ffff:127.0.0.1')).toBe('127.0.0.1');
   });
 
@@ -105,6 +148,51 @@ describe('P0-2: подменённый X-Forwarded-For не меняет клю�
 });
 
 describe('P0-3: лимиты и бюджет ассистента', () => {
+  it('11 разных пользователей с одного IP не блокируют друг друга (IP backstop)', async () => {
+    const ctx = await createTestContext();
+    try {
+      const codes: number[] = [];
+      for (let i = 1; i <= 11; i += 1) {
+        const res = await ctx.req('/api/v1/subscriptions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: 'telegram',
+            user_ref: `u_backstop_${String(i).padStart(6, '0')}`,
+            city: 'ufa',
+            category: 'concert',
+            period: 'weekend',
+          }),
+        });
+        codes.push(res.status);
+      }
+      expect(codes).toEqual(new Array(11).fill(201));
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('11 разных пользователей ассистента с одного IP проходят (IP backstop)', async () => {
+    const ctx = await createTestContext();
+    try {
+      const codes: number[] = [];
+      for (let i = 1; i <= 11; i += 1) {
+        const res = await ctx.req('/api/v1/assistant/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: 'Концерты в Уфе',
+            user_ref: `u_ask_backstop_${String(i).padStart(6, '0')}`,
+          }),
+        });
+        codes.push(res.status);
+      }
+      expect(codes).toEqual(new Array(11).fill(200));
+    } finally {
+      await ctx.close();
+    }
+  });
+
   it('N+1 запрос к /assistant/query получает 429 + Retry-After', async () => {
     const ctx = await createTestContext({
       assistantRatePer10Min: 2,
@@ -158,6 +246,72 @@ describe('P0-3: лимиты и бюджет ассистента', () => {
       const limited = await confirm();
       expect(limited.status).toBe(429);
       expect(limited.headers.get('retry-after')).toBeTruthy();
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('body limit отсекает 2 МБ на /subscriptions и 100 КБ на /assistant/query', async () => {
+    const ctx = await createTestContext();
+    try {
+      const huge = JSON.stringify({
+        channel: 'telegram',
+        user_ref: 'u_body_limit_000001',
+        city: 'ufa',
+        padding: 'x'.repeat(2_000_000),
+      });
+      const sub = await ctx.req('/api/v1/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: huge,
+      });
+      expect(sub.status).toBe(413);
+      validators.assertValid('Error', await sub.json());
+
+      const ask = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'x'.repeat(100_000) }),
+      });
+      expect(ask.status).toBe(413);
+      validators.assertValid('Error', await ask.json());
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('в production /metrics скрыт без METRICS_TOKEN и требует токен с ним', async () => {
+    const prod = await createTestContext({ production: true, metricsToken: undefined });
+    try {
+      expect((await prod.req('/metrics')).status).toBe(404);
+    } finally {
+      await prod.close();
+    }
+    const protectedCtx = await createTestContext({
+      production: true,
+      metricsToken: 'metrics-secret-for-tests-123456',
+    });
+    try {
+      expect((await protectedCtx.req('/metrics')).status).toBe(401);
+      const ok = await protectedCtx.req('/metrics', {
+        headers: { Authorization: 'Bearer metrics-secret-for-tests-123456' },
+      });
+      expect(ok.status).toBe(200);
+      expect(await ok.text()).toContain('http_requests_total');
+    } finally {
+      await protectedCtx.close();
+    }
+  });
+
+  it('метрики используют шаблон маршрута, а не UUID', async () => {
+    const ctx = await createTestContext();
+    try {
+      const list = await ctx.req('/api/v1/events?page_size=1');
+      const event = (await list.json()).items[0] as { id: string };
+      expect((await ctx.req(`/api/v1/events/${event.id}`)).status).toBe(200);
+      const metrics = ctx.metrics.formatPrometheus();
+      expect(metrics).not.toContain(event.id);
+      expect(metrics).toContain('/api/v1/events/:id');
     } finally {
       await ctx.close();
     }
@@ -251,6 +405,64 @@ describe('P0-4: confirmation-токены привязаны к user_ref и хр
         headers: { Authorization: `Bearer ${userRef}` },
       });
       expect((await subs.json()).items).toHaveLength(0);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('два параллельных confirm выполняют действие ровно один раз', async () => {
+    const ctx = await createTestContext();
+    const userRef = 'u_confirm_race_000001';
+    try {
+      const q = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Подпиши меня на концерты в Уфе на выходных',
+          user_ref: userRef,
+        }),
+      });
+      const data = await q.json();
+      const token = data.confirmation.confirmation_id as string;
+      const confirm = () =>
+        ctx.req('/api/v1/assistant/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmation_id: token, user_ref: userRef, confirm: true }),
+        });
+      const results = await Promise.all([confirm(), confirm()]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+
+      const subs = await ctx.req('/api/v1/subscriptions', {
+        headers: { Authorization: `Bearer ${userRef}` },
+      });
+      expect((await subs.json()).items).toHaveLength(1);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('текст обращения не попадает в шаги трассы сырым', async () => {
+    const ctx = await createTestContext();
+    const userRef = 'u_trace_pii_00000001';
+    const secret = 'secret@example.com';
+    try {
+      const q = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Сообщить об ошибке: пишите на ${secret}, телефон +7 999 123-45-67`,
+          user_ref: userRef,
+        }),
+      });
+      const data = await q.json();
+      expect(data.action).toBe('confirmation_required');
+      const traceRes = await ctx.adminReq(`/api/v1/admin/traces/${data.trace_id}`);
+      const trace = await traceRes.json();
+      const serialized = JSON.stringify(trace.steps);
+      expect(serialized).not.toContain(secret);
+      expect(serialized).not.toContain('999 123-45-67');
+      expect(trace.user_query_masked).toContain('[email]');
     } finally {
       await ctx.close();
     }

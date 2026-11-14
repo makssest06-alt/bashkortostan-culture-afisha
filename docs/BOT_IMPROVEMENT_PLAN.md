@@ -350,7 +350,7 @@
 
 - [x] `ASSISTANT_ENABLED=0` по умолчанию.
 - [x] `bot/src/api/assistant.ts` или методы в клиенте:
-  - `queryAssistant({ message, channel: 'telegram', user_ref, previous, patch, answering, limit, confirmation_token })`;
+  - `queryAssistant({ message, channel: 'telegram', user_ref, previous, patch, answering, limit })`;
   - `confirmAssistant(confirmationId, decision)`.
 - [x] Zod-схемы ответа: `action`, `message`, `constraints`, `chips`, `assumptions`, `clarify`, `results`, `total`, `hidden_unknown_*`, `relaxations`, `unsupported_actions`, `confirmation`, `events_query`, `reference_date`, `timezone`, `engine`, `trace_id`.
 - [x] `bot.ts` в `handleText`: если ассистент включён и нет черновика подписки — вызвать ассистент; иначе текущий поиск.

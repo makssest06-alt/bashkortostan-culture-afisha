@@ -12,6 +12,7 @@ import type { FormEvent } from 'react';
 
 import { Button, Field, Input, Textarea } from '@/components/ui';
 import { ApiClientError, sendFeedback } from '@/lib/api/client';
+import { browserUserRef } from '@/lib/api/user-ref';
 import { cn } from '@/lib/cn';
 import { useT } from '@/lib/i18n';
 import { pick } from '@/lib/i18n/lang';
@@ -84,7 +85,13 @@ export function OrganizerForm({ defaultKind = 'organizer_application', eventId, 
     setGeneral(null);
     setErrors({});
     try {
-      const accepted = await sendFeedback({ kind, event_id: eventId ?? null, ...values, organization: values.organization || null });
+      const accepted = await sendFeedback({
+        kind,
+        event_id: eventId ?? null,
+        user_ref: browserUserRef(),
+        ...values,
+        organization: values.organization || null,
+      });
       if (!accepted?.id) {
         setGeneral(p(COPY.failed));
         return;

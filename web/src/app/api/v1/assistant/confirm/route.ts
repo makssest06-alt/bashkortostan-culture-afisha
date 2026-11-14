@@ -4,7 +4,7 @@
  */
 
 import { USES_REMOTE_API } from '../../../../../lib/api/config';
-import { forwardToBackend } from '../../../../../lib/api/forward';
+import { forwardToBackend, readLimitedBody } from '../../../../../lib/api/forward';
 import {
   errorResponse,
   internalError,
@@ -19,12 +19,16 @@ const CONFIRM_TIMEOUT_MS = 15_000;
 export async function POST(request: Request): Promise<Response> {
   try {
     if (USES_REMOTE_API) {
-      return await forwardToBackend(request, { timeoutMs: CONFIRM_TIMEOUT_MS });
+      return await forwardToBackend(request, { timeoutMs: CONFIRM_TIMEOUT_MS, maxBodyBytes: 32 * 1024 });
     }
 
+    const limited = await readLimitedBody(request, 32 * 1024);
+    if (!limited.ok) {
+      return errorResponse(413, 'payload_too_large', 'Тело подтверждения слишком большое');
+    }
     let body: unknown;
     try {
-      body = await request.json();
+      body = JSON.parse(new TextDecoder().decode(limited.body));
     } catch {
       return errorResponse(400, 'invalid_json', 'Тело запроса должно быть корректным JSON');
     }
