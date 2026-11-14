@@ -222,6 +222,7 @@ const FEEDBACK_INTENT = word(
 );
 const GREETING = /^\s*(?:привет[а-я]*|здравствуй[а-я]*|добрый\s+(?:день|вечер)|доброе\s+утро|хай|салют|hello|hi)[\s!.,]*$/i;
 const THANKS = /^\s*(?:спасибо|благодарю|понятно|хорошо|ясно|отлично|окей|ок)[\s!.,а-я]*$/i;
+const TOPIC_ALIASES = new Map([['jazz', 'джаз'], ['dzhaz', 'джаз'], ['джазз', 'джаз']]);
 const GENERIC_WORD = /^(?:театр|спектакл|концерт|музе|выставк|выставок|фестивал|детск|музык|событи|мероприяти)/;
 
 const TEXT = {
@@ -694,7 +695,8 @@ export function parseIntoConstraints(
   const vocab = options.vocabulary ?? [];
   const leftover = tokenizeNlu(scanner.rest).filter((token) => token.length >= 4 && !STOP_WORDS.has(token));
   const specific = categories.words.flatMap((entry) => tokenizeNlu(entry)).filter((token) => !GENERIC_WORD.test(token));
-  const semantic = [...new Set([...specific, ...leftover])].filter((token) => inVocabulary(token, vocab));
+  const semantic = [...new Set([...specific, ...leftover].map((token) => TOPIC_ALIASES.get(token) ?? token))]
+    .filter((token) => inVocabulary(token, vocab));
   if (semantic.length > 0) parsedSoft.semantic_query = semantic.join(' ');
 
   const childrenMentioned = party.childrenMentioned || ages.children.length > 0;
@@ -805,12 +807,15 @@ function statusesToFilter(statuses: readonly ConstraintStatus[]): OccurrenceStat
 
 export function toCatalogFilters(c: Constraints, limit = DEFAULT_RESULT_LIMIT): EventsSearchFilters {
   const { hard, soft } = c;
+  const questOnly = hard.categories_any?.length === 1 && hard.categories_any[0] === 'quest';
   const mappedCategories = (hard.categories_any ?? []).filter(isCategoryId);
+  if (questOnly) mappedCategories.push('other');
   const mappedExclude = (hard.categories_exclude ?? []).filter(isCategoryId);
   const statusesExplicit = Boolean(hard.statuses && hard.statuses.length > 0);
   const ageRatings = hard.required_age_rating ? [hard.required_age_rating] : [];
   const audience = soft.audience === 'children' ? 'kids' : null;
-  const textParts = [hard.title_query, hard.topic_query, hard.venue_query].filter(Boolean);
+  const topic = [hard.topic_query, questOnly ? 'квест' : undefined].filter(Boolean).join(' ');
+  const textParts = [hard.title_query, topic, hard.venue_query].filter(Boolean);
 
   return {
     cities: (hard.cities ?? []).filter(isCitySlug),
@@ -834,7 +839,7 @@ export function toCatalogFilters(c: Constraints, limit = DEFAULT_RESULT_LIMIT): 
     venue_query: hard.venue_query ?? null,
     geo_query: hard.geo_query ?? null,
     title_query: hard.title_query ?? null,
-    topic_query: hard.topic_query ?? null,
+    topic_query: topic || null,
     language: hard.language ?? null,
     statuses: statusesExplicit ? statusesToFilter(hard.statuses!) : [...DEFAULT_OCCURRENCE_STATUSES],
     statuses_explicit: statusesExplicit,
@@ -1412,7 +1417,7 @@ export async function runDeterministicAssistant(
     caveats: buildCaveats(item, item.primary_occurrence_id),
   }));
 
-  const missingCat = (state.hard.categories_any ?? []).find((cat) => EXTRA_CATEGORY_LABELS[cat]);
+  const missingCat = (state.hard.categories_any ?? []).find((cat) => cat !== 'quest' && EXTRA_CATEGORY_LABELS[cat]);
   let summary: string;
   if (total === 0) {
     const parts: string[] = [];

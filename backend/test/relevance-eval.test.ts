@@ -17,13 +17,21 @@ describe('fixed catalog evaluation', () => {
     const event = events[0];
     const item = { ...event, title: 'Invented', price_min: null, matched_occurrence_ids: [event.occurrences[0].id], primary_occurrence_id: event.occurrences[0].id } as ApiEventListItem;
     expect(checkCard(item, item.primary_occurrence_id, event, { cities: ['salavat'] })).toEqual(expect.arrayContaining(['fact:title', 'fact:price_min', 'city']));
-    expect(checkCard(item, item.primary_occurrence_id, undefined)).toEqual(['unknown_event']);
+    expect(checkCard(item, item.primary_occurrence_id, undefined)).toEqual(['fact:unknown_event']);
   });
   it('runs the fixed fixture and reports each row, including feedback', async () => {
     const rows = readFileSync(resolve('../evals/search/relevance.fixture.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line) as RelevanceRow);
     const result = await evaluateRelevance(rows, events);
     expect(result.details).toHaveLength(rows.length);
+    expect(result.hardViolations).toBe(0);
+    expect(result.cardFactErrors).toBe(0);
+    expect(result.cancelledShownActive).toBe(0);
+    expect(result.hitAt5 / result.positiveTotal).toBeGreaterThanOrEqual(0.9);
+    expect(result.emptyWithMatches / result.positiveTotal).toBeLessThanOrEqual(0.05);
+    expect(result.falseClarifications).toBe(0);
+    expect(result.incorrectFirstClarifications).toBe(0);
+    expect(result.noResultsCorrect).toBe(result.noResultsTotal);
     expect(result.feedback.total).toBeGreaterThan(0);
-    expect(result.precisionAt5).toBeGreaterThanOrEqual(0);
+    expect(result.feedback.hitAt5).toBe(result.feedback.total);
   });
 });

@@ -52,12 +52,12 @@ export const CATEGORY_PATTERNS: readonly { id: string; pattern: string }[] = [
   {
     id: 'performance',
     pattern:
-      'театр[а-я]*|спектакл[а-я]*|постановк[а-я]+|пьес[а-я]+|балет[а-я]*|опер[аыуе]|оперн[а-я]+|мюзикл[а-я]*|драм[аыу]|комеди[а-я]+|театры|спектакли',
+      'театр[а-я]*|спектакл[а-я]*|постановк[а-я]+|пьес[а-я]+|балет[а-я]*|опер[аыуе]|оперн[а-я]+|мюзикл[а-я]*|драм[аыу]|комеди[а-я]+|театры|спектакли|ballet|balet|theat(?:re|er)',
   },
   {
     id: 'concert',
     pattern:
-      'концерт[а-я]*|филармони[а-я]+|органн[а-я]+|орган|джаз[а-я]*|симфони[а-я]+|оркестр[а-я]*|музык[а-я]+|рок[а-я]*',
+      'концерт[а-я]*|филармони[а-я]+|органн[а-я]+|орган|джаз[а-я]*|симфони[а-я]+|оркестр[а-я]*|музык[а-я]+|рок[а-я]*|concerts?|kontsert[yi]?|jazz|dzhaz',
   },
   { id: 'excursion', pattern: 'экскурси[а-я]+|прогулк[а-я]+' },
   { id: 'museum', pattern: 'музе[а-я]+' },
@@ -65,7 +65,7 @@ export const CATEGORY_PATTERNS: readonly { id: string; pattern: string }[] = [
   { id: 'festival', pattern: 'фестивал[а-я]+|праздник[а-я]*|ярмарк[а-я]+|сабантуй[а-я]*|форум[а-я]*' },
   { id: 'cinema', pattern: 'кино[а-я]*|фильм[а-я]*|киносеанс[а-я]*|кинопоказ[а-я]*' },
   { id: 'other', pattern: 'мастер-класс[а-я]*|мастерск[а-я]+|воркшоп[а-я]*' },
-  { id: 'quest', pattern: 'квест[а-я]*|квэст[а-я]*' },
+  { id: 'quest', pattern: 'квест[а-я]*|квэст[а-я]*|quests?|kvest[yi]?' },
   { id: 'lecture', pattern: 'лекци[а-я]+' },
 ];
 
@@ -176,26 +176,35 @@ export const MONTH_STEMS: readonly string[] = [
   'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр',
 ];
 
+const LATIN_MONTH_PATTERNS = [
+  'january|yanvarya', 'february|fevralya', 'march|marta', 'april|aprelya', 'may|maya', 'june|iyunya',
+  'july|iyulya', 'august|avgusta', 'september|sentyabrya', 'october|oktyabrya', 'november|noyabrya', 'december|dekabrya',
+];
+
 export const MONTH_GENITIVE_PATTERN =
-  'январ[ья]|феврал[ья]|марта?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|августа?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья]';
+  'январ[ья]|феврал[ья]|марта?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|августа?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья]|' +
+  LATIN_MONTH_PATTERNS.join('|');
 
 export const MONTH_PREPOSITIONAL_PATTERN =
   'январе|феврале|марте|апреле|мае|июне|июле|августе|сентябре|октябре|ноябре|декабре';
 
 export function monthNumber(wordForm: string): number {
+  if (/^[a-z]+$/.test(wordForm)) {
+    return LATIN_MONTH_PATTERNS.findIndex((pattern) => pattern.split('|').includes(wordForm)) + 1;
+  }
   if (/^ма[йяе]$/.test(wordForm)) return 5;
   const index = MONTH_STEMS.findIndex((stem, i) => i !== 4 && wordForm.startsWith(stem));
   return index + 1;
 }
 
 export const WEEKDAY_PATTERNS: readonly { weekday: number; pattern: string }[] = [
-  { weekday: 1, pattern: 'понедельник[а-я]*' },
-  { weekday: 2, pattern: 'вторник[а-я]*' },
-  { weekday: 3, pattern: 'сред[ауые]' },
-  { weekday: 4, pattern: 'четверг[а-я]*' },
-  { weekday: 5, pattern: 'пятниц[ауые]' },
-  { weekday: 6, pattern: 'суббот[ауые]|субботн[а-я]+' },
-  { weekday: 0, pattern: 'воскресень[еяю]|воскресн[а-я]+' },
+  { weekday: 1, pattern: 'понедельник[а-я]*|monday' },
+  { weekday: 2, pattern: 'вторник[а-я]*|tuesday' },
+  { weekday: 3, pattern: 'сред[ауые]|wednesday' },
+  { weekday: 4, pattern: 'четверг[а-я]*|thursday' },
+  { weekday: 5, pattern: 'пятниц[ауые]|friday' },
+  { weekday: 6, pattern: 'суббот[ауые]|субботн[а-я]+|saturday' },
+  { weekday: 0, pattern: 'воскресень[еяю]|воскресн[а-я]+|sunday' },
 ];
 
 export const STOP_WORDS: ReadonlySet<string> = new Set(

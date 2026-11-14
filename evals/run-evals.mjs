@@ -6,7 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, '..');
 const backendDir = resolve(rootDir, 'backend');
 const args = process.argv.slice(2);
-if (args[0] === '--external' && args[1]) args[1] = resolve(args[1]);
+if (['--external', '--holdout'].includes(args[0]) && args[1]) args[1] = resolve(args[1]);
 
 execFileSync(
   process.execPath,
