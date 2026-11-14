@@ -13,7 +13,7 @@ import {
   PREFERENCES,
   REGION_PATTERN,
 } from './nlu-lexicon.js';
-import { before, consume, find, levenshtein1, mentions, take, takeAll, tokenizeNlu, word, type Scanner } from './nlu-scanner.js';
+import { before, consume, find, levenshtein1, mentions, take, takeAll, word, type Scanner } from './nlu-scanner.js';
 import type { NluAssumption } from './nlu-dates.js';
 
 const MAX_CHILD_AGE = 17;
@@ -22,7 +22,7 @@ const MAX_BUDGET = 1_000_000;
 export type ConstraintStatus = 'scheduled' | 'cancelled' | 'postponed' | 'sold_out' | 'unknown';
 
 const CHILD_NOUN =
-  'ребенк[а-я]+|ребенок|дочк[а-я]+|дочер[а-я]+|дочь|сын[а-я]*|малыш[а-я]*|внук[а-я]*|внучк[а-я]+|дет(?:ям|ьми|ей|и)|школьник[а-я]*';
+  'ребенк[а-я]+|ребенок|дочк[а-я]+|дочер[а-я]+|дочь|сын[а-я]*|малыш[а-я]*|внук[а-я]*|внучк[а-я]+|дет(?:ям|ьми|ей|и)|школьник[а-я]*|подросток|подростк[а-я]+';
 const AGE_UNIT = 'лет(?:н[а-я]+)?|года|годик[а-я]*|годов|год';
 const AGE_PREFIX_PATTERN = Object.keys(AGE_PREFIXES).sort((a, b) => b.length - a.length).join('|');
 
@@ -236,6 +236,7 @@ export function parseParty(scanner: Scanner): ParsedParty {
 
 export interface ParsedPlace {
   cities: string[];
+  excludedCities: string[];
   region: boolean;
   outside?: string;
   notInDemo?: string;
@@ -243,25 +244,26 @@ export interface ParsedPlace {
   notes: NluAssumption[];
 }
 
-const NEGATION_BEFORE_PLACE = /(?:^|[^a-zа-я0-9])(?:кроме|не\s+в|только\s+не\s+в|но\s+не\s+в)\s*$/;
+const NEGATION_BEFORE_PLACE = /(?:^|[^a-zа-я0-9])(?:кроме|не(?:\s+в)?)\s+$/;
 
 export function parsePlace(scanner: Scanner): ParsedPlace {
-  const result: ParsedPlace = { cities: [], region: false, nearMe: false, notes: [] };
+  const result: ParsedPlace = { cities: [], excludedCities: [], region: false, nearMe: false, notes: [] };
 
   for (const { slug, pattern } of CITY_PATTERNS) {
     for (const match of takeAll(scanner, word(pattern))) {
-      if (NEGATION_BEFORE_PLACE.test(before(scanner, match))) continue;
-      if (!result.cities.includes(slug)) result.cities.push(slug);
+      const cities = NEGATION_BEFORE_PLACE.test(before(scanner, match)) ? result.excludedCities : result.cities;
+      if (!cities.includes(slug)) cities.push(slug);
     }
   }
 
   // Fuzzy 1-typo city lookup for long Bashkortostan city names (e.g. "Стерлитомак")
   if (result.cities.length === 0) {
-    for (const token of tokenizeNlu(scanner.rest)) {
-      if (token.length < 7) continue;
+    for (const match of scanner.rest.matchAll(/(?<![a-zа-я0-9])[a-zа-я]{7,}(?![a-zа-я0-9])/g)) {
+      const token = match[0];
+      const cities = NEGATION_BEFORE_PLACE.test(before(scanner, match)) ? result.excludedCities : result.cities;
       for (const entry of CITY_FUZZY_BASES) {
         if (entry.bases.some((b) => levenshtein1(token, b) <= 1)) {
-          result.cities.push(entry.slug);
+          if (!cities.includes(entry.slug)) cities.push(entry.slug);
           result.notes.push({ key: 'city_typo_corrected', text: `распознана опечатка в названии города («${token}»)` });
           break;
         }

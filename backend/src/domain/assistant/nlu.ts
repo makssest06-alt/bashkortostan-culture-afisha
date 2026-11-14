@@ -39,6 +39,9 @@ export type ClarifyCode =
   | 'location'
   | 'contradiction';
 
+const UNRESOLVED_FIELDS = ['date', 'audience', 'budget'] as const;
+type UnresolvedField = (typeof UNRESOLVED_FIELDS)[number];
+
 export type UnsupportedAction =
   | 'purchase'
   | 'booking'
@@ -87,6 +90,8 @@ export interface Constraints {
     less_travel?: boolean;
     audience?: string;
   };
+  /** Открытые вопросы, которые нельзя восстановить из одних только hard/soft условий. */
+  unresolved?: UnresolvedField[];
 }
 
 export interface ConstraintsPatch {
@@ -207,6 +212,9 @@ const RESET = word('начн(?:и|ем)\\s+(?:заново|сначала)|за�
 const DATE_UNSET = word('в\\s+любой\\s+день|любая\\s+дата|когда\\s+угодно|дата\\s+не\\s*важна|забудь\\s+про\\s+дат[а-я]+|без\\s+даты');
 const TIME_UNSET = word('в\\s+любое\\s+время|время\\s+не\\s*важно|забудь\\s+про\\s+время');
 const SKIP = word('неважно|не\\s+важно|люб(?:ой|ого)|не\\s+знаю|пропусти[а-я]*|не\\s+скажу|без\\s+разницы|все\\s+равно');
+const ADULT_AUDIENCE = word('(?<!не )для\\s+взрослых(?!\\s+и\\s+(?:для\\s+)?(?:детей|подростков))|взросл(?:ая|ой|ую)\\s+аудитори(?:я|и|ю|ей)');
+const CHILD_AUDIENCE = word('(?<!не )для\\s+детей(?!\\s+и\\s+(?:для\\s+)?взрослых)');
+const TEEN_AUDIENCE = word('подростков[а-я]+|(?:для|с|со)\\s+подростк[а-я]+|подросткам|подростку');
 const SUBSCRIBE_INTENT = word('подпиш[а-я]+|напомн[а-я]+|оповещ[а-я]+|рассылк[а-я]*|присылай\\s+нов[а-я]+');
 const FEEDBACK_INTENT = word(
   'добавить\\s+свое\\s+(?:мероприятие|событие)|заявка\\s+организатора|сообщить\\s+об\\s+ошибке|написать\\s+организатору',
@@ -226,11 +234,15 @@ const TEXT = {
   nothingNew: 'Новых условий в сообщении не нашёл, оставил прежние.',
   greeting: 'Здравствуйте!',
   askCity: 'В каком городе ищем?',
+  askCityConflict: 'Один и тот же город указан и исключён. В каком городе всё-таки ищем?',
   askLocation: 'Я не знаю, где вы находитесь. В каком городе ищем?',
   askChildAge: 'Сколько лет ребёнку? От возраста зависит, какие события можно показать.',
   askChildrenAges: 'Сколько лет детям? Назовите возраст каждого: по нему проверю возрастные ограничения.',
   askDate: 'Эта дата уже прошла. На какой день подобрать события?',
-  askContradiction: 'Условия противоречат друг другу (например, одновременно платно и бесплатно). Уточните, какой вариант оставить.',
+  askVagueDate: 'На какой день или период подобрать события?',
+  askAudience: 'Ищем детские события или события для взрослых?',
+  askBudget: 'Ищем только бесплатные события или можно рассмотреть платные?',
+  askContradiction: 'Указано, что детей не будет, но указан возраст ребёнка. Кто пойдёт на событие?',
   empty: 'По этим условиям событий нет. Ничего не выдумываю: ниже варианты, какое условие изменить.',
   emptyNoOptions: 'По этим условиям событий нет. Попробуйте изменить дату или город.',
 } as const;
@@ -400,7 +412,13 @@ function cleanSoft(v: unknown): Constraints['soft'] {
 
 export function sanitizeConstraints(raw: unknown): Constraints {
   if (!isRecord(raw)) return emptyConstraints();
-  return { hard: cleanHard(raw.hard), soft: cleanSoft(raw.soft) };
+  const fields: unknown[] = Array.isArray(raw.unresolved) ? raw.unresolved : [];
+  const unresolved = UNRESOLVED_FIELDS.filter((field) => fields.includes(field));
+  return {
+    hard: cleanHard(raw.hard),
+    soft: cleanSoft(raw.soft),
+    ...(unresolved.length > 0 ? { unresolved } : {}),
+  };
 }
 
 function deletePath(constraints: Constraints, path: string): void {
@@ -411,6 +429,18 @@ function deletePath(constraints: Constraints, path: string): void {
 
 function cloneConstraints(c: Constraints): Constraints {
   return JSON.parse(JSON.stringify(c)) as Constraints;
+}
+
+function updateUnresolved(
+  state: Constraints,
+  resolved: readonly UnresolvedField[],
+  added: readonly ClarifyCode[] = [],
+): void {
+  const fields = UNRESOLVED_FIELDS.filter((field) =>
+    added.includes(field) || (state.unresolved?.includes(field) && !resolved.includes(field)),
+  );
+  if (fields.length > 0) state.unresolved = fields;
+  else delete state.unresolved;
 }
 
 export function applyPatch(previous: Constraints, patch: ConstraintsPatch): Constraints {
@@ -425,6 +455,11 @@ export function applyPatch(previous: Constraints, patch: ConstraintsPatch): Cons
   if (setHard.region !== undefined) delete next.hard.cities;
   next.hard = normalizeHard({ ...next.hard, ...setHard });
   next.soft = { ...next.soft, ...setSoft };
+  const resolved: UnresolvedField[] = [];
+  if (setHard.date || patch.unset?.includes('hard.date')) resolved.push('date');
+  if (setSoft.audience || patch.unset?.includes('soft.audience')) resolved.push('audience');
+  if (PRICE_PATHS.some((path) => patch.unset?.includes(path) || path.slice(5) in setHard)) resolved.push('budget');
+  updateUnresolved(next, resolved);
   return next;
 }
 
@@ -432,6 +467,7 @@ export function needsChildAge(c: Constraints): boolean {
   const p = c.hard.participants;
   if (p?.children_ages && p.children_ages.length > 0) return false;
   if ((p?.children_count ?? 0) > 0) return true;
+  if (c.soft.audience === 'teenagers' && !(p?.participant_ages ?? []).some((age) => age < 18)) return true;
   return c.soft.preferences?.includes('family_friendly') ?? false;
 }
 
@@ -462,6 +498,7 @@ function inVocabulary(token: string, vocabulary: readonly string[]): boolean {
 export interface ParseIntoResult {
   next: Constraints;
   pastDate: boolean;
+  clarifications: ClarifyCode[];
   nearMe: boolean;
   outsideCity: string | null;
   notInDemoCity: string | null;
@@ -506,6 +543,7 @@ export function parseIntoConstraints(
     return {
       next: prev,
       pastDate: false,
+      clarifications: [],
       nearMe: false,
       outsideCity: null,
       notInDemoCity: null,
@@ -527,6 +565,7 @@ export function parseIntoConstraints(
     return {
       next: prev,
       pastDate: false,
+      clarifications: [],
       nearMe: false,
       outsideCity: null,
       notInDemoCity: null,
@@ -557,26 +596,33 @@ export function parseIntoConstraints(
   const statuses = parseStatuses(scanner);
   const ages = parseAges(scanner, options.answering === 'child_age' || needsChildAge(prev));
   const budget = parseBudget(scanner);
+  const resolvingAudience = options.answering === 'audience' || prev.unresolved?.includes('audience');
+  const explicitKidsAudience = mentions(scanner, CHILD_AUDIENCE);
+  const kidsReply = resolvingAudience && Boolean(take(scanner, CHILD_AUDIENCE));
   const party = parseParty(scanner);
   const place = parsePlace(scanner);
   notes.push(...place.notes);
   const categories = parseCategories(scanner);
+  const adultAudience = Boolean(take(scanner, ADULT_AUDIENCE));
+  const teenAudience = Boolean(take(scanner, TEEN_AUDIENCE));
   const venueTopic = parseVenueAndTopic(scanner, message);
   const preferences = parsePreferences(scanner);
 
   const parsedHard: Constraints['hard'] = {};
   const parsedSoft: Constraints['soft'] = {};
   const unset: string[] = [];
+  const clarifications: ClarifyCode[] = [];
 
   if (date.range && !date.past) parsedHard.date = date.range;
   if (time.time) parsedHard.time = time.time;
   if (statuses.statuses.length > 0) parsedHard.statuses = statuses.statuses;
   if (statuses.ageRating) parsedHard.required_age_rating = statuses.ageRating;
 
-  if (budget.unset) {
-    unset.push('hard.max_price_per_person', 'hard.max_total_price', 'hard.currency', 'hard.free_only');
+  if (budget.unset || budget.contradiction) {
+    unset.push(...PRICE_PATHS, 'hard.currency', 'soft.prefer_free', 'soft.price_direction');
   }
-  if (budget.amount !== undefined) {
+  if (budget.contradiction) clarifications.push('budget');
+  else if (budget.amount !== undefined) {
     if (budget.isTotal) parsedHard.max_total_price = budget.amount;
     else parsedHard.max_price_per_person = budget.amount;
     parsedHard.currency = 'RUB';
@@ -599,15 +645,30 @@ export function parseIntoConstraints(
   }
   if (Object.keys(participants).length > 0) parsedHard.participants = participants;
 
-  if (place.cities.length > 0) parsedHard.cities = place.cities;
-  else if (place.region) parsedHard.region = 'bashkortostan';
+  const cityConflict = place.cities.some((city) => place.excludedCities.includes(city));
+  if (cityConflict) {
+    unset.push('hard.cities', 'hard.region');
+    clarifications.push('city');
+  } else if (place.cities.length > 0) parsedHard.cities = place.cities;
+  else if (place.region && place.excludedCities.length === 0) parsedHard.region = 'bashkortostan';
+  else if (place.excludedCities.length > 0) {
+    const remaining = reset ? undefined : prev.hard.cities?.filter((city) => !place.excludedCities.includes(city));
+    if (remaining?.length && !place.region) parsedHard.cities = remaining;
+    else unset.push('hard.cities', 'hard.region');
+  }
   if (place.nearMe) parsedSoft.less_travel = true;
 
   if (categories.unset) unset.push('hard.categories_any', 'hard.categories_exclude');
   if (categories.any.length > 0) parsedHard.categories_any = categories.any;
   if (categories.exclude.length > 0) parsedHard.categories_exclude = categories.exclude;
   if (categories.avoid.length > 0) parsedSoft.avoid_categories = categories.avoid;
-  if (categories.kids) parsedSoft.audience = 'children';
+  const kidsAudience = categories.kids || kidsReply;
+  if (adultAudience && (kidsAudience || explicitKidsAudience || teenAudience)) {
+    unset.push('soft.audience');
+    clarifications.push('audience');
+  } else if (adultAudience) parsedSoft.audience = 'adults';
+  else if (teenAudience) parsedSoft.audience = 'teenagers';
+  else if (kidsAudience) parsedSoft.audience = 'children';
 
   if (venueTopic.venue_query) parsedHard.venue_query = venueTopic.venue_query;
   if (venueTopic.geo_query) parsedHard.geo_query = venueTopic.geo_query;
@@ -616,7 +677,9 @@ export function parseIntoConstraints(
 
   if (preferences.ids.length > 0) parsedSoft.preferences = preferences.ids;
 
-  if (take(scanner, DATE_UNSET)) unset.push('hard.date');
+  const dateUnset = Boolean(take(scanner, DATE_UNSET));
+  if (date.past || date.vague || dateUnset) unset.push('hard.date');
+  if (date.past || (date.vague && !dateUnset)) clarifications.push('date');
   if (take(scanner, TIME_UNSET)) unset.push('hard.time');
 
   const waitingForAge = options.answering === 'child_age' || needsChildAge(prev);
@@ -629,14 +692,10 @@ export function parseIntoConstraints(
   if (semantic.length > 0) parsedSoft.semantic_query = semantic.join(' ');
 
   const childrenMentioned = party.childrenMentioned || ages.children.length > 0;
-  const contradiction = budget.contradiction || (party.noChildren && ages.children.length > 0);
+  const contradiction = party.noChildren && ages.children.length > 0;
 
   const next = reset ? emptyConstraints() : cloneConstraints(prev);
   for (const path of unset) deletePath(next, path);
-
-  if (date.past) {
-    delete next.hard.date;
-  }
 
   const { participants: parsedP, ...restHard } = parsedHard;
   if (PRICE_PATHS.some((path) => (restHard as Record<string, unknown>)[path.slice(5)] !== undefined)) {
@@ -663,7 +722,9 @@ export function parseIntoConstraints(
 
   const prefSet = new Set([...(next.soft.preferences ?? []), ...(parsedSoft.preferences ?? [])]);
   if (ages.children.length > 0 || party.noChildren || skipAge) prefSet.delete('family_friendly');
-  else if (childrenMentioned && !mergedP.children_ages?.length) prefSet.add('family_friendly');
+  else if (childrenMentioned && !mergedP.children_ages?.length && !clarifications.includes('audience')) {
+    prefSet.add('family_friendly');
+  }
 
   const { preferences: _p, ...restSoft } = parsedSoft;
   void _p;
@@ -671,7 +732,15 @@ export function parseIntoConstraints(
   if (prefSet.size > 0) next.soft.preferences = [...prefSet];
   else delete next.soft.preferences;
   if (skipAge) next.soft.audience = 'children';
-  if (party.noChildren && next.soft.audience === 'children') delete next.soft.audience;
+  if (party.noChildren && (next.soft.audience === 'children' || next.soft.audience === 'teenagers')) {
+    delete next.soft.audience;
+  }
+
+  const resolved: UnresolvedField[] = [];
+  if (parsedHard.date || dateUnset) resolved.push('date');
+  if (restSoft.audience || (resolvingAudience && party.noChildren)) resolved.push('audience');
+  if (budget.amount !== undefined || budget.free || budget.unset) resolved.push('budget');
+  updateUnresolved(next, resolved, clarifications);
 
   next.hard = normalizeHard(next.hard);
 
@@ -685,13 +754,14 @@ export function parseIntoConstraints(
     party.noChildren ||
     skipAge ||
     place.region ||
-    date.past ||
+    clarifications.length > 0 ||
     subscribeIntent ||
     feedbackIntent;
 
   return {
     next,
     pastDate: date.past,
+    clarifications,
     nearMe: place.nearMe,
     outsideCity: place.outside ?? null,
     notInDemoCity: place.notInDemo ?? null,
@@ -1240,10 +1310,9 @@ export async function runDeterministicAssistant(
     }
   }
 
-  const pending: ClarifyCode[] = [];
-  if (parsed?.contradiction) pending.push('contradiction');
-  if (parsed?.pastDate) pending.push('date');
-  if (!hasPlace(state)) pending.push(parsed?.nearMe ? 'location' : 'city');
+  const pending = [...new Set<ClarifyCode>([...(parsed?.clarifications ?? []), ...(state.unresolved ?? [])])];
+  if (parsed?.contradiction) pending.unshift('contradiction');
+  if (!hasPlace(state) && !pending.includes('city')) pending.push(parsed?.nearMe ? 'location' : 'city');
   if (needsChildAge(state)) pending.push('child_age');
 
   const unsupported = parsed?.unsupported ?? [];
@@ -1266,30 +1335,49 @@ export async function runDeterministicAssistant(
         code,
         pending,
         question: TEXT.askContradiction,
-        quick_replies: ['Только бесплатно', 'Сбросить бюджет'],
+        quick_replies: ['Иду без детей'],
+      };
+    } else if (code === 'budget') {
+      clarify = {
+        code,
+        pending,
+        question: TEXT.askBudget,
+        quick_replies: ['Только бесплатно', 'Любая цена'],
+      };
+    } else if (code === 'audience') {
+      clarify = {
+        code,
+        pending,
+        question: TEXT.askAudience,
+        quick_replies: ['Для детей', 'Для взрослых'],
       };
     } else if (code === 'date') {
       clarify = {
         code,
         pending,
-        question: TEXT.askDate,
+        question: parsed?.pastDate ? TEXT.askDate : TEXT.askVagueDate,
         quick_replies: ['Сегодня', 'Завтра', 'На выходных'],
       };
     } else if (code === 'child_age') {
       const count = state.hard.participants?.children_count;
-      const replies = ['3 года', '5 лет', '7 лет', '10 лет', '14 лет'];
+      const teen = state.soft.audience === 'teenagers';
+      const replies = teen ? ['12 лет', '14 лет', '16 лет', '17 лет'] : ['3 года', '5 лет', '7 лет', '10 лет', '14 лет'];
       if (count === undefined) replies.push('Иду без детей');
       clarify = {
         code,
         pending,
-        question: count === 1 ? TEXT.askChildAge : TEXT.askChildrenAges,
+        question: teen && (count ?? 1) === 1
+          ? 'Сколько лет подростку? По возрасту проверю, какие события подходят.'
+          : count === 1 ? TEXT.askChildAge : TEXT.askChildrenAges,
         quick_replies: replies,
       };
     } else {
       clarify = {
         code,
         pending,
-        question: code === 'location' ? TEXT.askLocation : TEXT.askCity,
+        question: code === 'location' ? TEXT.askLocation : parsed?.clarifications.includes('city')
+          ? TEXT.askCityConflict
+          : TEXT.askCity,
         quick_replies: [...CITIES.map((c) => c.name.ru), 'Вся республика'],
       };
     }

@@ -136,6 +136,14 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
       soft: { audience: 'adults' },
     },
     {
+      message: 'Кукольный спектакль для взрослой аудитории в Салавате завтра',
+      code: 'audience',
+      question: /детск.*взросл/i,
+      answer: 'Для детей',
+      hard: { cities: ['salavat'], categories_any: ['performance'] },
+      soft: { audience: 'children' },
+    },
+    {
       message: 'В Салавате, но не в Салавате, завтра, бесплатно',
       code: 'city',
       question: /город/i,
@@ -220,6 +228,45 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
     const body = await res.json();
     expect(body.action).toBe('search');
     expect([...body.constraints.hard.cities].sort()).toEqual([...cities].sort());
+  });
+
+  it('keeps an unanswered date open after resolving a city conflict and editing other conditions', async () => {
+    const ask = async (message: string, previous?: unknown) => {
+      const response = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, previous }),
+      });
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+    const conflict = await ask('Выставки в Сибае, но не в Сибае, в один из ближайших дней');
+    expect(conflict.clarify).toMatchObject({ code: 'city', pending: ['city', 'date'] });
+    const city = await ask('Нефтекамск', conflict.constraints);
+    expect(city.clarify.code).toBe('date');
+    const edit = await ask('Только бесплатно', city.constraints);
+    expect(edit.clarify.code).toBe('date');
+    const done = await ask('Завтра', edit.constraints);
+    expect(done.action).toBe('search');
+    expect(done.constraints.hard).toMatchObject({
+      cities: ['neftekamsk'], categories_any: ['exhibition'], free_only: true,
+      date: { from: '2026-11-14', to: '2026-11-14' },
+    });
+  });
+
+  it('uses the chosen adult audience to rank catalog events without requiring an 18+ label', async () => {
+    const res = await ctx.req('/api/v1/assistant/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Концерты для взрослых сегодня в Уфе' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.action).toBe('search');
+    expect(body.constraints.hard.required_age_rating).toBeUndefined();
+    expect(body.results[0]?.event.title).toBe('Поздний джаз');
+    expect(body.results.some((item: { event: { age_limit: number | null } }) =>
+      item.event.age_limit !== null && item.event.age_limit < 18)).toBe(true);
   });
 
   it('requires confirmation token for subscribe via /assistant/query -> /assistant/confirm', async () => {
