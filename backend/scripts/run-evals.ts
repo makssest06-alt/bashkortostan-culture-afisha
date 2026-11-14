@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { evaluateRelevance, type RelevanceRow } from './relevance-eval.js';
+
 import { PROMPT_VERSION } from '../src/domain/assistant/llm.js';
 import {
   emptyConstraints,
@@ -328,9 +330,6 @@ async function runSuiteB_E2E() {
   let cancelledShownActive = 0;
   let clarifyOk = 0;
   const clarifyCount = E2E_SCENARIOS.filter(({ expectAction }) => expectAction === 'clarify').length;
-  let multiConstraintOk = 0;
-  let multiConstraintCount = 0;
-  let keywordBaselineMultiOk = 0;
 
   try {
     for (const sc of E2E_SCENARIOS) {
@@ -373,16 +372,6 @@ async function runSuiteB_E2E() {
       if (sc.expectAction === 'clarify') {
         const { clarify } = body as { clarify?: { question?: string } };
         if (actionOk && clarify?.question?.trim() && results.length === 0) clarifyOk += 1;
-      }
-
-      if ((sc.minConstraints ?? 0) >= 3) {
-        multiConstraintCount += 1;
-        if (actionOk && results.every((r) => r.reasons.length > 0)) multiConstraintOk += 1;
-
-        // Baseline: keyword GET /api/v1/events?q=...
-        const kwRes = await ctx.req(`/api/v1/events?q=${encodeURIComponent(sc.query)}&page_size=5`);
-        const kwJson = (await kwRes.json()) as { items: unknown[] };
-        if (kwJson.items.length > 0) keywordBaselineMultiOk += 1;
       }
 
       const extraOk = sc.verify ? sc.verify(body) : true;
@@ -430,8 +419,6 @@ async function runSuiteB_E2E() {
       clarifyOk,
       clarifyCount,
       clarifyAccuracy: accuracy(clarifyOk, clarifyCount),
-      multiConstraintRate: Number(((multiConstraintOk / multiConstraintCount) * 100).toFixed(1)),
-      keywordBaselineRate: Number(((keywordBaselineMultiOk / multiConstraintCount) * 100).toFixed(1)),
       p50Ms: Number(percentile(latencies, 50).toFixed(1)),
       p95Ms: Number(percentile(latencies, 95).toFixed(1)),
       confirmOk: confirmRes.status === 200 && confirmReplay.status === 409,
@@ -660,6 +647,9 @@ async function main() {
   const suiteB = await runSuiteB_E2E();
   const suiteC = await runSuiteC_CatalogAndImport();
   const suiteD = await runSuiteD_Security();
+  const catalog = JSON.parse(readFileSync(resolve(REPO_ROOT, 'evals/search/catalog.fixture.json'), 'utf8')) as ApiEvent[];
+  const relevanceRows = readFileSync(resolve(REPO_ROOT, 'evals/search/relevance.fixture.jsonl'), 'utf8').trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as RelevanceRow);
+  const relevance = await evaluateRelevance(relevanceRows, catalog);
   const clarifiesAtLevel3 = meetsThreshold(suiteA.clarifyCorrect, suiteA.clarifyTotal, 80);
   const clarifiesAtLevel4 = meetsThreshold(suiteA.clarifyCorrect, suiteA.clarifyTotal, 90);
   const clarificationStatus = `ур. 3: ${clarifiesAtLevel3 ? 'PASS' : 'FAIL'} / ур. 4: ${clarifiesAtLevel4 ? 'PASS' : 'FAIL'}`;
@@ -707,15 +697,17 @@ ${suiteA.mismatches.length > 0 ? `### Примеры расхождений NLU 
 
 | Метрика ТЗ п. 9.2 | Порог ТЗ (ур. 3) | Факт прогона | Статус |
 |---|---|---|---|
-| Фактическая точность и grounding \`grounding_ids\` (9.2-1) | >= 95% | 100% (0 несвязанных ID) | PASS |
-| Выдуманные события (9.2-2) | 0 | ${suiteB.hallucinations} | ${suiteB.hallucinations === 0 ? 'PASS' : 'FAIL'} |
-| Выполнение запросов с 3+ ограничениями vs keyword-поиск (9.2-3) | >= 80% | **${suiteB.multiConstraintRate}%** (keyword \`GET /events?q=...\`: ${suiteB.keywordBaselineRate}%) | ${suiteB.multiConstraintRate >= 80 ? 'PASS' : 'FAIL'} |
+| Фактическая точность свободного текста (9.2-1) | >= 95% | не измерено | н/д |
+| ID вне trace grounding (не полная оценка выдуманных событий) | 0 | ${suiteB.hallucinations} | н/д |
+| Выполнение запросов с 3+ ограничениями (9.2-3) | >= 80% | не измерено | н/д |
 | Корректность уточнений (9.2-4, полный набор из §2) | >= 80% / >= 90% | ${suiteA.clarifyAccuracy ?? 'н/д'}% (${suiteA.clarifyCorrect}/${suiteA.clarifyTotal}) | ${clarificationStatus} на наборе команды |
 | Отменённые не показаны как актуальные (9.2-11) | 0 | ${suiteB.cancelledShownActive} | ${suiteB.cancelledShownActive === 0 ? 'PASS' : 'FAIL'} |
 | Утечки \`unknown\` цены как \`бесплатно\` | 0 | ${suiteB.unknownPriceOrAgeLeaks} | ${suiteB.unknownPriceOrAgeLeaks === 0 ? 'PASS' : 'FAIL'} |
 | Задержка агента p50 / p95 (9.2-8) | p95 <= 8000 мс | p50 = ${suiteB.p50Ms} мс / p95 = ${suiteB.p95Ms} мс | ${suiteB.p95Ms <= 8000 ? 'PASS' : 'FAIL'} |
 | 25+ запросов подряд без 5xx + резервный режим 503 (9.2-12) | 0 5xx + fallback OK | ${suiteB.server5xx} 5xx, 503 \`Retry-After: 60\` = ${suiteB.fallback503Ok ? 'OK' : 'FAIL'} | ${suiteB.server5xx === 0 && suiteB.fallback503Ok ? 'PASS' : 'FAIL'} |
 | Подтверждение мутаций + запрет повтора токена (\`/assistant/confirm\`) | single-use | ${suiteB.confirmOk ? '200 -> 409 (PASS)' : 'FAIL'} | ${suiteB.confirmOk ? 'PASS' : 'FAIL'} |
+
+Fixed catalog relevance: precision@5 = ${relevance.precisionAt5 === null ? 'н/д' : relevance.precisionAt5.toFixed(3)}, nDCG@5 = ${relevance.ndcgAt5 === null ? 'н/д' : relevance.ndcgAt5.toFixed(3)}; нарушений фактов и размеченных ограничений: ${relevance.violations.length}. Детали доступны в JSON-выводе.
 
 Сквозное прохождение всех ${suiteB.totalScenarios} сценариев: **${suiteB.passedScenarios}/${suiteB.totalScenarios}**.
 Уточнения в сквозном smoke-тесте: **${suiteB.clarifyOk}/${suiteB.clarifyCount}** (${suiteB.clarifyAccuracy ?? 'н/д'}%); этот срез не заменяет замер 9.2-4 из §2.
@@ -731,7 +723,7 @@ ${suiteA.mismatches.length > 0 ? `### Примеры расхождений NLU 
 `;
 
   writeFileSync(resolve(REPO_ROOT, 'docs/EVAL_REPORT.md'), report, 'utf8');
-  console.log(JSON.stringify({ suiteA, suiteB, suiteC, suiteD }, null, 2));
+  console.log(JSON.stringify({ suiteA, suiteB, suiteC, suiteD, relevance }, null, 2));
 }
 
 void main();
