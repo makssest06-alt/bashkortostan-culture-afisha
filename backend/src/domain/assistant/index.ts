@@ -135,6 +135,37 @@ function estimateMaxLlmCostRub(config: AppConfig): number {
   return Math.round(((inputTokens / 1000) * inRate + (outputTokens / 1000) * outRate) * 10_000) / 10_000;
 }
 
+/** Уточнения, которые rules задаёт по структурным правилам и не стоит переспрашивать у LLM. */
+const STRUCTURAL_CLARIFY = new Set(['city', 'date', 'child_age', 'contradiction']);
+
+/**
+ * Политика hybrid-режима: LLM подключается, только если детерминированный
+ * движок не понял свободную формулировку (нет ограничений / пустая выдача)
+ * или задаёт необязательное смысловое уточнение. Guardrails и запись в БД
+ * никогда не эскалируются.
+ */
+export function hybridEscalationReason(
+  request: AssistantRequest,
+  response: AssistantResponsePayload,
+): string | null {
+  if (!request.message?.trim()) return null;
+  if (response.action === 'out_of_scope' || response.action === 'confirmation_required') return null;
+
+  if (response.action === 'clarify') {
+    const code = response.clarify?.code;
+    return code && !STRUCTURAL_CLARIFY.has(code) ? `clarify_${code}` : null;
+  }
+
+  if (response.action === 'search') {
+    if (response.total === 0) return 'no_results';
+    const hard = response.constraints?.hard ?? {};
+    const soft = response.constraints?.soft ?? {};
+    if (Object.keys(hard).length === 0 && Object.keys(soft).length === 0) return 'no_constraints';
+  }
+
+  return null;
+}
+
 const SENSITIVE_PLAN_KEY = /^(title_query|topic_query|venue_query|geo_query|semantic_query|q|text|name|contact|email|phone|organization)$/i;
 
 /** Рекурсивно убирает свободный текст/ПДн из plan перед записью в трассу. */
@@ -193,20 +224,37 @@ export async function runAssistantPipeline(
 
   // P0-3: дневной бюджет. При его исчерпании LLM не вызывается вообще —
   // ассистент отвечает по rules-движку, деньги не тратятся молча.
-  const useLlm = Boolean(config.llmApiKey);
-  if (useLlm) {
+  const engineMode = config.assistantEngine;
+  const llmConfigured = Boolean(config.llmApiKey);
+  let llmFallbackReason: 'budget' | 'error' | null = null;
+
+  const rulesFallback = (engineName: string) =>
+    runDeterministicAssistant(request, runtime, now, engineName);
+
+  const runRules = async (): Promise<AssistantResponsePayload> => {
+    const rulesPayload = await rulesFallback('rules-v2');
+    planObj = {
+      constraints: rulesPayload.constraints,
+      engine_mode: engineMode,
+      route: 'rules',
+      ...(llmConfigured && engineMode !== 'rules' ? { llm: 'not_called' } : {}),
+    };
+    return rulesPayload;
+  };
+
+  /** Возвращает ответ LLM или null, если сработал бюджет/ошибка. */
+  const runLlm = async (): Promise<AssistantResponsePayload | null> => {
     const spent = await assistantSpendTodayRub(db, now);
     const budget = config.assistantDailyBudgetRub;
     const estimate = estimateMaxLlmCostRub(config);
     const budgetExceeded = spent >= budget || spent + budgetReservedRub + estimate > budget;
     if (budgetExceeded) {
       fallbackUsed = true;
+      llmFallbackReason = 'budget';
       errorText =
         spent >= budget
           ? `daily_budget_exhausted: ${spent.toFixed(4)} ₽ >= ${budget} ₽`
           : `daily_budget_reserved: ${(spent + budgetReservedRub).toFixed(4)} ₽ + ${estimate.toFixed(4)} ₽ > ${budget} ₽`;
-      payload = await runDeterministicAssistant(request, runtime, now, 'rules-budget-v2');
-      planObj = { constraints: payload.constraints, fallback: 'daily_budget_exhausted' };
       options.metrics?.incAssistantBudgetFallback();
       logEvent('warn', 'assistant_budget_exhausted', {
         request_id: options.requestId,
@@ -214,38 +262,71 @@ export async function runAssistantPipeline(
         reserved_rub: Number(budgetReservedRub.toFixed(4)),
         budget_rub: budget,
       });
-    } else {
-      if (budget > 0 && spent >= budget * 0.8) {
-        logEvent('warn', 'assistant_budget_warning', {
-          request_id: options.requestId,
-          spent_rub: Number(spent.toFixed(4)),
-          budget_rub: budget,
-        });
+      return null;
+    }
+
+    if (budget > 0 && spent >= budget * 0.8) {
+      logEvent('warn', 'assistant_budget_warning', {
+        request_id: options.requestId,
+        spent_rub: Number(spent.toFixed(4)),
+        budget_rub: budget,
+      });
+    }
+    budgetReservedRub += estimate;
+    try {
+      const llmRes = await runLlmAgent(request, config, runtime, now);
+      tokenUsage = llmRes.tokenUsage;
+      costRub = llmRes.costRub;
+      modelUsed = config.llmModel;
+      planObj = { ...llmRes.plan, engine_mode: engineMode };
+      return llmRes.response;
+    } catch (err) {
+      fallbackUsed = true;
+      llmFallbackReason = 'error';
+      errorText = err instanceof Error ? err.message : 'LLM error';
+      if (err instanceof LlmError) {
+        tokenUsage = err.tokenUsage;
+        costRub = err.costRub;
       }
-      budgetReservedRub += estimate;
-      try {
-        const llmRes = await runLlmAgent(request, config, runtime, now);
-        payload = llmRes.response;
-        tokenUsage = llmRes.tokenUsage;
-        costRub = llmRes.costRub;
-        modelUsed = config.llmModel;
-        planObj = llmRes.plan;
-      } catch (err) {
-        fallbackUsed = true;
-        errorText = err instanceof Error ? err.message : 'LLM error';
-        if (err instanceof LlmError) {
-          tokenUsage = err.tokenUsage;
-          costRub = err.costRub;
-        }
-        payload = await runDeterministicAssistant(request, runtime, now, 'rules-fallback-v2');
-        planObj = { constraints: payload.constraints, fallback: true };
-      } finally {
-        budgetReservedRub = Math.max(0, budgetReservedRub - estimate);
+      return null;
+    } finally {
+      budgetReservedRub = Math.max(0, budgetReservedRub - estimate);
+    }
+  };
+
+  const fallbackAfterLlm = async (): Promise<AssistantResponsePayload> => {
+    const engineName = llmFallbackReason === 'budget' ? 'rules-budget-v2' : 'rules-fallback-v2';
+    const fallbackPayload = await rulesFallback(engineName);
+    planObj = {
+      constraints: fallbackPayload.constraints,
+      engine_mode: engineMode,
+      route: 'rules_fallback',
+      fallback: llmFallbackReason === 'budget' ? 'daily_budget_exhausted' : errorText ?? true,
+    };
+    return fallbackPayload;
+  };
+
+  if (engineMode === 'rules' || !llmConfigured) {
+    payload = await runRules();
+  } else if (engineMode === 'llm') {
+    payload = (await runLlm()) ?? (await fallbackAfterLlm());
+  } else {
+    // hybrid: быстрый детерминированный путь; LLM — только на неоднозначных
+    // запросах, где правила не смогли понять фразу или ничего не нашли.
+    const rulesPayload = await runRules();
+    const escalationReason = hybridEscalationReason(request, rulesPayload);
+    if (!escalationReason) {
+      payload = rulesPayload;
+    } else {
+      const llmPayload = await runLlm();
+      if (llmPayload) {
+        planObj = { ...(planObj ?? {}), hybrid_reason: escalationReason };
+        payload = llmPayload;
+      } else {
+        payload = await fallbackAfterLlm();
+        planObj = { ...(planObj ?? {}), hybrid_reason: escalationReason };
       }
     }
-  } else {
-    payload = await runDeterministicAssistant(request, runtime, now, 'rules-v2');
-    planObj = { constraints: payload.constraints };
   }
 
   payload.trace_id = traceId;

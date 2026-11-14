@@ -30,6 +30,7 @@ import {
 } from './domain/dictionaries.js';
 import { findEventByIdOrCode, loadAllEvents } from './domain/events-repo.js';
 import { submitFeedback } from './domain/feedback.js';
+import { readAiSettings, writeAiEnabled } from './domain/settings.js';
 import {
   CACHE_CARD,
   CACHE_DICTIONARY,
@@ -120,6 +121,7 @@ const KNOWN_ROUTE_METHODS: Array<{ pattern: RegExp; allow: string }> = [
   { pattern: /^\/api\/v1\/admin\/reset\/?$/, allow: 'POST, OPTIONS' },
   { pattern: /^\/api\/v1\/admin\/traces\/?$/, allow: 'GET, OPTIONS' },
   { pattern: /^\/api\/v1\/admin\/traces\/[^/]+\/?$/, allow: 'GET, OPTIONS' },
+  { pattern: /^\/api\/v1\/admin\/settings\/?$/, allow: 'GET, PATCH, OPTIONS' },
 ];
 
 function intParam(raw: string | undefined, fallback: number, min = 1, max = 100): number {
@@ -366,12 +368,10 @@ export function createApp(options: CreateAppOptions) {
       eventsCount = Number(cntRes.rows[0]?.cnt ?? 0);
     }
 
-    const modelStatus = config.assistantDisabled
-      ? 'disabled'
-      : config.llmApiKey
-        ? 'ok'
-        : 'disabled';
-    const overallStatus = !dbOk || config.assistantDisabled ? 'degraded' : 'ok';
+    const aiSettings = dbOk ? await readAiSettings(db) : { aiEnabled: false };
+    const assistantOn = !config.assistantDisabled && aiSettings.aiEnabled;
+    const modelStatus = !assistantOn ? 'disabled' : config.llmApiKey ? 'ok' : 'disabled';
+    const overallStatus = !dbOk || !assistantOn ? 'degraded' : 'ok';
 
     return jsonResponse(
       c,
@@ -380,6 +380,7 @@ export function createApp(options: CreateAppOptions) {
         checks: {
           database: dbOk ? 'ok' : 'fail',
           model: modelStatus,
+          assistant: assistantOn ? 'ok' : 'disabled',
         },
         version: '1.0.0',
         data: db.driver,
@@ -882,7 +883,8 @@ export function createApp(options: CreateAppOptions) {
   // --- ИИ-ассистент ---
 
   app.post('/api/v1/assistant/query', async (c) => {
-    if (config.assistantDisabled || c.req.header('x-assistant-demo') === 'unavailable') {
+    const aiOn = !config.assistantDisabled && (await readAiSettings(db)).aiEnabled;
+    if (!aiOn || c.req.header('x-assistant-demo') === 'unavailable') {
       return errorResponse(
         c,
         503,
@@ -940,7 +942,8 @@ export function createApp(options: CreateAppOptions) {
   });
 
   app.post('/api/v1/assistant/confirm', async (c) => {
-    if (config.assistantDisabled || c.req.header('x-assistant-demo') === 'unavailable') {
+    const aiOn = !config.assistantDisabled && (await readAiSettings(db)).aiEnabled;
+    if (!aiOn || c.req.header('x-assistant-demo') === 'unavailable') {
       return errorResponse(c, 503, 'unavailable', 'ИИ временно недоступен', [], { 'Retry-After': '60' });
     }
     let body: unknown;
@@ -1235,6 +1238,44 @@ export function createApp(options: CreateAppOptions) {
       return errorResponse(c, 404, 'not_found', 'Трасса не найдена');
     }
     return jsonResponse(c, trace);
+  });
+
+  // --- Настройки админки: «рубильник» ИИ-ассистента ---
+
+  app.get('/api/v1/admin/settings', async (c) => {
+    const current = await readAiSettings(db);
+    return jsonResponse(c, {
+      ai_enabled: current.aiEnabled,
+      ai_env_locked: config.assistantDisabled,
+      engine: config.assistantEngine,
+      llm_configured: Boolean(config.llmApiKey),
+      updated_at: current.updatedAt,
+      updated_by: current.updatedBy,
+    });
+  });
+
+  app.patch('/api/v1/admin/settings', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return errorResponse(c, 400, 'invalid_json', 'Ожидается JSON с полем ai_enabled');
+    }
+    const enabled = (body as { ai_enabled?: unknown } | null)?.ai_enabled;
+    if (typeof enabled !== 'boolean') {
+      return errorResponse(c, 400, 'validation_error', 'Поле ai_enabled должно быть true или false', [
+        { field: 'ai_enabled', message: 'Допустимо: true или false' },
+      ]);
+    }
+    const updated = await writeAiEnabled(db, enabled, c.get('adminActor'));
+    return jsonResponse(c, {
+      ai_enabled: updated.aiEnabled,
+      ai_env_locked: config.assistantDisabled,
+      engine: config.assistantEngine,
+      llm_configured: Boolean(config.llmApiKey),
+      updated_at: updated.updatedAt,
+      updated_by: updated.updatedBy,
+    });
   });
 
   // --- 405 Method Not Allowed / 404 Not Found в общем формате Error ---

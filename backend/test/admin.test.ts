@@ -275,4 +275,71 @@ describe('Admin, Moderation, Audit, Subscriptions & Feedback Privacy', () => {
     expect(data.reset).toBe(true);
     expect(data.events).toBeGreaterThan(20);
   });
+
+  it('AI toggle: админ выключает и включает ИИ без перезапуска, env-флаг приоритетнее', async () => {
+    const unauth = await ctx.req('/api/v1/admin/settings');
+    expect(unauth.status).toBe(401);
+    validators.assertValid('Error', await unauth.json());
+
+    const initial = await ctx.adminReq('/api/v1/admin/settings');
+    expect(initial.status).toBe(200);
+    const initialBody = (await initial.json()) as { ai_enabled: boolean; ai_env_locked: boolean; engine: string };
+    expect(initialBody.ai_enabled).toBe(true);
+    expect(initialBody.ai_env_locked).toBe(false);
+    expect(initialBody.engine).toBeTruthy();
+
+    const bad = await ctx.adminReq('/api/v1/admin/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ai_enabled: 'yes' }),
+    });
+    expect(bad.status).toBe(400);
+    validators.assertValid('Error', await bad.json());
+
+    try {
+      const off = await ctx.adminReq('/api/v1/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai_enabled: false }),
+      });
+      expect(off.status).toBe(200);
+      const offBody = (await off.json()) as { ai_enabled: boolean; updated_by: string | null };
+      expect(offBody.ai_enabled).toBe(false);
+      expect(offBody.updated_by).toBeTruthy();
+
+      const blocked = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Концерты в Уфе завтра' }),
+      });
+      expect(blocked.status).toBe(503);
+      expect(blocked.headers.get('retry-after')).toBe('60');
+      validators.assertValid('Error', await blocked.json());
+
+      const health = await ctx.req('/api/v1/health');
+      const healthBody = (await health.json()) as { checks: Record<string, string>; status: string };
+      expect(healthBody.checks.assistant).toBe('disabled');
+      expect(healthBody.status).toBe('degraded');
+
+      const on = await ctx.adminReq('/api/v1/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai_enabled: true }),
+      });
+      expect(on.status).toBe(200);
+
+      const allowed = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Концерты в Уфе завтра' }),
+      });
+      expect(allowed.status).toBe(200);
+    } finally {
+      await ctx.adminReq('/api/v1/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai_enabled: true }),
+      });
+    }
+  });
 });

@@ -5,6 +5,8 @@
  * Тогда POST /api/v1/assistant/query отвечает 503 unavailable, а сайт сам переходит на обычный поиск.
  */
 
+import { isAiEnabled } from '../admin/ai-flag';
+
 export const DEMO_HEADER = 'x-assistant-demo';
 export const DEMO_UNAVAILABLE = 'unavailable';
 
@@ -13,5 +15,9 @@ export function assistantDisabled(): boolean {
 }
 
 export function assistantUnavailable(request?: Request): boolean {
-  return assistantDisabled() || request?.headers.get(DEMO_HEADER) === DEMO_UNAVAILABLE;
+  return (
+    assistantDisabled() ||
+    !isAiEnabled() ||
+    request?.headers.get(DEMO_HEADER) === DEMO_UNAVAILABLE
+  );
 }

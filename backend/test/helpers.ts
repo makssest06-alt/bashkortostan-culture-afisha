@@ -32,18 +32,21 @@ export interface TestContext {
 
 export async function createTestContext(
   overrides: Partial<AppConfig> = {},
+  options: { now?: Date } = {},
 ): Promise<TestContext> {
   process.env.LOG_SILENT = '1';
+  const now = options.now ?? FIXED_NOW;
   const db = openDatabase({ databaseUrl: 'memory://' });
   await runMigrations(db);
   await seedDatabase(db, {
-    now: FIXED_NOW,
+    now,
     publicWebUrl: 'http://localhost:3210',
   });
 
   const config: AppConfig = {
     port: 8000,
     host: '127.0.0.1',
+    assistantEngine: overrides.llmApiKey ? 'llm' : 'rules',
     databaseUrl: 'memory://',
     pgliteDataDir: './data/pglite',
     adminToken: TEST_ADMIN_TOKEN,
@@ -82,7 +85,7 @@ export async function createTestContext(
     db,
     config,
     metrics,
-    nowFn: () => FIXED_NOW,
+    nowFn: () => now,
   });
 
   const req = (path: string, init?: RequestInit) =>

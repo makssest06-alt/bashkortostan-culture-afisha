@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { checkAdminAuth } from '../src/domain/admin.js';
 import { ToolRuntime } from '../src/domain/assistant/tools.js';
-import { EXAMPLE_ADMIN_TOKEN, loadConfig } from '../src/config.js';
+import { EXAMPLE_ADMIN_TOKEN, loadConfig, parseAssistantEngine } from '../src/config.js';
 import { clientIpFromHeaders, normalizeClientIp } from '../src/domain/rate-limit.js';
 import {
   createContractValidators,
@@ -44,6 +44,15 @@ describe('P0-1: админка не открыта по умолчанию', () 
     const demo = loadConfig({ ADMIN_OPEN: '1' });
     expect(demo.adminOpen).toBe(true);
     expect(demo.production).toBe(false);
+  });
+
+  it('ASSISTANT_ENGINE: явные режимы, безопасный default и отказ при опечатке', () => {
+    expect(parseAssistantEngine(undefined, false)).toBe('rules');
+    expect(parseAssistantEngine(undefined, true)).toBe('llm');
+    expect(parseAssistantEngine('rules', true)).toBe('rules');
+    expect(parseAssistantEngine('llm', false)).toBe('llm');
+    expect(parseAssistantEngine('hybrid', false)).toBe('hybrid');
+    expect(() => parseAssistantEngine('hybryd', true)).toThrow(/ASSISTANT_ENGINE/);
   });
 
   it('checkAdminAuth не открывает админку в production даже при adminOpen=true', () => {

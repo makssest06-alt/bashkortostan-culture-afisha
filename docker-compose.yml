@@ -46,6 +46,7 @@ services:
       ADMIN_OPEN: ${ADMIN_OPEN:-}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3210}
       ASSISTANT_DISABLED: ${ASSISTANT_DISABLED:-}
+      ASSISTANT_ENGINE: ${ASSISTANT_ENGINE:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}

@@ -35,11 +35,12 @@ npm run dev
 | `ADMIN_TOKEN` | пусто | Bearer/header-токен модератора; заглушка из `.env.example` автоматически отклоняется. В production обязателен, ≥ 32 символов |
 | `ADMIN_OPEN` | пусто | `1` открывает админку без токена — только для локального демо. В production бэкенд с `ADMIN_OPEN=1` не стартует |
 | `PUBLIC_WEB_URL` | `http://localhost:3210` | Публичный URL сайта (ссылки на события и источники) |
-| `ASSISTANT_DISABLED` | пусто | `1` отключает ассистента (`503` + `Retry-After: 60`) |
+| `ASSISTANT_DISABLED` | пусто | `1` жёстко отключает ассистента (`503` + `Retry-After: 60`). Мягкий рубильник — в админке, вкладка «ИИ» (`GET/PATCH /api/v1/admin/settings`) |
 | `LLM_API_KEY` | пусто | Ключ OpenAI-compatible LLM; без него активен локальный контур `rules-v2` |
-| `LLM_BASE_URL` | `https://api.openai.com/v1` | Базовый URL LLM API |
-| `LLM_MODEL` | `gpt-4o-mini` | Имя модели |
-| `LLM_TIMEOUT_MS` | `12000` | Таймаут запроса к LLM (мс) |
+| `ASSISTANT_ENGINE` | пусто (auto) | `rules` / `llm` / `hybrid`: как маршрутизируются запросы ассистента. Auto = `llm` при наличии ключа, иначе `rules` |
+| `LLM_BASE_URL` | `https://api.openai.com/v1` | Базовый URL LLM API (DeepSeek: `https://api.deepseek.com`) |
+| `LLM_MODEL` | `gpt-4o-mini` | Имя модели (DeepSeek: `deepseek-flash`) |
+| `LLM_TIMEOUT_MS` | `12000` | Таймаут запроса к LLM (мс); для `deepseek-flash` с thinking — `60000` |
 | `LLM_COST_IN_RUB_PER_1K` / `LLM_COST_OUT_RUB_PER_1K` | `0.015` / `0.06` | Расчёт стоимости токенов модели в ₽ |
 | `ASSISTANT_RATE_LIMIT_10M` | `20` | Лимит `/assistant/query` за 10 минут на IP и на `user_ref` |
 | `ASSISTANT_DAILY_LIMIT` | `200` | Суточный лимит `/assistant/query` на IP и на `user_ref` |

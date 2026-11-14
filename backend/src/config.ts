@@ -8,10 +8,14 @@ export const EXAMPLE_ADMIN_TOKEN = 'change-me-to-a-long-random-string';
 /** Минимальная длина токена админки в production: 32 случайных символа. */
 export const MIN_PRODUCTION_ADMIN_TOKEN_LENGTH = 32;
 
+export type AssistantEngine = 'rules' | 'llm' | 'hybrid';
+
 export interface AppConfig {
   port: number;
   /** Адрес, на котором слушает API. По умолчанию только localhost; в Docker — 0.0.0.0. */
   host: string;
+  /** Движок ассистента: только правила, только LLM или гибрид с эскалацией. */
+  assistantEngine: AssistantEngine;
   databaseUrl: string;
   pgliteDataDir: string;
   adminToken: string | undefined;
@@ -59,6 +63,18 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
 }
 
 /**
+ * Явно заданный ASSISTANT_ENGINE проверяется строго: опечатка не должна
+ * незаметно менять поведение (например, включать платную модель).
+ * Без переменной сохраняем прежнее поведение: LLM при наличии ключа, иначе rules.
+ */
+export function parseAssistantEngine(raw: string | undefined, hasLlmKey: boolean): AssistantEngine {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (!value) return hasLlmKey ? 'llm' : 'rules';
+  if (value === 'rules' || value === 'llm' || value === 'hybrid') return value;
+  throw new Error('ASSISTANT_ENGINE должен быть rules, llm или hybrid');
+}
+
+/**
  * `TRUST_PROXY=0` — заголовкам не верим; `1`/`true` — один доверенный прокси;
  * число N — N доверенных прокси (берём адрес с конца цепочки X-Forwarded-For).
  */
@@ -87,6 +103,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const adminOpenRequested = env.ADMIN_OPEN === '1';
   const port = Number.parseInt(env.PORT ?? '8000', 10);
   const proxy = parseTrustProxy(env.TRUST_PROXY);
+  const llmApiKey = env.LLM_API_KEY?.trim() || undefined;
+  const assistantEngine = parseAssistantEngine(env.ASSISTANT_ENGINE, Boolean(llmApiKey));
 
   if (production && adminOpenRequested) {
     throw new Error(
@@ -115,6 +133,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: Number.isFinite(port) && port > 0 ? port : 8000,
     host: (env.HOST ?? '127.0.0.1').trim() || '127.0.0.1',
+    assistantEngine,
     databaseUrl: (env.DATABASE_URL ?? '').trim(),
     pgliteDataDir: (env.PGLITE_DATA_DIR ?? './data/pglite').trim(),
     adminToken,
@@ -122,7 +141,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     production,
     publicWebUrl: (env.PUBLIC_WEB_URL ?? 'http://localhost:3210').replace(/\/+$/, ''),
     assistantDisabled: env.ASSISTANT_DISABLED === '1',
-    llmApiKey: env.LLM_API_KEY?.trim() || undefined,
+    llmApiKey,
     llmBaseUrl: (env.LLM_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/+$/, ''),
     llmModel: (env.LLM_MODEL ?? 'gpt-4o-mini').trim(),
     llmTimeoutMs: Math.max(1000, Number.parseInt(env.LLM_TIMEOUT_MS ?? '12000', 10) || 12000),

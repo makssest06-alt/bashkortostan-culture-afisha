@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn';
 
 import { adminFetch } from './api';
 import { Notice } from './bits';
+import { AiTab } from './AiTab';
 import { ApplicationsTab } from './ApplicationsTab';
 import { AuditList } from './AuditList';
 import { EventsTab } from './EventsTab';
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'applications', label: 'Заявки' },
   { id: 'audit', label: 'Журнал' },
   { id: 'traces', label: 'Трассы ИИ' },
+  { id: 'ai', label: 'ИИ' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -163,6 +165,7 @@ export function AdminApp() {
           </section>
         ) : null}
         {tab === 'traces' ? <TracesTab /> : null}
+        {tab === 'ai' ? <AiTab /> : null}
       </div>
     </div>
   );
