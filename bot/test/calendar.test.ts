@@ -49,6 +49,16 @@ describe('календарь .ics', () => {
     expect(lines(ics)).toContain('SUMMARY:Концерт\\, вечер\\; музыка');
   });
 
+  it('экранирует UID от CRLF-инъекции', () => {
+    const ics = buildEventIcs(
+      makeEvent({ id: 'a\r\nSTATUS:CANCELLED' }),
+      makeOccurrence({ id: 'b\r\nSTATUS:CANCELLED' }),
+      { now: NOW },
+    );
+    expect(lines(ics)).not.toContain('STATUS:CANCELLED');
+    expect(ics).toContain('UID:a\\nSTATUS:CANCELLED-b\\nSTATUS:CANCELLED@');
+  });
+
   it('складывает длинные строки по 75 октетов, не разрывая UTF-8', () => {
     const folded = foldIcsLine(`SUMMARY:${'я'.repeat(100)}`);
     const parts = folded.split('\r\n');

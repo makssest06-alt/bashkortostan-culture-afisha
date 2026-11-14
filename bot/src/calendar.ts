@@ -121,7 +121,7 @@ export function buildEventIcs(
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
-    `UID:${event.id}-${occurrence.id}@${uidDomain}`,
+    `UID:${escapeIcsText(event.id)}-${escapeIcsText(occurrence.id)}@${uidDomain}`,
     `DTSTAMP:${toIcsUtc(now)}`,
   ];
 

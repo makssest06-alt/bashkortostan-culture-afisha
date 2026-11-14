@@ -6,7 +6,7 @@
 import { withAdmin } from '../../../../../../../lib/admin/route-kit';
 import { resolveDisputed } from '../../../../../../../lib/admin/service';
 import type { ModerationAction } from '../../../../../../../lib/admin/service';
-import { errorResponse, json, methodNotAllowed, notFound, preflight, validationError } from '../../../../../../../lib/api/http';
+import { errorResponse, json, methodNotAllowed, notFound, preflightAdmin, validationError } from '../../../../../../../lib/api/http';
 
 const ACTIONS: readonly ModerationAction[] = ['publish', 'keep_draft', 'cancel', 'merge'];
 
@@ -32,7 +32,7 @@ export function POST(request: Request, context: { params: Promise<{ id: string }
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('POST, OPTIONS');

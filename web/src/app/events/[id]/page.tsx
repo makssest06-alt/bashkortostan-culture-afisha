@@ -24,9 +24,11 @@ type EventPageProps = {
 async function requestOrigin(): Promise<URL | undefined> {
   const configured = configuredSiteOrigin();
   if (configured) return configured;
+  // В production не строим canonical/OG из клиентского Host/X-Forwarded-Host.
+  if (process.env.NODE_ENV === 'production') return undefined;
   const headerList = await headers();
   const host = headerList.get('x-forwarded-host') ?? headerList.get('host');
-  if (!host) return undefined;
+  if (!host || !/^[a-z0-9.-]+(?::\d{1,5})?$/i.test(host)) return undefined;
   const protocol = headerList.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
   try {
     return new URL(`${protocol}://${host}`);

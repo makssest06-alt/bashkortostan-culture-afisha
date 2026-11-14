@@ -38,10 +38,12 @@ export class SlidingRateLimiter {
     if (recent.length >= maxRequests) {
       const oldest = recent[0];
       const retryAfter = Math.max(1, Math.ceil((oldest + windowMs - nowMs) / 1000));
+      this.hits.delete(key);
       this.hits.set(key, recent);
       return { ok: false, retryAfter, remaining: 0 };
     }
     recent.push(nowMs);
+    this.hits.delete(key);
     this.hits.set(key, recent);
     return { ok: true, retryAfter: 0, remaining: Math.max(0, maxRequests - recent.length) };
   }
@@ -57,6 +59,7 @@ export class SlidingRateLimiter {
       const key = `${keyBase}:${rule.suffix}`;
       const cutoff = nowMs - rule.windowMs;
       const recent = (this.hits.get(key) ?? []).filter((ts) => ts > cutoff);
+      this.hits.delete(key);
       this.hits.set(key, recent);
       if (recent.length >= rule.max) {
         const retryAfter = Math.max(1, Math.ceil((recent[0] + rule.windowMs - nowMs) / 1000));
@@ -68,6 +71,7 @@ export class SlidingRateLimiter {
       const key = `${keyBase}:${rule.suffix}`;
       const arr = this.hits.get(key) ?? [];
       arr.push(nowMs);
+      this.hits.delete(key);
       this.hits.set(key, arr);
       minRemaining = Math.min(minRemaining, Math.max(0, rule.max - arr.length));
     }

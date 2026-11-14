@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import type { AppConfig } from '../../config.js';
@@ -9,7 +9,7 @@ import type { SlidingRateLimiter } from '../rate-limit.js';
 import { USER_REF_PATTERN } from '../subscriptions.js';
 import { formatRfc3339Local, localNow, TZ_OFFSET } from '../time.js';
 import type { ApiErrorDetail } from '../types.js';
-import { PROMPT_VERSION, runLlmAgent } from './llm.js';
+import { PROMPT_VERSION, runLlmAgent, LlmError } from './llm.js';
 import {
   maskPii,
   MAX_MESSAGE_LENGTH,
@@ -121,6 +121,35 @@ async function assistantSpendTodayRub(db: Database, now: Date): Promise<number> 
   return Number.isFinite(total) && total >= 0 ? total : 0;
 }
 
+/**
+ * Оценка максимальной стоимости одного запроса. Резервируется до вызова LLM,
+ * чтобы параллельные запросы не прошли проверку бюджета одновременно.
+ */
+let budgetReservedRub = 0;
+
+function estimateMaxLlmCostRub(config: AppConfig): number {
+  const inputTokens = 6_000;
+  const outputTokens = config.assistantMaxTokens;
+  const inRate = config.llmCostInRubPer1k ?? 0.015;
+  const outRate = config.llmCostOutRubPer1k ?? 0.06;
+  return Math.round(((inputTokens / 1000) * inRate + (outputTokens / 1000) * outRate) * 10_000) / 10_000;
+}
+
+const SENSITIVE_PLAN_KEY = /^(title_query|topic_query|venue_query|geo_query|semantic_query|q|text|name|contact|email|phone|organization)$/i;
+
+/** Рекурсивно убирает свободный текст/ПДн из plan перед записью в трассу. */
+function sanitizeTracePlan(value: unknown, depth = 0): unknown {
+  if (depth > 5) return '[depth]';
+  if (typeof value === 'string') return maskPii(value).slice(0, 200);
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeTracePlan(item, depth + 1));
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 100)) {
+    out[key] = SENSITIVE_PLAN_KEY.test(key) ? '[redacted]' : sanitizeTracePlan(item, depth + 1);
+  }
+  return out;
+}
+
 export async function runAssistantPipeline(
   db: Database,
   config: AppConfig,
@@ -137,7 +166,9 @@ export async function runAssistantPipeline(
   const startedMs = Date.now();
   const traceId = randomUUID();
   const channel = request.channel ?? 'web';
-  const maskedUserRef = request.user_ref ? maskPii(request.user_ref).slice(0, 64) : null;
+  const maskedUserRef = request.user_ref
+    ? `u_${createHash('sha256').update(request.user_ref).digest('hex').slice(0, 16)}`
+    : null;
 
   const runtime = new ToolRuntime(db, {
     requestId: options.requestId,
@@ -166,15 +197,21 @@ export async function runAssistantPipeline(
   if (useLlm) {
     const spent = await assistantSpendTodayRub(db, now);
     const budget = config.assistantDailyBudgetRub;
-    if (spent >= budget) {
+    const estimate = estimateMaxLlmCostRub(config);
+    const budgetExceeded = spent >= budget || spent + budgetReservedRub + estimate > budget;
+    if (budgetExceeded) {
       fallbackUsed = true;
-      errorText = `daily_budget_exhausted: ${spent.toFixed(4)} ₽ >= ${budget} ₽`;
+      errorText =
+        spent >= budget
+          ? `daily_budget_exhausted: ${spent.toFixed(4)} ₽ >= ${budget} ₽`
+          : `daily_budget_reserved: ${(spent + budgetReservedRub).toFixed(4)} ₽ + ${estimate.toFixed(4)} ₽ > ${budget} ₽`;
       payload = await runDeterministicAssistant(request, runtime, now, 'rules-budget-v2');
       planObj = { constraints: payload.constraints, fallback: 'daily_budget_exhausted' };
       options.metrics?.incAssistantBudgetFallback();
       logEvent('warn', 'assistant_budget_exhausted', {
         request_id: options.requestId,
         spent_rub: Number(spent.toFixed(4)),
+        reserved_rub: Number(budgetReservedRub.toFixed(4)),
         budget_rub: budget,
       });
     } else {
@@ -185,6 +222,7 @@ export async function runAssistantPipeline(
           budget_rub: budget,
         });
       }
+      budgetReservedRub += estimate;
       try {
         const llmRes = await runLlmAgent(request, config, runtime, now);
         payload = llmRes.response;
@@ -195,8 +233,14 @@ export async function runAssistantPipeline(
       } catch (err) {
         fallbackUsed = true;
         errorText = err instanceof Error ? err.message : 'LLM error';
+        if (err instanceof LlmError) {
+          tokenUsage = err.tokenUsage;
+          costRub = err.costRub;
+        }
         payload = await runDeterministicAssistant(request, runtime, now, 'rules-fallback-v2');
         planObj = { constraints: payload.constraints, fallback: true };
+      } finally {
+        budgetReservedRub = Math.max(0, budgetReservedRub - estimate);
       }
     }
   } else {
@@ -227,7 +271,7 @@ export async function runAssistantPipeline(
       JSON.stringify(runtime.steps),
       JSON.stringify([...runtime.groundedIds]),
       tokenUsage ? JSON.stringify(tokenUsage) : null,
-      planObj ? JSON.stringify(planObj) : null,
+      planObj ? JSON.stringify(sanitizeTracePlan(planObj)) : null,
       costRub,
       fallbackUsed,
       errorText,

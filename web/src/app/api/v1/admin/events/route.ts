@@ -5,7 +5,7 @@
 
 import { withAdmin, intParam } from '../../../../../lib/admin/route-kit';
 import { listAdminEvents } from '../../../../../lib/admin/service';
-import { json, methodNotAllowed, preflight, validationError } from '../../../../../lib/api/http';
+import { json, methodNotAllowed, preflightAdmin, validationError } from '../../../../../lib/api/http';
 import type { EventStatus } from '../../../../../lib/api/types';
 
 const STATUSES: readonly EventStatus[] = ['published', 'draft', 'cancelled'];
@@ -34,7 +34,7 @@ export function GET(request: Request): Promise<Response> {
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('GET, OPTIONS');

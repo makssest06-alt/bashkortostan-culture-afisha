@@ -105,7 +105,7 @@ export interface BotConfig {
   userRefMode?: 'hmac' | 'legacy';
   /** Ассистент в боте; по умолчанию выключен. */
   assistantEnabled?: boolean;
-  /** Подтверждения ассистента; включать только после фикса привязки токена. */
+  /** Подтверждения ассистента; P0-4 исправлен, флаг включается осознанно. */
   assistantConfirmations?: boolean;
 }
 

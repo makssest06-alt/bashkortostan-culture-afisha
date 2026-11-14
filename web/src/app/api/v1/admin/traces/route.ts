@@ -4,14 +4,14 @@
  */
 
 import { withAdmin } from '../../../../../lib/admin/route-kit';
-import { json, methodNotAllowed, preflight } from '../../../../../lib/api/http';
+import { json, methodNotAllowed, preflightAdmin } from '../../../../../lib/api/http';
 
 export function GET(request: Request): Promise<Response> {
   return withAdmin(request, ({ requestId }) => json({ items: [], total: 0 }, { requestId }));
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('GET, OPTIONS');

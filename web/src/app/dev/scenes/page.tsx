@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
 import { HomeStage } from '@/components/home/HomeStage';
 
@@ -14,6 +15,7 @@ export default async function DevScenesPage({
 }: {
   searchParams: Promise<{ only?: string }>;
 }) {
+  if (process.env.NODE_ENV === 'production') notFound();
   const { only } = await searchParams;
   const ids = (only ?? '')
     .split(',')

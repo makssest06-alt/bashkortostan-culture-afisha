@@ -872,7 +872,7 @@ export function aboutKeyboard(
 
 /**
  * Кнопки ответа ассистента. Подтверждения включаются только явным флагом:
- * до исправления P0-4 в бэкенде токен не привязан к пользователю.
+ * P0-4 исправлен: токен привязан к user_ref, флаг включается осознанно.
  */
 export function assistantKeyboard(
   response: AssistantResponse,

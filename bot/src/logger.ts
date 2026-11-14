@@ -7,7 +7,8 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   error: 40,
 };
 
-const TELEGRAM_TOKEN_RE = /\b\d{5,15}:[A-Za-z0-9_-]{20,}\b/g;
+const TELEGRAM_TOKEN_RE = /\d{5,15}:[A-Za-z0-9_-]{20,}/g;
+const BEARER_RE = /(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
 
 export type LogFields = Record<string, unknown>;
 
@@ -23,9 +24,11 @@ export interface Logger {
   error: (message: string, fields?: LogFields) => void;
 }
 
-/** Прячет токен, даже если он случайно попал в текст ошибки. */
+/** Прячет токен, даже если он случайно попал в текст ошибки или URL. */
 export function redactSecrets(text: string): string {
-  return text.replace(TELEGRAM_TOKEN_RE, '[redacted-token]');
+  return text
+    .replace(TELEGRAM_TOKEN_RE, '[redacted-token]')
+    .replace(BEARER_RE, '$1[redacted]');
 }
 
 function normalizeFields(fields?: LogFields): LogFields | undefined {

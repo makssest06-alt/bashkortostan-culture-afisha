@@ -52,6 +52,21 @@ export interface LlmOutcome {
   plan: Record<string, unknown>;
 }
 
+export type LlmTokenUsage = { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+
+/** Ошибка LLM с уже потраченными токенами: бюджет должен их учитывать. */
+export class LlmError extends Error {
+  readonly tokenUsage: LlmTokenUsage;
+  readonly costRub: number;
+
+  constructor(message: string, tokenUsage: LlmTokenUsage, costRub: number, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'LlmError';
+    this.tokenUsage = tokenUsage;
+    this.costRub = costRub;
+  }
+}
+
 function sanitizeToolOutputForLlm(toolName: string, data: unknown): unknown {
   if (!data || typeof data !== 'object') return data;
   const obj = data as Record<string, unknown>;
@@ -176,9 +191,19 @@ export async function runLlmAgent(
         notes: [],
       };
 
-  // Быстрая защита от prompt injection на входе до отправки в LLM
-  if (parsedHints.injection) {
-    const plan = { stage: 'guardrail', blocked: 'injection' };
+  // Быстрая защита от prompt injection на входе до отправки в LLM.
+  // Проверяем и текущую фразу, и пользовательские реплики истории: иначе
+  // jailbreak можно пронести в модель через history.
+  const historyInjection = (request.history ?? []).some(
+    (item) =>
+      item.role === 'user' &&
+      parseIntoConstraints(item.content, emptyConstraints(), { today }).injection,
+  );
+  if (parsedHints.injection || historyInjection) {
+    const plan = {
+      stage: 'guardrail',
+      blocked: historyInjection ? 'history_injection' : 'injection',
+    };
     return {
       tokenUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       costRub: 0,
@@ -217,26 +242,40 @@ export async function runLlmAgent(
   const totalTokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
   for (let round = 0; round <= MAX_TOOL_CALLS_PER_ANSWER; round += 1) {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.llmApiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.llmModel,
-        messages,
-        tools: AGENT_TOOL_DEFINITIONS,
-        tool_choice: 'auto',
-        temperature: 0.2,
-        // P0-3: потолок токенов ответа — нельзя выжечь бюджет одним длинным ответом.
-        max_tokens: config.assistantMaxTokens,
-      }),
-      signal: AbortSignal.timeout(config.llmTimeoutMs),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.llmApiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.llmModel,
+          messages,
+          tools: AGENT_TOOL_DEFINITIONS,
+          tool_choice: 'auto',
+          temperature: 0.2,
+          // P0-3: потолок токенов ответа — нельзя выжечь бюджет одним длинным ответом.
+          max_tokens: config.assistantMaxTokens,
+        }),
+        signal: AbortSignal.timeout(config.llmTimeoutMs),
+      });
+    } catch (error) {
+      throw new LlmError(
+        error instanceof Error ? error.message : 'LLM request failed',
+        totalTokenUsage,
+        computeCostRub(totalTokenUsage, config),
+        { cause: error },
+      );
+    }
 
     if (!res.ok) {
-      throw new Error(`LLM HTTP ${res.status}`);
+      throw new LlmError(
+        `LLM HTTP ${res.status}`,
+        totalTokenUsage,
+        computeCostRub(totalTokenUsage, config),
+      );
     }
 
     const json = (await res.json()) as {
@@ -252,7 +291,11 @@ export async function runLlmAgent(
 
     const assistantMsg = json.choices?.[0]?.message;
     if (!assistantMsg) {
-      throw new Error('LLM returned empty choice');
+      throw new LlmError(
+        'LLM returned empty choice',
+        totalTokenUsage,
+        computeCostRub(totalTokenUsage, config),
+      );
     }
 
     messages.push(assistantMsg);
@@ -417,5 +460,9 @@ export async function runLlmAgent(
     }
   }
 
-  throw new Error('LLM exceeded maximum tool rounds');
+  throw new LlmError(
+    'LLM exceeded maximum tool rounds',
+    totalTokenUsage,
+    computeCostRub(totalTokenUsage, config),
+  );
 }

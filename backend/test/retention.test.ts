@@ -33,6 +33,12 @@ describe('Retention и активность подписок', () => {
          VALUES ($1, $2, 'system', 'retention', 'system', 'retention-test')`,
         [randomUUID(), old(400)],
       );
+      const importId = randomUUID();
+      await ctx.db.query(
+        `INSERT INTO imports (id, created_at, actor, format, received, added, updated, merged, unchanged)
+         VALUES ($1, $2, 'system', 'json', 0, 0, 0, 0, 0)`,
+        [importId, old(200)],
+      );
       await ctx.db.query(
         `INSERT INTO feedback (id, created_at, expires_at, kind, name, contact, text, status)
          VALUES ($1, $2, $3, 'question', 'Тест', 'test@example.invalid', 'Старое обращение', 'new')`,
@@ -58,11 +64,14 @@ describe('Retention и активность подписок', () => {
       expect(removed.confirmations).toBeGreaterThanOrEqual(1);
       expect(removed.traces).toBeGreaterThanOrEqual(1);
       expect(removed.raw_records).toBeGreaterThanOrEqual(1);
+      expect(removed.imports).toBeGreaterThanOrEqual(1);
       expect(removed.audit_log).toBeGreaterThanOrEqual(1);
       expect(removed.subscriptions).toBeGreaterThanOrEqual(1);
 
       const subs = await ctx.db.query('SELECT id FROM subscriptions WHERE user_ref = $1', [userRef]);
       expect(subs.rows).toHaveLength(0);
+      const imports = await ctx.db.query('SELECT id FROM imports WHERE id = $1', [importId]);
+      expect(imports.rows).toHaveLength(0);
     } finally {
       await ctx.close();
     }

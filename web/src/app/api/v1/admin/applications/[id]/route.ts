@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { withAdmin } from '../../../../../../lib/admin/route-kit';
 import { mutate, readState } from '../../../../../../lib/admin/store';
 import { KIND_LABEL } from '../../../../../../lib/api/feedback';
-import { errorResponse, json, methodNotAllowed, notFound, preflight, validationError } from '../../../../../../lib/api/http';
+import { errorResponse, json, methodNotAllowed, notFound, preflightAdmin, validationError } from '../../../../../../lib/api/http';
 
 export function PATCH(request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
   return withAdmin(request, async ({ requestId, actor }) => {
@@ -41,7 +41,7 @@ export function PATCH(request: Request, context: { params: Promise<{ id: string 
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('PATCH, OPTIONS');

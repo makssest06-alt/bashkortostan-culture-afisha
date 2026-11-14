@@ -14,6 +14,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { errorResponse } from '../api/http';
+import { configuredSiteOrigin } from '../api/site-origin';
 
 export const SESSION_COOKIE = 'afisha_admin';
 export const NAME_COOKIE = 'afisha_admin_name';
@@ -84,9 +85,28 @@ export function cleanActor(raw: string | null | undefined, fallback: string): st
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get('origin') ?? request.headers.get('referer');
   if (!origin) return false;
-  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+
+  const configured = configuredSiteOrigin();
+  if (configured) {
+    try {
+      return new URL(origin).origin === configured.origin;
+    } catch {
+      return false;
+    }
+  }
+
+  const trustedProxy = process.env.TRUST_PROXY_CLIENT_IP === '1';
+  const forwardedHost = trustedProxy
+    ? request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    : null;
+  const host = forwardedHost || request.headers.get('host');
+  if (!host) return false;
+  const forwardedProto = trustedProxy
+    ? request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+    : null;
+  const protocol = forwardedProto || new URL(request.url).protocol.replace(':', '');
   try {
-    return new URL(origin).host === host;
+    return new URL(origin).origin === `${protocol}://${host}`;
   } catch {
     return false;
   }

@@ -2,7 +2,7 @@
 
 import { withAdmin } from '../../../../../lib/admin/route-kit';
 import { resetDemo } from '../../../../../lib/admin/service';
-import { json, methodNotAllowed, preflight } from '../../../../../lib/api/http';
+import { json, methodNotAllowed, preflightAdmin } from '../../../../../lib/api/http';
 
 export function POST(request: Request): Promise<Response> {
   return withAdmin(request, ({ requestId, actor }) => {
@@ -12,7 +12,7 @@ export function POST(request: Request): Promise<Response> {
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('POST, OPTIONS');

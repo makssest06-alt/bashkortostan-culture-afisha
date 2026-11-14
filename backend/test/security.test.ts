@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { checkAdminAuth } from '../src/domain/admin.js';
+import { ToolRuntime } from '../src/domain/assistant/tools.js';
 import { EXAMPLE_ADMIN_TOKEN, loadConfig } from '../src/config.js';
 import { clientIpFromHeaders, normalizeClientIp } from '../src/domain/rate-limit.js';
 import {
@@ -471,7 +472,110 @@ describe('P0-4: confirmation-токены привязаны к user_ref и хр
       const serialized = JSON.stringify(trace.steps);
       expect(serialized).not.toContain(secret);
       expect(serialized).not.toContain('999 123-45-67');
+      expect(JSON.stringify(trace.plan)).not.toContain(secret);
+      expect(JSON.stringify(trace.plan)).not.toContain('999 123-45-67');
       expect(trace.user_query_masked).toContain('[email]');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('сохраняет channel подтверждения (telegram не превращается в web)', async () => {
+    const ctx = await createTestContext();
+    const userRef = 'u_channel_confirm_001';
+    try {
+      const q = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Подпиши меня на концерты в Уфе на выходных',
+          user_ref: userRef,
+          channel: 'telegram',
+        }),
+      });
+      const data = await q.json();
+      const confirm = await ctx.req('/api/v1/assistant/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirmation_id: data.confirmation.confirmation_id,
+          user_ref: userRef,
+          confirm: true,
+        }),
+      });
+      const body = await confirm.json();
+      expect(body.status).toBe('done');
+      expect(body.subscription.channel).toBe('telegram');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('confirm со строкой "false" не создаёт подписку', async () => {
+    const ctx = await createTestContext();
+    const userRef = 'u_confirm_bool_000001';
+    try {
+      const q = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Подпиши меня на концерты в Уфе на выходных',
+          user_ref: userRef,
+        }),
+      });
+      const data = await q.json();
+      const res = await ctx.req('/api/v1/assistant/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirmation_id: data.confirmation.confirmation_id,
+          user_ref: userRef,
+          confirm: 'false',
+        }),
+      });
+      expect(res.status).toBe(400);
+      const subs = await ctx.req('/api/v1/subscriptions', {
+        headers: { Authorization: `Bearer ${userRef}` },
+      });
+      expect((await subs.json()).items).toHaveLength(0);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('save_feedback без user_ref не создаёт подтверждение', async () => {
+    const ctx = await createTestContext();
+    try {
+      const q = await ctx.req('/api/v1/assistant/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Сообщить об ошибке: неверная дата начала' }),
+      });
+      expect(q.status).toBe(200);
+      const rows = await ctx.db.query<{ cnt: string | number }>(
+        'SELECT COUNT(*) AS cnt FROM agent_confirmations',
+      );
+      expect(Number(rows.rows[0]?.cnt ?? 0)).toBe(0);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('traceArgs рекурсивно редактирует вложенные ПДн', async () => {
+    const ctx = await createTestContext();
+    try {
+      const runtime = new ToolRuntime(ctx.db, {
+        requestId: 'req_trace_args',
+        userRef: 'u_trace_args_00000001',
+        now: FIXED_NOW,
+      });
+      await runtime.execute('save_feedback', {
+        kind: 'question',
+        text: 'secret@example.com',
+        meta: { email: 'secret@example.com', TEXT: 'secret@example.com' },
+      });
+      const serialized = JSON.stringify(runtime.steps);
+      expect(serialized).not.toContain('secret@example.com');
     } finally {
       await ctx.close();
     }
@@ -536,6 +640,13 @@ describe('P0-4: confirmation-токены привязаны к user_ref и хр
         body: confirmBody({ user_ref: userRef }),
       });
       expect(reuse.status).toBe(409);
+
+      // После выполнения не храним текст обращения и user_ref до retention.
+      const rowsAfter = await ctx.db.query<{ payload: unknown; user_ref: string | null }>(
+        'SELECT payload, user_ref FROM agent_confirmations',
+      );
+      expect(JSON.stringify(rowsAfter.rows[0]?.payload)).toBe('{}');
+      expect(rowsAfter.rows[0]?.user_ref).toBeNull();
 
       // В аудит попало подтверждение, но не сырой токен и не user_ref.
       const audit = await ctx.adminReq('/api/v1/admin/audit?action=confirm');

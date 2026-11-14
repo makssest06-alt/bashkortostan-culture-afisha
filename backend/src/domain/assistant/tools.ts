@@ -87,38 +87,42 @@ function newConfirmationToken(): { token: string; tokenHash: string } {
   return { token, tokenHash: createHash('sha256').update(token).digest('hex') };
 }
 
-/** Ограниченное представление события для контекста языковой модели (model_view из contracts/agent_tools.json). */export function toModelViewEvent(ev: ApiEvent): Record<string, unknown> {
-  const rawDesc = (ev.description ?? '')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
-    .replace(/[<>]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const trimmedDesc =
-    rawDesc.length > DESCRIPTION_MAX_CHARS
-      ? `${rawDesc.slice(0, DESCRIPTION_MAX_CHARS - 1)}…`
-      : rawDesc;
+/** Ограниченное представление события для контекста языковой модели (model_view из contracts/agent_tools.json). */
+export function toModelViewEvent(ev: ApiEvent): Record<string, unknown> {
+  const cleanText = (value: string | null | undefined, max = 300) =>
+    (value ?? '')
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/[<>]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, max);
+  const untrusted = (value: string | null | undefined, max = 300) => {
+    const text = cleanText(value, max);
+    return text ? `<untrusted_event_data>${text}</untrusted_event_data>` : '';
+  };
+  const trimmedDesc = cleanText(ev.description, DESCRIPTION_MAX_CHARS);
 
   return {
     id: ev.id,
-    title: ev.title,
+    title: untrusted(ev.title, 200),
     category: ev.category,
-    tags: ev.tags,
+    tags: ev.tags.slice(0, 20).map((tag) => untrusted(tag, 60)),
     date_start: ev.date_start,
     date_end: ev.date_end,
     time_precision: ev.time_precision,
     duration_min: ev.duration_min,
     city: ev.city,
-    venue: ev.venue,
+    venue: untrusted(ev.venue, 200),
     venue_id: ev.venue_id,
-    address: ev.address,
+    address: untrusted(ev.address, 300),
     price_min: ev.price_min,
     price_max: ev.price_max,
     is_free: ev.is_free,
     age_limit: ev.age_limit,
     language: ev.language,
     status: ev.status,
-    source_url: ev.source_url,
-    org_link: ev.org_link,
+    source_url: untrusted(ev.source_url, 500),
+    org_link: untrusted(ev.org_link, 500),
     description: trimmedDesc ? `<untrusted_event_data>${trimmedDesc}</untrusted_event_data>` : '',
   };
 }
@@ -696,9 +700,9 @@ export class ToolRuntime {
         const { token, tokenHash } = newConfirmationToken();
         const expiresAt = formatRfc3339Local(now.getTime() + CONFIRMATION_TTL_SECONDS * 1000);
         await this.db.query(
-          `INSERT INTO agent_confirmations (token, action, user_ref, payload, summary, expires_at)
-           VALUES ($1, 'subscribe', $2, $3::jsonb, $4, $5)`,
-          [tokenHash, this.ctx.userRef, JSON.stringify(args), summary, expiresAt],
+          `INSERT INTO agent_confirmations (token, action, user_ref, payload, summary, expires_at, channel)
+           VALUES ($1, 'subscribe', $2, $3::jsonb, $4, $5, $6)`,
+          [tokenHash, this.ctx.userRef, JSON.stringify(args), summary, expiresAt, this.ctx.channel ?? 'web'],
         );
         return {
           ok: true,
@@ -746,17 +750,25 @@ export class ToolRuntime {
       if (args.event_id && !UUID_PATTERN.test(args.event_id) && !/^evt_[a-z0-9_]+$/i.test(args.event_id)) {
         return invalidArgs('Некорректный event_id для обращения', this.ctx.requestId);
       }
-      const summary = args.event_id
+      const summaryBase = args.event_id
         ? `Обращение (${args.kind}) по событию ${args.event_id}`
         : `Обращение (${args.kind})`;
+      const preview = maskPii(args.text).replace(/\s+/g, ' ').trim().slice(0, 120);
+      const summary = `${summaryBase}: «${preview}${args.text.length > 120 ? '…' : ''}»`;
 
       if (!this.ctx.confirmationToken) {
+        if (!this.ctx.userRef) {
+          return invalidArgs(
+            'Для обращения через ассистента нужен user_ref в запросе (user_ref)',
+            this.ctx.requestId,
+          );
+        }
         const { token, tokenHash } = newConfirmationToken();
         const expiresAt = formatRfc3339Local(now.getTime() + CONFIRMATION_TTL_SECONDS * 1000);
         await this.db.query(
-          `INSERT INTO agent_confirmations (token, action, user_ref, payload, summary, expires_at)
-           VALUES ($1, 'save_feedback', $2, $3::jsonb, $4, $5)`,
-          [tokenHash, this.ctx.userRef ?? null, JSON.stringify(args), summary, expiresAt],
+          `INSERT INTO agent_confirmations (token, action, user_ref, payload, summary, expires_at, channel)
+           VALUES ($1, 'save_feedback', $2, $3::jsonb, $4, $5, $6)`,
+          [tokenHash, this.ctx.userRef, JSON.stringify(args), summary, expiresAt, this.ctx.channel ?? 'web'],
         );
         return {
           ok: true,
@@ -825,6 +837,16 @@ export async function confirmPendingAction(
   if (requesterUserRef && !USER_REF_PATTERN.test(requesterUserRef)) {
     return invalidArgs('Некорректный user_ref', ctx.requestId);
   }
+  if (bodyObj.confirm !== undefined && typeof bodyObj.confirm !== 'boolean') {
+    return invalidArgs('Поле confirm должно быть boolean', ctx.requestId);
+  }
+  if (
+    bodyObj.decision !== undefined &&
+    bodyObj.decision !== 'approve' &&
+    bodyObj.decision !== 'reject'
+  ) {
+    return invalidArgs('Поле decision должно быть approve или reject', ctx.requestId);
+  }
   const rejected = bodyObj.confirm === false || bodyObj.decision === 'reject';
   // P0-4: ищем по хешу токена — в БД сам токен не хранится.
   const tokenHash = createHash('sha256').update(token).digest('hex');
@@ -834,6 +856,7 @@ export async function confirmPendingAction(
     user_ref: string | null;
     payload: Record<string, unknown> | string;
     summary: string;
+    channel: string | null;
     expires_at: Date | string;
     used_at: Date | string | null;
   }>('SELECT * FROM agent_confirmations WHERE token = $1', [tokenHash]);
@@ -913,13 +936,14 @@ export async function confirmPendingAction(
     user_ref: string | null;
     payload: Record<string, unknown> | string;
     summary: string;
+    channel: string | null;
   }>(
     `UPDATE agent_confirmations
      SET used_at = $2
      WHERE token = $1
        AND used_at IS NULL
        AND expires_at > $2
-     RETURNING action, user_ref, payload, summary`,
+     RETURNING action, user_ref, payload, summary, channel`,
     [tokenHash, formatRfc3339Local(now)],
   );
 
@@ -937,6 +961,15 @@ export async function confirmPendingAction(
   }
 
   const claimed = claim.rows[0];
+
+  // После выполнения/отмены не храним текст обращения и user_ref до retention.
+  const clearConfirmation = () =>
+    db.query(
+      `UPDATE agent_confirmations
+       SET payload = '{}'::jsonb, user_ref = NULL
+       WHERE token = $1`,
+      [tokenHash],
+    );
 
   const writeAudit = async (decision: 'approve' | 'reject') => {
     await db.query(
@@ -957,6 +990,7 @@ export async function confirmPendingAction(
   };
 
   if (rejected) {
+    await clearConfirmation();
     await writeAudit('reject');
     return {
       ok: true,
@@ -972,9 +1006,14 @@ export async function confirmPendingAction(
       ? (JSON.parse(claimed.payload) as Record<string, unknown>)
       : claimed.payload;
   const confirmFields = bodyObj;
+  const channel =
+    claimed.channel === 'telegram' || claimed.channel === 'web' || claimed.channel === 'api'
+      ? claimed.channel
+      : (ctx.channel ?? 'web');
   const runtime = new ToolRuntime(db, {
     ...ctx,
     userRef: claimed.user_ref ?? ctx.userRef,
+    channel,
     confirmationToken: token,
     confirmPayload: {
       name: typeof confirmFields.name === 'string' ? confirmFields.name : undefined,
@@ -983,7 +1022,12 @@ export async function confirmPendingAction(
     },
   });
 
-  const execRes = await runtime.execute(claimed.action, payloadObj);
+  let execRes: ToolResult<unknown>;
+  try {
+    execRes = await runtime.execute(claimed.action, payloadObj);
+  } finally {
+    await clearConfirmation();
+  }
   if (execRes.ok) {
     await writeAudit('approve');
   }
@@ -1010,29 +1054,32 @@ function safeArgsRecord(rawArgs: unknown): Record<string, unknown> {
   return {};
 }
 
+const SENSITIVE_TRACE_KEY =
+  /^(text|name|contact|phone|email|organization|title_query|topic_query|venue_query|geo_query|semantic_query|q)$/i;
+
+function sanitizeTraceValue(value: unknown, keyName: string, depth = 0): unknown {
+  if (depth > 5) return '[depth]';
+  if (typeof value === 'string') {
+    if (SENSITIVE_TRACE_KEY.test(keyName)) {
+      return keyName.toLowerCase() === 'text' ? `[redacted ${value.length} chars]` : '[redacted]';
+    }
+    return maskPii(value).slice(0, 200);
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item) => sanitizeTraceValue(item, keyName, depth + 1));
+  }
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 50)) {
+    out[key] = sanitizeTraceValue(item, key, depth + 1);
+  }
+  return out;
+}
+
 /**
  * P1: в трассы не пишем сырые ПДн. Текст обращения сохраняем только длиной,
  * остальные строки маскируем от email/телефонов и ограничиваем 200 символами.
  */
-function traceArgs(name: string, rawArgs: unknown): Record<string, unknown> {
-  const args = safeArgsRecord(rawArgs);
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(args)) {
-    if (typeof value === 'string') {
-      if (name === 'save_feedback' && key === 'text') {
-        out[key] = `[redacted ${value.length} chars]`;
-      } else if (['name', 'contact', 'phone', 'email', 'organization'].includes(key)) {
-        out[key] = '[redacted]';
-      } else {
-        out[key] = maskPii(value).slice(0, 200);
-      }
-    } else if (Array.isArray(value)) {
-      out[key] = value
-        .slice(0, 20)
-        .map((item) => (typeof item === 'string' ? maskPii(item).slice(0, 200) : item));
-    } else {
-      out[key] = value;
-    }
-  }
-  return out;
+function traceArgs(_name: string, rawArgs: unknown): Record<string, unknown> {
+  return sanitizeTraceValue(safeArgsRecord(rawArgs), '', 0) as Record<string, unknown>;
 }

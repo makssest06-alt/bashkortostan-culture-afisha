@@ -145,6 +145,11 @@ export function preflight(): Response {
   return new Response(null, { status: 204, headers: { ...CORS_HEADERS } });
 }
 
+/** Preflight админки: без публичных CORS-заголовков. */
+export function preflightAdmin(): Response {
+  return new Response(null, { status: 204, headers: { 'X-Content-Type-Options': 'nosniff' } });
+}
+
 /** Убирает публичные CORS-заголовки с ответов админки. */
 export function stripCorsHeaders(response: Response): Response {
   for (const name of Object.keys(CORS_HEADERS)) response.headers.delete(name);

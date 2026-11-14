@@ -184,6 +184,8 @@ export function createApp(options: CreateAppOptions) {
   const nowFn = options.nowFn ?? (() => new Date());
   const feedbackRateLimiter = new SlidingRateLimiter();
   const metricsRateLimiter = new SlidingRateLimiter();
+  const readRateLimiter = new SlidingRateLimiter();
+  const subscriptionListRateLimiter = new SlidingRateLimiter();
   const assistantQueryRateLimiter = new SlidingRateLimiter();
   const assistantConfirmRateLimiter = new SlidingRateLimiter();
   const subscriptionCreateRateLimiter = new SlidingRateLimiter();
@@ -217,6 +219,12 @@ export function createApp(options: CreateAppOptions) {
   ] as const;
   const subscriptionDeleteIpBackstopRules = [
     { suffix: '10m', max: 200, windowMs: 10 * 60_000 },
+  ] as const;
+  const subscriptionListRules = [
+    { suffix: '1m', max: 60, windowMs: 60_000 },
+  ] as const;
+  const subscriptionListIpBackstopRules = [
+    { suffix: '1m', max: 300, windowMs: 60_000 },
   ] as const;
 
   function jsonBodyLimit(maxSize: number, message: string) {
@@ -297,6 +305,30 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/feedback', jsonBodyLimit(32 * 1024, 'Обращение слишком длинное'));
   // Admin body limit подключается после проверки токена — ниже, чтобы 401 не читал тело.
 
+  const publicReadLimit = async (c: Context<Env>, next: () => Promise<void>) => {
+    if (c.req.method !== 'GET') return next();
+    const check = readRateLimiter.checkAndConsume(
+      `read:${getClientIp(c, config)}`,
+      config.readRatePerMinute,
+      60_000,
+      nowFn().getTime(),
+    );
+    if (!check.ok) return rateLimited('public_read', c, check.retryAfter);
+    return next();
+  };
+  for (const path of [
+    '/api/v1/events',
+    '/api/v1/events/*',
+    '/api/v1/facets',
+    '/api/v1/dictionaries',
+    '/api/v1/cities',
+    '/api/v1/categories',
+    '/api/v1/venues',
+    '/api/v1/venues/*',
+  ]) {
+    app.use(path, publicReadLimit);
+  }
+
   // --- Служебные маршруты ---
 
   app.get('/api/v1', (c) =>
@@ -360,16 +392,6 @@ export function createApp(options: CreateAppOptions) {
   });
 
   const handleMetrics = (c: any) => {
-    // P1: в production метрики доступны только с METRICS_TOKEN; без токена — 404.
-    if (config.production && !config.metricsToken) {
-      return errorResponse(c, 404, 'not_found', 'Страница не найдена');
-    }
-    if (config.metricsToken) {
-      const auth = /^Bearer\s+(.+)$/i.exec(c.req.header('authorization')?.trim() ?? '');
-      if (!auth?.[1] || !secureEquals(auth[1].trim(), config.metricsToken)) {
-        return errorResponse(c, 401, 'unauthorized', 'Требуется METRICS_TOKEN');
-      }
-    }
     const ip = getClientIp(c, config);
     const check = metricsRateLimiter.checkAndConsume(
       `metrics:${ip}`,
@@ -381,6 +403,16 @@ export function createApp(options: CreateAppOptions) {
       return errorResponse(c, 429, 'rate_limited', 'Слишком много запросов к /metrics', [], {
         'Retry-After': String(check.retryAfter),
       });
+    }
+    // P1: в production метрики доступны только с METRICS_TOKEN; без токена — 404.
+    if (config.production && !config.metricsToken) {
+      return errorResponse(c, 404, 'not_found', 'Страница не найдена');
+    }
+    if (config.metricsToken) {
+      const auth = /^Bearer\s+(.+)$/i.exec(c.req.header('authorization')?.trim() ?? '');
+      if (!auth?.[1] || !secureEquals(auth[1].trim(), config.metricsToken)) {
+        return errorResponse(c, 401, 'unauthorized', 'Требуется METRICS_TOKEN');
+      }
     }
     return new Response(metrics.formatPrometheus(), {
       status: 200,
@@ -760,6 +792,22 @@ export function createApp(options: CreateAppOptions) {
         'Требуется заголовок Authorization: Bearer <user_ref>',
       );
     }
+
+    const nowMs = nowFn().getTime();
+    const ip = getClientIp(c, config);
+    const ipCheck = subscriptionListRateLimiter.consumeMulti(
+      `subs:list:ip:${ip}`,
+      subscriptionListIpBackstopRules,
+      nowMs,
+    );
+    if (!ipCheck.ok) return rateLimited('subscription_list', c, ipCheck.retryAfter);
+    const userCheck = subscriptionListRateLimiter.consumeMulti(
+      `subs:list:user:${rateKeyHash(auth.userRef)}`,
+      subscriptionListRules,
+      nowMs,
+    );
+    if (!userCheck.ok) return rateLimited('subscription_list', c, userCheck.retryAfter);
+
     const res = await listSubscriptions(db, auth.userRef, nowFn());
     if (!res.ok) {
       return errorResponse(c, res.status, res.code, res.message, res.details);

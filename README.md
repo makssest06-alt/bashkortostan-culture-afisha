@@ -23,7 +23,7 @@
 - **Контракт v1 готов**: схема события по п. 8.1, OpenAPI 3.1, инструменты агента п. 7.2 (см. ниже).
 - **Сайт** (`web/`, влит из [PR #17](https://github.com/makssest06-alt/bashkortostan-culture-afisha/pull/17)): каталог с фильтрами в адресе, карточка с блоком «Источники», `/ask` с резервным поиском, виджет, `/developers`, `/about` с формой заявки, админка `/admin`, РУС/БАШ. Событие по сети ходит в форме контракта v1. Без бэка сайт работает на своих моках с синтетическими событиями (`synthetic: true`), бэк подключается переменной окружения (см. «Как подключить бэк к сайту»).
 - **Бэкенд и контур ИИ-агента** (`backend/`, [`backend/README.md`](backend/README.md)): REST API v1 на TypeScript + Hono (`contracts/api.openapi.yaml` + маршруты сайта `/dictionaries`, `/facets`, `/assistant/query`, `/assistant/confirm`, `/admin/applications`, `/admin/traces`), миграции и сид PostgreSQL 16 (через `pg` / `postgres:16-alpine` и встроенный `@electric-sql/pglite`), идемпотентный CSV/JSON/multipart-импорт, дедупликация по `dedup_key`, очередь модерации с `merge`, оптимистическая блокировка `ETag`/`If-Match`, журнал `audit_log`, подписки, форма обратной связи с honeypot и лимитами, трассы агента и `/metrics` (Prometheus).
-- **Telegram-бот** (`bot/`, [`bot/README.md`](bot/README.md)): отдельный сервис на Node.js 22, канал к REST API v1 без доступа к базе. Закрывает уровень 1 ТЗ и даёт карточку 2.0: `/start` с брендовым жетоном и дисклеймером, поиск, все сеансы, тарифы, `.ics`-календарь, карта, шаринг, deep link `event_<uuid>`, «Похожие события», расписание площадки, фильтры возраста/языка/сортировки/периода, серверные ослабления пустой выдачи, переход из подписки к событиям и адаптер ассистента за флагом (по умолчанию выключен). В выдаче видны счётчики скрытых событий с неизвестной ценой/возрастом. 199 тестов в 12 файлах, `typecheck` и `build` проходят. Запуск и проверка — в [`bot/README.md`](bot/README.md).
+- **Telegram-бот** (`bot/`, [`bot/README.md`](bot/README.md)): отдельный сервис на Node.js 22, канал к REST API v1 без доступа к базе. Закрывает уровень 1 ТЗ и даёт карточку 2.0: `/start` с брендовым жетоном и дисклеймером, поиск, все сеансы, тарифы, `.ics`-календарь, карта, шаринг, deep link `event_<uuid>`, «Похожие события», расписание площадки, фильтры возраста/языка/сортировки/периода, серверные ослабления пустой выдачи, переход из подписки к событиям и адаптер ассистента за флагом (по умолчанию выключен). В выдаче видны счётчики скрытых событий с неизвестной ценой/возрастом. 202 теста в 12 файлах, `typecheck` и `build` проходят. Бот: [@bash_hackathon102bot](https://t.me/bash_hackathon102bot). Запуск и проверка — в [`bot/README.md`](bot/README.md).
 - **Админка на сайте** (`/admin`): вкладки событий, импорта, модерации, обращений, аудита и **«Трассы ИИ»** (`GET /api/v1/admin/traces`, детали шагов/токенов/стоимости в ₽); в `/ask` поддержаны многошаговый диалог и подтверждение подписок/обращений через `/assistant/confirm`.
 - **Eval-контур и отчёт** (`evals/run-evals.mjs`, [`docs/EVAL_REPORT.md`](docs/EVAL_REPORT.md)): автоматический прогон 120 запросов `evals/search/queries.jsonl`, 25 сквозных сценариев (включая сравнение с keyword-поиском и цикл подтверждения `200 -> 409`), 100-строчного импорта `import-100.csv` и проверок ИБ из `evals/security/scenarios.jsonl`.
 
@@ -34,7 +34,8 @@
 По ТЗ (п. 10) сервис поднимается так, на чистой машине, не дольше 10 минут:
 
 ```bash
-cp .env.example .env   # при необходимости задать ADMIN_TOKEN, LLM_API_KEY и TELEGRAM_BOT_TOKEN
+./scripts/bootstrap-env.sh   # создаст .env и сгенерирует ADMIN_TOKEN/POSTGRES_PASSWORD
+# затем впишите TELEGRAM_BOT_TOKEN (и LLM_API_KEY, если нужен живой LLM)
 docker compose up --build
 ```
 
@@ -51,7 +52,7 @@ npm run dev                    # http://localhost:8000 (миграции + си�
 ```
 
 Полезные команды в `backend/`:
-- `npm run typecheck && npm run build && npm test` — проверка типов, сборка `dist/` и автотесты (`contract`, `imports`, `admin`, `assistant`).
+- `npm run typecheck && npm run build && npm test` — проверка типов, сборка `dist/` и автотесты (`contract`, `imports`, `admin`, `assistant`, `security`, `retention`).
 - `npm run migrate` / `npm run seed` / `npm run import:file -- fixtures/import-100.csv` — CLI для миграций, сидирования и импорта файлов.
 
 ### Telegram-бот локально
@@ -100,7 +101,7 @@ docker compose up --build      # http://localhost:3210, сайт на моках
 
 Значения переменных можно положить в `web/.env` рядом с `compose.yaml`. Образ собирается из `web/Dockerfile` (standalone-сборка Next.js, запуск не от root, правки админки на моках хранятся в томе `/data`).
 
-### Telegram-бот локально
+### Telegram-бот локально: production-сборка
 
 Нужен Node.js 22+ и запущенный API.
 
@@ -228,7 +229,7 @@ curl -s 'http://localhost:3210/api/v1/events?page_size=1'
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | при сборке | Адрес бэка. Пусто — моки |
 | `NEXT_PUBLIC_DATA_MODE` | при сборке | `live` убирает плашку «демо-данные». Ставить только с реальными событиями |
-| `NEXT_PUBLIC_TELEGRAM_BOT_URL` | при сборке | Ссылка на бота, например `https://t.me/имя_бота` |
+| `NEXT_PUBLIC_TELEGRAM_BOT_URL` | при сборке | Ссылка на бота. По умолчанию `https://t.me/bash_hackathon102bot` |
 | `ADMIN_TOKEN` | при запуске | Токен модератора. С бэком совпадает с его токеном. Заглушка из примера не открывает админку. В production обязателен, ≥ 32 символов |
 | `ADMIN_OPEN` | при запуске | `1` открывает админку без токена — только локальное демо; в production игнорируется. По умолчанию пусто |
 | `TRUST_PROXY_CLIENT_IP` | при запуске | `1` — сайт передаёт адрес клиента в `X-Forwarded-For` (только за доверенным reverse proxy). По умолчанию `0`: клиентский заголовок не пересылается |
@@ -260,7 +261,6 @@ curl -s 'http://localhost:3210/api/v1/events?page_size=1'
 ├── evals/            # Наборы запросов, сценарии ИБ и единый раннер evals/run-evals.mjs
 ├── scripts/          # Служебные скрипты дизайн-кита
 ├── security/         # Машиночитаемые политики безопасности
-├── bot/              # Telegram-бот: отдельный сервис к REST API v1
 ├── web/              # Сайт на Next.js: каталог, карточка, /ask, виджет, админка; свои Dockerfile и compose.yaml
 ├── .env.example      # Переменные окружения полного стека
 ├── docker-compose.yml # Стек postgres + api + bot + web
@@ -299,6 +299,7 @@ curl -s 'http://localhost:3210/api/v1/events?page_size=1'
 
 ## Навигация
 
+- **Безопасность:** [повторный аудит](docs/SECURITY_AUDIT_2026-11-14.md) · [модель угроз](docs/SECURITY_THREAT_MODEL.md)
 - **Задание и рамки:** [ТЗ](docs/TZ.pdf) · [Соответствие ТЗ](docs/TZ_COMPLIANCE.md) · [Отчёт evals](docs/EVAL_REPORT.md) · [Решения](docs/DECISIONS.md) · [План](docs/PLAN.md) · [Продукт и MVP](docs/PRODUCT.md) · [Правила команды](CONTRIBUTING.md)
 - **Сервисы:** [Бэкенд (`backend/`)](backend/README.md) · [Telegram-бот (`bot/`)](bot/README.md) · [Сайт (`web/`)](web/)
 - **Контракт v1:** [Схема события](docs/EVENT_SCHEMA.md) · [OpenAPI](contracts/api.openapi.yaml) · [Инструменты агента](docs/AGENT_TOOLS.md)
