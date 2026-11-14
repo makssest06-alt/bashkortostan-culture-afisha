@@ -96,6 +96,9 @@ const FREE_IS_SOFT =
   '(?:желательно|хотелось\\s+бы|лучше|по\\s+возможности)\\s+(?:бы\\s+)?бесплатн|бесплатн[а-я]*,?\\s+(?:но\\s+)?(?:не\\s+обязательно|необязательно)';
 const BUDGET_UNSET =
   '(?:забудь\\s+про|убери|сними|без)\\s+(?:бюджет[а-я]*|ограничени[а-я]+\\s+(?:по\\s+)?цен[а-я]+|лимит[а-я]*)|(?:бюджет|цена)\\s+(?:больше\\s+|уже\\s+)?не\\s*важ[а-я]+|люб(?:ая|ой)\\s+(?:цена|бюджет)|за\\s+любые\\s+деньги';
+const PAID_ALLOWED = word('(?<!не )(?:можно|подойдут|рассмотрю|допускаются)\\s+(?:и\\s+)?платн[а-я]+');
+const PAID = word('платн[а-я]+');
+const FREE_ADJECTIVE = word('бесплатн[а-я]+');
 const PEOPLE_BY_WORD: Record<string, number> = { двоих: 2, троих: 3, четверых: 4, пятерых: 5 };
 
 export interface ParsedBudget {
@@ -105,6 +108,7 @@ export interface ParsedBudget {
   free?: 'hard' | 'soft';
   cheaper: boolean;
   unset: boolean;
+  paidAllowed?: boolean;
   contradiction: boolean;
 }
 
@@ -120,6 +124,8 @@ export function parseBudget(scanner: Scanner): ParsedBudget {
     result.unset = true;
     return result;
   }
+
+  result.paidAllowed = Boolean(take(scanner, PAID_ALLOWED));
 
   const numeric = find(scanner, word(`(${LIMIT})(?:\\s*[-:])?\\s+${NUM}${MULT}(?:\\s*(${CURRENCY}))?`));
   if (numeric) {
@@ -156,8 +162,9 @@ export function parseBudget(scanner: Scanner): ParsedBudget {
     if (total[1] && PEOPLE_BY_WORD[total[1]]) result.people = PEOPLE_BY_WORD[total[1]];
   }
 
-  const contradiction = mentions(scanner, word('платн[а-я]+')) && mentions(scanner, word('бесплатн[а-я]+'));
-  if (contradiction) {
+  if (find(scanner, PAID) && find(scanner, FREE_ADJECTIVE)) {
+    takeAll(scanner, PAID);
+    takeAll(scanner, FREE_ADJECTIVE);
     result.contradiction = true;
   } else if (take(scanner, word(FREE))) {
     result.free = mentions(scanner, new RegExp(FREE_IS_SOFT)) ? 'soft' : 'hard';
@@ -346,18 +353,12 @@ export function parseCategories(scanner: Scanner): ParsedCategories {
   return result;
 }
 
-export function parseVenueAndTopic(scanner: Scanner, rawMessage: string): {
+export function parseVenueAndTopic(scanner: Scanner): {
   venue_query?: string;
   geo_query?: string;
-  title_query?: string;
   topic_query?: string;
 } {
   const out: { venue_query?: string; geo_query?: string; title_query?: string; topic_query?: string } = {};
-
-  const quoted = /«([^»]{2,80})»|"([^"]{2,80})"/.exec(rawMessage);
-  if (quoted) {
-    out.title_query = (quoted[1] ?? quoted[2]).trim();
-  }
 
   const venueMatch = take(
     scanner,

@@ -175,6 +175,14 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
       hard: { cities: ['ufa'], free_only: true },
       soft: {},
     },
+    {
+      message: 'Платный бесплатный концерт завтра в Уфе',
+      code: 'budget',
+      question: /бесплатн.*платн/i,
+      answer: 'Можно платные',
+      hard: { cities: ['ufa'], categories_any: ['concert'] },
+      soft: {},
+    },
   ])('asks about $code and preserves the other conditions after an answer', async (scenario) => {
     const ask = (input: Record<string, unknown>) => ctx.req('/api/v1/assistant/query', {
       method: 'POST',
@@ -203,11 +211,32 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
       date: { from: '2026-11-14', to: '2026-11-14' },
     });
     expect(answer.constraints.soft).toMatchObject(scenario.soft);
+    if (scenario.answer === 'Можно платные') {
+      expect(answer.constraints.hard.free_only).toBeUndefined();
+      expect(answer.constraints.unresolved).toBeUndefined();
+    }
     if (scenario.code === 'audience') expect(answer.constraints.hard.required_age_rating).toBeUndefined();
     if (scenario.code === 'child_age') {
       expect(answer.results.every((r: { event: { age_limit: number | null } }) =>
         r.event.age_limit !== null && r.event.age_limit <= 14)).toBe(true);
     }
+  });
+
+  it.each([
+    ['Спектакль «Скоро» в Уфе', 'Скоро', undefined],
+    ['Детский спектакль "Для взрослых" завтра в Уфе', 'Для взрослых', '2026-11-14'],
+    ['Спектакль “Вчера” в Уфе в субботу', 'Вчера', '2026-11-14'],
+  ])('keeps quoted words in the title: %s', async (message, title, date) => {
+    const res = await ctx.req('/api/v1/assistant/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.action).toBe('search');
+    expect(body.constraints.hard.title_query).toBe(title);
+    expect(body.constraints.hard.date?.from).toBe(date);
   });
 
   it.each([

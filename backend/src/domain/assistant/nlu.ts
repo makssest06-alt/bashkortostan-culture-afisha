@@ -13,7 +13,7 @@ import {
 import type { ApiEvent, OccurrenceStatus } from '../types.js';
 import { parseDate, parseTime, type DateRange, type TimeRange } from './nlu-dates.js';
 import { EXTRA_CATEGORY_LABELS, PREFERENCES, STOP_WORDS } from './nlu-lexicon.js';
-import { createScanner, mentions, normalizeNluText, stemRu, take, tokenizeNlu, word } from './nlu-scanner.js';
+import { createScanner, mentions, normalizeHomoglyphs, normalizeNluText, stemRu, take, tokenizeNlu, word } from './nlu-scanner.js';
 import {
   parseAges,
   parseBudget,
@@ -215,6 +215,7 @@ const SKIP = word('неважно|не\\s+важно|люб(?:ой|ого)|не\
 const ADULT_AUDIENCE = word('(?<!не )для\\s+взрослых(?!\\s+и\\s+(?:для\\s+)?(?:детей|подростков))|взросл(?:ая|ой|ую)\\s+аудитори(?:я|и|ю|ей)');
 const CHILD_AUDIENCE = word('(?<!не )для\\s+детей(?!\\s+и\\s+(?:для\\s+)?взрослых)');
 const TEEN_AUDIENCE = word('подростков[а-я]+|(?:для|с|со)\\s+подростк[а-я]+|подросткам|подростку');
+const QUOTED_TITLE = /«([^»]{2,80})»|"([^"]{2,80})"|“([^”]{2,80})”|„([^“]{2,80})“/;
 const SUBSCRIBE_INTENT = word('подпиш[а-я]+|напомн[а-я]+|оповещ[а-я]+|рассылк[а-я]*|присылай\\s+нов[а-я]+');
 const FEEDBACK_INTENT = word(
   'добавить\\s+свое\\s+(?:мероприятие|событие)|заявка\\s+организатора|сообщить\\s+об\\s+ошибке|написать\\s+организатору',
@@ -520,9 +521,9 @@ export function parseIntoConstraints(
   prev: Constraints,
   options: { today: string; answering?: ClarifyCode; vocabulary?: readonly string[] },
 ): ParseIntoResult {
-  const scanner = createScanner(message);
+  const rawScanner = createScanner(message);
   const notes: AssistantAssumption[] = [];
-  if (scanner.homoglyphFixed) {
+  if (rawScanner.homoglyphFixed) {
     notes.push({
       key: 'mixed_script_normalization',
       text: 'латинские буквы в русском слове приведены к кириллице',
@@ -530,15 +531,15 @@ export function parseIntoConstraints(
   }
 
   const unsupported: UnsupportedAction[] = [];
-  if (mentions(scanner, SQL)) unsupported.push('write_sql');
-  if (mentions(scanner, SYSTEM_PROMPT)) unsupported.push('reveal_system_prompt');
-  if (mentions(scanner, PRIVATE_DATA)) unsupported.push('reveal_private_data');
+  if (mentions(rawScanner, SQL)) unsupported.push('write_sql');
+  if (mentions(rawScanner, SYSTEM_PROMPT)) unsupported.push('reveal_system_prompt');
+  if (mentions(rawScanner, PRIVATE_DATA)) unsupported.push('reveal_private_data');
 
-  const greeting = GREETING.test(scanner.full);
-  const thanks = THANKS.test(scanner.full);
-  const hasDomainIntent = mentions(scanner, DOMAIN);
+  const greeting = GREETING.test(rawScanner.full);
+  const thanks = THANKS.test(rawScanner.full);
+  const hasDomainIntent = mentions(rawScanner, DOMAIN);
 
-  if (unsupported.length > 0 || mentions(scanner, IGNORE_RULES)) {
+  if (unsupported.length > 0 || mentions(rawScanner, IGNORE_RULES)) {
     if (unsupported.length === 0) unsupported.push('reveal_system_prompt');
     return {
       next: prev,
@@ -561,7 +562,7 @@ export function parseIntoConstraints(
     };
   }
 
-  if (mentions(scanner, OFF_TOPIC) && !hasDomainIntent) {
+  if (mentions(rawScanner, OFF_TOPIC) && !hasDomainIntent) {
     return {
       next: prev,
       pastDate: false,
@@ -583,6 +584,9 @@ export function parseIntoConstraints(
     };
   }
 
+  const quoted = QUOTED_TITLE.exec(message);
+  const title = quoted ? normalizeHomoglyphs((quoted[1] ?? quoted[2] ?? quoted[3] ?? quoted[4]).trim()).text : undefined;
+  const scanner = quoted ? createScanner(message.replace(QUOTED_TITLE, ' ')) : rawScanner;
   const subscribeIntent = Boolean(take(scanner, SUBSCRIBE_INTENT));
   const feedbackIntent = Boolean(take(scanner, FEEDBACK_INTENT));
   const reset = Boolean(take(scanner, RESET));
@@ -605,7 +609,7 @@ export function parseIntoConstraints(
   const categories = parseCategories(scanner);
   const adultAudience = Boolean(take(scanner, ADULT_AUDIENCE));
   const teenAudience = Boolean(take(scanner, TEEN_AUDIENCE));
-  const venueTopic = parseVenueAndTopic(scanner, message);
+  const venueTopic = parseVenueAndTopic(scanner);
   const preferences = parsePreferences(scanner);
 
   const parsedHard: Constraints['hard'] = {};
@@ -620,6 +624,8 @@ export function parseIntoConstraints(
 
   if (budget.unset || budget.contradiction) {
     unset.push(...PRICE_PATHS, 'hard.currency', 'soft.prefer_free', 'soft.price_direction');
+  } else if (budget.paidAllowed) {
+    unset.push('hard.free_only');
   }
   if (budget.contradiction) clarifications.push('budget');
   else if (budget.amount !== undefined) {
@@ -672,7 +678,7 @@ export function parseIntoConstraints(
 
   if (venueTopic.venue_query) parsedHard.venue_query = venueTopic.venue_query;
   if (venueTopic.geo_query) parsedHard.geo_query = venueTopic.geo_query;
-  if (venueTopic.title_query) parsedHard.title_query = venueTopic.title_query;
+  if (title) parsedHard.title_query = title;
   if (venueTopic.topic_query) parsedHard.topic_query = venueTopic.topic_query;
 
   if (preferences.ids.length > 0) parsedSoft.preferences = preferences.ids;
@@ -739,7 +745,7 @@ export function parseIntoConstraints(
   const resolved: UnresolvedField[] = [];
   if (parsedHard.date || dateUnset) resolved.push('date');
   if (restSoft.audience || (resolvingAudience && party.noChildren)) resolved.push('audience');
-  if (budget.amount !== undefined || budget.free || budget.unset) resolved.push('budget');
+  if (budget.amount !== undefined || budget.free || budget.unset || budget.paidAllowed) resolved.push('budget');
   updateUnresolved(next, resolved, clarifications);
 
   next.hard = normalizeHard(next.hard);
