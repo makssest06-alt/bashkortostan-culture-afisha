@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError, createApiClient } from '../src/api/client.js';
 import { makeAssistantResponse, makeEvent, makeListResponse } from './fixtures.js';
@@ -221,6 +221,72 @@ describe('ApiClient', () => {
     const { client } = clientWith(() => jsonResponse(makeEvent()));
     const event = await client.getEvent('11111111-1111-4111-8111-111111111111');
     expect(event.title).toBe('Вечер башкирской музыки');
+  });
+
+  it('кеш карточки: в пределах TTL повторный вызов не ходит в сеть', async () => {
+    let calls = 0;
+    const { client } = clientWith(() => {
+      calls += 1;
+      return jsonResponse(makeEvent(), 200, { etag: '"card-cache-1"' });
+    });
+
+    const first = await client.getEvent('22222222-2222-4222-8222-222222222221');
+    expect(calls).toBe(1);
+
+    const second = await client.getEvent('22222222-2222-4222-8222-222222222221');
+    expect(calls).toBe(1);
+    expect(second).toBe(first);
+  });
+
+  it('после TTL ревалидирует по If-None-Match: 304 отдаёт кеш, 200 обновляет', async () => {
+    const event = makeEvent();
+    let calls = 0;
+    let mode: 'fresh' | 'not-modified' | 'updated' = 'fresh';
+    const { client } = clientWith((_url, init) => {
+      calls += 1;
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      if (mode === 'fresh') {
+        expect(headers['if-none-match']).toBeUndefined();
+        return jsonResponse(event, 200, { etag: '"card-cache-2"' });
+      }
+      expect(headers['if-none-match']).toBe('"card-cache-2"');
+      if (mode === 'not-modified') {
+        return new Response(null, { status: 304, headers: { etag: '"card-cache-2"' } });
+      }
+      return jsonResponse({ ...event, title: 'Обновлённая карточка' }, 200, { etag: '"card-cache-3"' });
+    });
+
+    await client.getEvent('22222222-2222-4222-8222-222222222222');
+    expect(calls).toBe(1);
+
+    const realNow = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(realNow + 61_000);
+    try {
+      mode = 'not-modified';
+      const cached = await client.getEvent('22222222-2222-4222-8222-222222222222');
+      expect(cached.title).toBe('Вечер башкирской музыки');
+      expect(calls).toBe(2);
+
+      nowSpy.mockReturnValue(realNow + 200_000);
+      mode = 'updated';
+      const updated = await client.getEvent('22222222-2222-4222-8222-222222222222');
+      expect(updated.title).toBe('Обновлённая карточка');
+      expect(calls).toBe(3);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('ответ без ETag не кешируется', async () => {
+    let calls = 0;
+    const { client } = clientWith(() => {
+      calls += 1;
+      return jsonResponse(makeEvent());
+    });
+
+    await client.getEvent('22222222-2222-4222-8222-222222222223');
+    await client.getEvent('22222222-2222-4222-8222-222222222223');
+    expect(calls).toBe(2);
   });
 
   it('запрашивает похожие события с городом, датой и пагинацией', async () => {

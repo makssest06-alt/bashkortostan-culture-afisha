@@ -150,6 +150,30 @@ export interface ApiClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+interface EventCacheEntry {
+  etag: string;
+  data: Event;
+  expiresAt: number;
+}
+
+/**
+ * Кеш карточек событий. В пределах TTL повторный просмотр не ходит в сеть,
+ * после TTL идёт ревалидация `If-None-Match`: 304 продлевает TTL и отдаёт кеш,
+ * 200 (новый ETag) обновляет и данные, и метку.
+ */
+const EVENT_CACHE_TTL_MS = 60_000;
+const EVENT_CACHE_MAX = 200;
+const eventCache = new Map<string, EventCacheEntry>();
+
+function cacheEvent(key: string, event: Event, etag: string | null): void {
+  if (!etag) return;
+  if (eventCache.size >= EVENT_CACHE_MAX && !eventCache.has(key)) {
+    const oldest = eventCache.keys().next().value;
+    if (oldest !== undefined) eventCache.delete(oldest);
+  }
+  eventCache.set(key, { etag, data: event, expiresAt: Date.now() + EVENT_CACHE_TTL_MS });
+}
+
 function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/+$/, '').replace(/\/api\/v1$/i, '').replace(/\/+$/, '');
 }
@@ -233,6 +257,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     path: string,
     schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } } },
     init?: RequestInit,
+    hooks?: {
+      /** Вызывается на 200/204 до разбора тела — например, чтобы прочитать ETag. */
+      onOk?: (response: Response) => void;
+      /** Вызывается на 304; вернуть данные из кеша или undefined, чтобы считать 304 ошибкой. */
+      onNotModified?: () => T | undefined;
+    },
   ): Promise<T> {
     const url = `${baseUrl}${path}`;
     const requestId = randomUUID();
@@ -263,6 +293,16 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
 
     const responseRequestId = response.headers.get('x-request-id') ?? requestId;
+
+    if (response.status === 304) {
+      const cached = hooks?.onNotModified?.();
+      if (cached !== undefined) return cached;
+      throw new ApiError('API вернул 304, но кеша для этого ответа нет', {
+        kind: 'contract',
+        status: 304,
+        requestId: responseRequestId,
+      });
+    }
 
     if (!response.ok) {
       const raw = await response.text().catch(() => '');
@@ -296,8 +336,11 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
 
     if (response.status === 204) {
+      hooks?.onOk?.(response);
       return undefined as T;
     }
+
+    hooks?.onOk?.(response);
 
     const raw = await response.text();
     let payload: unknown;
@@ -359,7 +402,33 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     },
 
     async getEvent(id) {
-      return request(`/api/v1/events/${encodeURIComponent(id)}`, EventSchema);
+      const key = encodeURIComponent(id);
+      const cached = eventCache.get(key);
+      // Свежая запись отдаётся без сети; устаревшая ревалидируется по ETag.
+      if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+      let etag: string | null = null;
+      let revalidated = false;
+      const event = await request(
+        `/api/v1/events/${key}`,
+        EventSchema,
+        cached ? { headers: { 'if-none-match': cached.etag } } : undefined,
+        {
+          onOk: (response) => {
+            etag = response.headers.get('etag');
+          },
+          onNotModified: () => {
+            if (cached) {
+              eventCache.set(key, { ...cached, expiresAt: Date.now() + EVENT_CACHE_TTL_MS });
+              revalidated = true;
+              return cached.data;
+            }
+            return undefined;
+          },
+        },
+      );
+      if (!revalidated) cacheEvent(key, event, etag);
+      return event;
     },
 
     async getSimilarEvents(id, params = {}) {
