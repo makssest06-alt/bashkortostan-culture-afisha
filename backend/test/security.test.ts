@@ -23,7 +23,8 @@ function feedbackBody(text = 'Вопрос из теста') {
   });
 }
 
-describe('P0-1: админка не открыта по умолчанию', () => {  it('production не стартует с ADMIN_OPEN=1 и без длинного ADMIN_TOKEN', () => {
+describe('P0-1: админка не открыта по умолчанию', () => {
+  it('production не стартует с ADMIN_OPEN=1 и без длинного ADMIN_TOKEN', () => {
     expect(() =>
       loadConfig({ NODE_ENV: 'production', ADMIN_OPEN: '1', ADMIN_TOKEN: LONG_TOKEN }),
     ).toThrow(/ADMIN_OPEN=1 запрещён/);
