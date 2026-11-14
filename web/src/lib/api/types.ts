@@ -443,7 +443,7 @@ export interface EventsListResponse {
 // Ассистент
 // ---------------------------------------------------------------------------
 
-export type AssistantAction = 'search' | 'clarify' | 'out_of_scope';
+export type AssistantAction = 'search' | 'clarify' | 'out_of_scope' | 'confirmation_required';
 
 export type ClarifyCode =
   | 'city'
@@ -535,6 +535,30 @@ export interface ConstraintsPatch {
   unset: string[];
 }
 
+export interface AssistantHistoryItem {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AssistantConfirmation {
+  confirmation_id: string;
+  summary: string;
+  expires_at: string;
+}
+
+export interface AssistantConfirmRequest {
+  confirmation_id: string;
+  confirm?: boolean;
+  decision?: 'approve' | 'reject';
+}
+
+export interface AssistantConfirmResponse {
+  status: string;
+  message?: string;
+  subscription_id?: string;
+  feedback_id?: string;
+}
+
 export interface AssistantRequest {
   /** Фраза пользователя. Нужна фраза или patch. */
   message?: string;
@@ -544,8 +568,12 @@ export interface AssistantRequest {
   patch?: ConstraintsPatch;
   /** На какой вопрос отвечает пользователь: `clarify.code` из прошлого ответа. */
   answering?: ClarifyCode;
+  /** История последних реплик диалога (для памяти агента без previous). */
+  history?: AssistantHistoryItem[];
   /** Сколько событий вернуть, от 1 до 12. По умолчанию 6. */
   limit?: number;
+  user_ref?: string;
+  channel?: 'telegram' | 'web' | 'api';
 }
 
 export type ChipKind =
@@ -607,6 +635,7 @@ export interface AssistantResponse {
   chips: AssistantChip[];
   assumptions: AssistantAssumption[];
   clarify?: AssistantClarify;
+  confirmation?: AssistantConfirmation;
   results?: AssistantResult[];
   /** Сколько всего событий прошло условия. Может быть больше длины results. */
   total?: number;
@@ -617,10 +646,11 @@ export interface AssistantResponse {
   unsupported_actions?: UnsupportedAction[];
   /** Те же условия для каталога: ссылка «показать все». Нет, если условия в каталог не переводятся. */
   events_query?: EventsQuery;
+  trace_id?: string;
   reference_date: string;
   timezone: Timezone;
-  /** Кто разбирал фразу. Сейчас это правила без языковой модели. */
-  engine: 'rules-mock-v1';
+  /** Кто разбирал фразу (правила или LLM-модель). */
+  engine: string;
 }
 
 // ---------------------------------------------------------------------------

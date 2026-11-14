@@ -11,13 +11,15 @@
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 
-import { ApiClientError, askAssistant } from '@/lib/api/client';
+import { ApiClientError, askAssistant, confirmAssistantAction } from '@/lib/api/client';
 import { keywordFilters, mergeQueries } from '@/lib/api/keyword-filters';
 import type {
   AssistantAction,
   AssistantAssumption,
   AssistantChip,
   AssistantClarify,
+  AssistantConfirmation,
+  AssistantHistoryItem,
   AssistantRequest,
   AssistantResponse,
   AssistantResult,
@@ -76,6 +78,8 @@ export interface DialogState {
   assumptions: AssistantAssumption[];
   /** Вопрос, на который ассистент ждёт ответа. */
   clarify: AssistantClarify | null;
+  /** Запрос подтверждения мутирующего действия (подписка/заявка). */
+  confirmation: AssistantConfirmation | null;
   view: SearchView | null;
   /** Сегодняшняя дата афиши из последнего ответа. */
   today: string | null;
@@ -98,6 +102,8 @@ type Action =
   | { type: 'ask'; text: string }
   | { type: 'patch'; note: string; optimisticChips: AssistantChip[] | null }
   | { type: 'answer'; response: AssistantResponse; receivedAt: number }
+  | { type: 'confirming' }
+  | { type: 'confirmDone'; text: string }
   | { type: 'fail' }
   | { type: 'fallback'; query: EventsQuery; text: string; note: string }
   | { type: 'fallbackQuery'; query: EventsQuery }
@@ -110,6 +116,7 @@ const EMPTY: DialogState = {
   chips: [],
   assumptions: [],
   clarify: null,
+  confirmation: null,
   view: null,
   today: null,
   phase: 'idle',
@@ -132,6 +139,7 @@ function applyResponse(state: DialogState, response: AssistantResponse, received
     constraints: response.constraints,
     chips: response.chips,
     assumptions: response.assumptions,
+    confirmation: response.action === 'confirmation_required' ? (response.confirmation ?? null) : null,
     today: response.reference_date,
     phase: 'idle',
     chipsBeforePatch: null,
@@ -151,6 +159,8 @@ function applyResponse(state: DialogState, response: AssistantResponse, received
     // Условий не хватает: прежняя выдача к ним уже не относится.
     next.clarify = response.clarify ?? null;
     next.view = null;
+  } else if (response.action === 'confirmation_required') {
+    next.clarify = null;
   }
   // out_of_scope условий не меняет: вопрос и выдача остаются как были.
   return next;
@@ -176,6 +186,16 @@ function reducer(state: DialogState, action: Action): DialogState {
       };
     case 'answer':
       return applyResponse(state, action.response, action.receivedAt);
+    case 'confirming':
+      return { ...state, phase: 'updating' };
+    case 'confirmDone':
+      return {
+        ...state,
+        turns: [...state.turns, { id: state.nextId, role: 'assistant', text: action.text, action: 'search', unsupported: [] }],
+        confirmation: null,
+        phase: 'idle',
+        nextId: state.nextId + 1,
+      };
     case 'fail':
       // Условия на сервере не поменялись: возвращаем чипы, которые убрали заранее.
       return { ...state, chips: state.chipsBeforePatch ?? state.chips, chipsBeforePatch: null, phase: 'error' };
@@ -223,6 +243,8 @@ export interface AskDialog {
   send: (text: string) => boolean;
   /** Правка условий без текста. note попадает в ленту, optimisticChips сразу заменяет чипы. */
   applyPatch: (patch: ConstraintsPatch, note: string, optimisticChips?: AssistantChip[]) => void;
+  /** Подтвердить или отменить действие ассистента (подписка/заявка). */
+  confirmAction: (decision: 'approve' | 'reject') => void;
   retry: () => void;
   reset: () => void;
   /** Правка фильтров обычного поиска в резервном режиме. */
@@ -307,7 +329,12 @@ export function useAskDialog(
       const current = latest.current;
       if (!text || current.phase === 'thinking' || current.phase === 'updating') return false;
       dispatch({ type: 'ask', text });
-      const payload: AssistantRequest = { message: text, limit: RESULT_LIMIT };
+      const history: AssistantHistoryItem[] = current.turns
+        .filter((t): t is Extract<Turn, { role: 'user' | 'assistant' }> => t.role === 'user' || t.role === 'assistant')
+        .slice(-8)
+        .map((t) => ({ role: t.role, content: t.text }));
+      const payload: AssistantRequest = { message: text, limit: RESULT_LIMIT, channel: 'web' };
+      if (history.length > 0) payload.history = history;
       if (current.constraints) payload.previous = current.constraints;
       if (current.clarify) payload.answering = current.clarify.code;
       void run(payload, THINKING_MIN_MS);
@@ -315,6 +342,25 @@ export function useAskDialog(
     },
     [run],
   );
+
+  const confirmAction = useCallback(async (decision: 'approve' | 'reject') => {
+    const current = latest.current;
+    const pending = current.confirmation;
+    if (!pending || current.phase === 'thinking' || current.phase === 'updating') return;
+    dispatch({ type: 'confirming' });
+    try {
+      const res = await confirmAssistantAction({
+        confirmation_id: pending.confirmation_id,
+        confirm: decision === 'approve',
+        decision,
+      });
+      const fallbackText = decision === 'approve' ? 'Готово: действие выполнено.' : 'Действие отменено.';
+      dispatch({ type: 'confirmDone', text: res.message ?? fallbackText });
+    } catch (error) {
+      console.warn('[ask] подтверждение действия не удалось', error);
+      dispatch({ type: 'fail' });
+    }
+  }, []);
 
   const applyPatch = useCallback(
     (patch: ConstraintsPatch, note: string, optimisticChips?: AssistantChip[]) => {
@@ -357,6 +403,7 @@ export function useAskDialog(
     busy: state.phase === 'thinking' || state.phase === 'updating',
     send,
     applyPatch,
+    confirmAction,
     retry,
     reset,
     setFallbackQuery,

@@ -49,7 +49,7 @@ export function AskExperience({ initial, pendingQuery }: AskExperienceProps) {
     aiOff,
     fallbackNote: askText('fallbackNote', lang),
   });
-  const { state, started, busy, send, applyPatch, retry, reset, setFallbackQuery } = dialog;
+  const { state, started, busy, send, applyPatch, confirmAction, retry, reset, setFallbackQuery } = dialog;
 
   const toggleAi = useCallback(() => {
     setAiOff((current) => {
@@ -196,7 +196,9 @@ export function AskExperience({ initial, pendingQuery }: AskExperienceProps) {
               turns={state.turns}
               phase={state.phase}
               clarify={state.clarify}
+              confirmation={state.confirmation}
               onReply={handleReply}
+              onConfirm={confirmAction}
               onRetry={retry}
               threadRef={threadRef}
             />

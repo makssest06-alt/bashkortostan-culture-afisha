@@ -21,6 +21,8 @@ import type {
   AfishaEvent,
   ApiErrorBody,
   ApiErrorDetail,
+  AssistantConfirmRequest,
+  AssistantConfirmResponse,
   AssistantRequest,
   AssistantResponse,
   Dictionaries,
@@ -178,6 +180,18 @@ export async function askAssistant(
     body: JSON.stringify(payload),
   });
   return fromApiAssistantResponse(response);
+}
+
+/** Подтверждение или отмена мутирующего действия агента (подписка/заявка). */
+export async function confirmAssistantAction(
+  payload: AssistantConfirmRequest,
+  options: ClientOptions = {},
+): Promise<AssistantConfirmResponse> {
+  return request<AssistantConfirmResponse>('/assistant/confirm', options, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 /** Тело POST /feedback. `website` — ловушка для ботов: люди оставляют поле пустым. */

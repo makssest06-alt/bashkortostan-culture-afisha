@@ -9,7 +9,7 @@ import { HandPalm, WarningCircle } from '@phosphor-icons/react';
 import type { RefObject } from 'react';
 
 import { Button, Chip } from '@/components/ui';
-import type { AssistantClarify, UnsupportedAction } from '@/lib/api/types';
+import type { AssistantClarify, AssistantConfirmation, UnsupportedAction } from '@/lib/api/types';
 import { cn } from '@/lib/cn';
 import { useT } from '@/lib/i18n';
 import type { Lang } from '@/lib/i18n';
@@ -23,7 +23,9 @@ export type ThreadProps = {
   phase: Phase;
   /** Вопрос, на который ассистент ждёт ответа: под последней репликой стоят быстрые ответы. */
   clarify: AssistantClarify | null;
+  confirmation: AssistantConfirmation | null;
   onReply: (text: string) => void;
+  onConfirm: (decision: 'approve' | 'reject') => void;
   onRetry: () => void;
   threadRef: RefObject<HTMLDivElement | null>;
 };
@@ -38,7 +40,7 @@ function refusalTag(turn: Extract<Turn, { role: 'assistant' }>, lang: Lang): str
   return null;
 }
 
-export function Thread({ turns, phase, clarify, onReply, onRetry, threadRef }: ThreadProps) {
+export function Thread({ turns, phase, clarify, confirmation, onReply, onConfirm, onRetry, threadRef }: ThreadProps) {
   const { t, lang } = useT();
   const busy = phase === 'thinking' || phase === 'updating';
   const lastId = turns.length > 0 ? turns[turns.length - 1].id : -1;
@@ -77,6 +79,8 @@ export function Thread({ turns, phase, clarify, onReply, onRetry, threadRef }: T
         const tag = refusalTag(turn, lang);
         const replies =
           turn.id === lastId && turn.action === 'clarify' && clarify && phase !== 'error' ? clarify.quick_replies : [];
+        const showConfirm =
+          turn.id === lastId && turn.action === 'confirmation_required' && confirmation && phase !== 'error';
 
         return (
           <div
@@ -100,6 +104,16 @@ export function Thread({ turns, phase, clarify, onReply, onRetry, threadRef }: T
                     {reply}
                   </Chip>
                 ))}
+              </div>
+            ) : null}
+            {showConfirm ? (
+              <div role="group" aria-label="Подтверждение действия" className="mt-2 flex flex-wrap gap-2" data-confirmation="">
+                <Button size="sm" onClick={() => onConfirm('approve')} disabled={busy}>
+                  Подтвердить
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => onConfirm('reject')} disabled={busy}>
+                  Отменить
+                </Button>
               </div>
             ) : null}
           </div>

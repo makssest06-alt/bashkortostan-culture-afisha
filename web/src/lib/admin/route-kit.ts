@@ -22,7 +22,9 @@ export async function withAdmin(
     const auth = requireAdmin(request, requestId);
     if (!auth.ok) return auth.response;
     // Бэк подключён: данные админки живут в нём, сайт только проверяет сессию и пересылает запрос.
-    const response = USES_REMOTE_API ? await forwardAdmin(request, requestId) : await handler({ requestId, actor: auth.actor });
+    const response = USES_REMOTE_API
+      ? await forwardAdmin(request, requestId, auth.actor)
+      : await handler({ requestId, actor: auth.actor });
     if (request.method !== 'GET') {
       // В журнал сервера идут метод, адрес и код ответа: без тела запроса и персональных данных.
       logEvent('info', 'admin_request', {

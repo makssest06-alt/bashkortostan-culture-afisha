@@ -196,3 +196,41 @@ export interface AdminState {
   imports: ImportReport[];
   applications: Application[];
 }
+
+export interface AgentTraceStep {
+  step: number;
+  tool: string;
+  args: Record<string, unknown>;
+  duration_ms: number;
+  ok: boolean;
+  code?: string;
+}
+
+export interface AgentTraceSummary {
+  id: string;
+  request_id: string;
+  created_at: string;
+  channel: string;
+  user_ref: string | null;
+  engine: string;
+  model: string | null;
+  prompt_version: string | null;
+  action: string;
+  user_query_masked: string;
+  duration_ms: number;
+  cost_rub: number | null;
+  fallback_used: boolean;
+  error: string | null;
+  grounding_ids: string[];
+  token_usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
+}
+
+export interface AgentTraceDetail extends AgentTraceSummary {
+  steps: AgentTraceStep[];
+  plan: Record<string, unknown> | null;
+}
+
+export interface AgentTraceList {
+  items: AgentTraceSummary[];
+  total: number;
+}
