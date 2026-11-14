@@ -13,7 +13,7 @@ import {
   PREFERENCES,
   REGION_PATTERN,
 } from './nlu-lexicon.js';
-import { before, consume, find, levenshtein1, mentions, take, takeAll, tokenizeNlu, word, type Scanner } from './nlu-scanner.js';
+import { before, consume, find, levenshtein1, mentions, take, takeAll, word, type Scanner } from './nlu-scanner.js';
 import type { NluAssumption } from './nlu-dates.js';
 
 const MAX_CHILD_AGE = 17;
@@ -22,7 +22,7 @@ const MAX_BUDGET = 1_000_000;
 export type ConstraintStatus = 'scheduled' | 'cancelled' | 'postponed' | 'sold_out' | 'unknown';
 
 const CHILD_NOUN =
-  'ребенк[а-я]+|ребенок|дочк[а-я]+|дочер[а-я]+|дочь|сын[а-я]*|малыш[а-я]*|внук[а-я]*|внучк[а-я]+|дет(?:ям|ьми|ей|и)|школьник[а-я]*';
+  'ребенк[а-я]+|ребенок|дочк[а-я]+|дочер[а-я]+|дочь|сын[а-я]*|малыш[а-я]*|внук[а-я]*|внучк[а-я]+|дет(?:ям|ьми|ей|и)|школьник[а-я]*|подросток|подростк[а-я]+';
 const AGE_UNIT = 'лет(?:н[а-я]+)?|года|годик[а-я]*|годов|год';
 const AGE_PREFIX_PATTERN = Object.keys(AGE_PREFIXES).sort((a, b) => b.length - a.length).join('|');
 
@@ -96,6 +96,9 @@ const FREE_IS_SOFT =
   '(?:желательно|хотелось\\s+бы|лучше|по\\s+возможности)\\s+(?:бы\\s+)?бесплатн|бесплатн[а-я]*,?\\s+(?:но\\s+)?(?:не\\s+обязательно|необязательно)';
 const BUDGET_UNSET =
   '(?:забудь\\s+про|убери|сними|без)\\s+(?:бюджет[а-я]*|ограничени[а-я]+\\s+(?:по\\s+)?цен[а-я]+|лимит[а-я]*)|(?:бюджет|цена)\\s+(?:больше\\s+|уже\\s+)?не\\s*важ[а-я]+|люб(?:ая|ой)\\s+(?:цена|бюджет)|за\\s+любые\\s+деньги';
+const PAID_ALLOWED = word('(?<!не )(?:можно|подойдут|рассмотрю|допускаются)\\s+(?:и\\s+)?платн[а-я]+');
+const PAID = word('платн[а-я]+');
+const FREE_ADJECTIVE = word('бесплатн[а-я]+');
 const PEOPLE_BY_WORD: Record<string, number> = { двоих: 2, троих: 3, четверых: 4, пятерых: 5 };
 
 export interface ParsedBudget {
@@ -105,6 +108,7 @@ export interface ParsedBudget {
   free?: 'hard' | 'soft';
   cheaper: boolean;
   unset: boolean;
+  paidAllowed?: boolean;
   contradiction: boolean;
 }
 
@@ -120,6 +124,8 @@ export function parseBudget(scanner: Scanner): ParsedBudget {
     result.unset = true;
     return result;
   }
+
+  result.paidAllowed = Boolean(take(scanner, PAID_ALLOWED));
 
   const numeric = find(scanner, word(`(${LIMIT})(?:\\s*[-:])?\\s+${NUM}${MULT}(?:\\s*(${CURRENCY}))?`));
   if (numeric) {
@@ -156,8 +162,9 @@ export function parseBudget(scanner: Scanner): ParsedBudget {
     if (total[1] && PEOPLE_BY_WORD[total[1]]) result.people = PEOPLE_BY_WORD[total[1]];
   }
 
-  const contradiction = mentions(scanner, word('платн[а-я]+')) && mentions(scanner, word('бесплатн[а-я]+'));
-  if (contradiction) {
+  if (find(scanner, PAID) && find(scanner, FREE_ADJECTIVE)) {
+    takeAll(scanner, PAID);
+    takeAll(scanner, FREE_ADJECTIVE);
     result.contradiction = true;
   } else if (take(scanner, word(FREE))) {
     result.free = mentions(scanner, new RegExp(FREE_IS_SOFT)) ? 'soft' : 'hard';
@@ -236,6 +243,7 @@ export function parseParty(scanner: Scanner): ParsedParty {
 
 export interface ParsedPlace {
   cities: string[];
+  excludedCities: string[];
   region: boolean;
   outside?: string;
   notInDemo?: string;
@@ -243,25 +251,26 @@ export interface ParsedPlace {
   notes: NluAssumption[];
 }
 
-const NEGATION_BEFORE_PLACE = /(?:^|[^a-zа-я0-9])(?:кроме|не\s+в|только\s+не\s+в|но\s+не\s+в)\s*$/;
+const NEGATION_BEFORE_PLACE = /(?:^|[^a-zа-я0-9])(?:кроме|не(?:\s+в)?)\s+$/;
 
 export function parsePlace(scanner: Scanner): ParsedPlace {
-  const result: ParsedPlace = { cities: [], region: false, nearMe: false, notes: [] };
+  const result: ParsedPlace = { cities: [], excludedCities: [], region: false, nearMe: false, notes: [] };
 
   for (const { slug, pattern } of CITY_PATTERNS) {
     for (const match of takeAll(scanner, word(pattern))) {
-      if (NEGATION_BEFORE_PLACE.test(before(scanner, match))) continue;
-      if (!result.cities.includes(slug)) result.cities.push(slug);
+      const cities = NEGATION_BEFORE_PLACE.test(before(scanner, match)) ? result.excludedCities : result.cities;
+      if (!cities.includes(slug)) cities.push(slug);
     }
   }
 
   // Fuzzy 1-typo city lookup for long Bashkortostan city names (e.g. "Стерлитомак")
   if (result.cities.length === 0) {
-    for (const token of tokenizeNlu(scanner.rest)) {
-      if (token.length < 7) continue;
+    for (const match of scanner.rest.matchAll(/(?<![a-zа-я0-9])[a-zа-я]{7,}(?![a-zа-я0-9])/g)) {
+      const token = match[0];
+      const cities = NEGATION_BEFORE_PLACE.test(before(scanner, match)) ? result.excludedCities : result.cities;
       for (const entry of CITY_FUZZY_BASES) {
         if (entry.bases.some((b) => levenshtein1(token, b) <= 1)) {
-          result.cities.push(entry.slug);
+          if (!cities.includes(entry.slug)) cities.push(entry.slug);
           result.notes.push({ key: 'city_typo_corrected', text: `распознана опечатка в названии города («${token}»)` });
           break;
         }
@@ -344,18 +353,12 @@ export function parseCategories(scanner: Scanner): ParsedCategories {
   return result;
 }
 
-export function parseVenueAndTopic(scanner: Scanner, rawMessage: string): {
+export function parseVenueAndTopic(scanner: Scanner): {
   venue_query?: string;
   geo_query?: string;
-  title_query?: string;
   topic_query?: string;
 } {
   const out: { venue_query?: string; geo_query?: string; title_query?: string; topic_query?: string } = {};
-
-  const quoted = /«([^»]{2,80})»|"([^"]{2,80})"/.exec(rawMessage);
-  if (quoted) {
-    out.title_query = (quoted[1] ?? quoted[2]).trim();
-  }
 
   const venueMatch = take(
     scanner,

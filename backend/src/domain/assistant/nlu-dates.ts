@@ -40,10 +40,14 @@ export interface NluAssumption {
 export interface ParsedDate {
   range?: DateRange;
   past: boolean;
+  vague: boolean;
   notes: NluAssumption[];
 }
 
 const ASSUME_NEXT_YEAR_AFTER_DAYS = 60;
+const VAGUE_DATE = word(
+  'на\\s+днях|в\\s+один\\s+из\\s+(?:ближайших\\s+)?дней|как-нибудь\\s+на\\s+(?:этой\\s+)?неделе|через\\s+несколько\\s+дней|скоро|в\\s+ближайшее\\s+время',
+);
 
 function resolveDate(
   day: number,
@@ -206,9 +210,10 @@ function parseRelative(scanner: Scanner, today: string, notes: NluAssumption[]):
 
 export function parseDate(scanner: Scanner, today: string): ParsedDate {
   const notes: NluAssumption[] = [];
+  const vague = Boolean(take(scanner, VAGUE_DATE));
   const range = parseAbsolute(scanner, today, notes) ?? parseRelative(scanner, today, notes);
-  if (!range) return { past: false, notes };
-  return { range, past: range.to < today, notes };
+  if (!range) return { past: false, vague, notes };
+  return { range, past: range.to < today, vague: false, notes };
 }
 
 const HOUR = `(\\d{1,2})(?::(\\d{2}))?|${NUMBER_WORD_PATTERN}`;

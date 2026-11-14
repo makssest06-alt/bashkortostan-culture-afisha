@@ -1,0 +1,10 @@
+{"id":"EXT-01","query":"Детская выставка для взрослой аудитории в Стерлитамаке в субботу","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"clarify","clarify":["audience"]}}
+{"id":"EXT-02","query":"В Белорецке, но только не в Белорецке, где послушать музыку в пятницу?","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"clarify","clarify":["city"]}}
+{"id":"EXT-03","query":"Подбери бесплатные концерты в Сибае через несколько дней","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"clarify","clarify":["date"]}}
+{"id":"EXT-04","query":"На выставку с подростком в Нефтекамске в субботу","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"clarify","clarify":["child_age"]}}
+{"id":"EXT-05","query":"Нужна экскурсия в Уфе в воскресенье, только платная, но вход должен быть бесплатным","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"clarify","clarify":["budget"]}}
+{"id":"EXT-06","query":"Что покажут поблизости вечером в пятницу?","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"clarify","clarify":["location"]}}
+{"id":"EXT-07","query":"В каком театре Уфы идёт спектакль «Скоро»?","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"search"}}
+{"id":"EXT-08","query":"В Сибае на днях, а лучше в пятницу вечером, можно сходить на выставку?","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"search"}}
+{"id":"EXT-09","query":"Экскурсии в Салавате или Ишимбае на выходных для подростка 15 лет","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"search"}}
+{"id":"EXT-10","query":"Детский спектакль «Для взрослых» завтра в Уфе","reference_now":"2026-11-11T12:00:00+05:00","expected":{"action":"search"}}

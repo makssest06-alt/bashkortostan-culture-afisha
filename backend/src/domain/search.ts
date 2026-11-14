@@ -462,6 +462,14 @@ function computeSoftScore(event: ApiEvent, soft?: SoftFilterHints | null): numbe
     if (event.age_limit !== null && event.age_limit <= 6) score += 3;
   }
 
+  if (soft.audience === 'adults' || soft.audience === 'teenagers') {
+    const audienceEvidence = normalizeText(`${event.description} ${event.tags.join(' ')}`);
+    const matchesAudience = soft.audience === 'adults'
+      ? /взросл(?:ых|ым|ые|ая аудитория|ой аудитории)/.test(audienceEvidence)
+      : /подрост(?:ок|к[а-я]+)|старшеклассник[а-я]*/.test(audienceEvidence);
+    if (matchesAudience) score += 6;
+  }
+
   if (soft.semantic_query) {
     const haystack = normalizeText(
       [event.title, event.description, event.tags.join(' '), event.venue, event.category].join(' '),
