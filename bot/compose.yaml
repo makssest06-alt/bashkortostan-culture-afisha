@@ -1,0 +1,12 @@
+services:
+  bot:
+    build: .
+    env_file:
+      - .env
+    environment:
+      # Если бэкенд поднят в этом же compose, замените на http://api:8000.
+      API_BASE_URL: ${API_BASE_URL:-http://host.docker.internal:8000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    # Портов нет: бот работает через long polling и сам ходит в API.

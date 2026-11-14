@@ -1,110 +1,200 @@
-import { createHash, randomBytes } from 'node:crypto';
+import type { Facets, Relaxation } from './api/types.js';
+import type { CategoryId, CityId } from './directory-service.js';
+import type { DatePreset, SearchDate, SearchSort } from './search-options.js';
 
-export interface HistoryTurn {
+export interface SearchState {
+  q: string | null;
+  city: CityId | null;
+  category: CategoryId | null;
+  /** Пресет (`today`, `weekend`, …) или конкретный день `ГГГГ-ММ-ДД`. */
+  date: SearchDate | null;
+  /** Начало периода включительно; взаимоисключающе с `date`. */
+  dateFrom: string | null;
+  /** Конец периода включительно; взаимоисключающе с `date`. */
+  dateTo: string | null;
+  /** Потолок цены за человека в рублях. */
+  priceMax: number | null;
+  /** Только события с явной пометкой «бесплатно». */
+  freeOnly: boolean;
+  /** Возраст посетителя, а не возрастной рейтинг события. */
+  age: number | null;
+  /** Код площадки. */
+  venueId: string | null;
+  /** Язык мероприятия по ISO 639. */
+  language: string | null;
+  sort: SearchSort;
+  page: number;
+  totalPages: number;
+  queryTruncated: boolean;
+  /** Счётчики из последней выдачи; null, если старый бэкенд их не прислал. */
+  facets: Facets | null;
+  /** Серверные варианты ослабления пустой выдачи. */
+  relaxations: Relaxation[];
+}
+
+export interface SubscriptionDraft {
+  city: CityId | null;
+  category: CategoryId | null;
+  period: DatePreset | null;
+}
+
+export interface AssistantTurn {
   role: 'user' | 'assistant';
   content: string;
 }
 
-export interface ChatSession {
-  userRef: string;
-  city: string | null;
-  category: string | null;
-  period: 'today' | 'tomorrow' | 'weekend' | 'week' | null;
-  freeOnly: boolean;
-  page: number;
-  lastConstraints?: Record<string, unknown>;
-  lastClarifyCode?: string;
-  quickReplies: string[];
-  history: HistoryTurn[];
-  eventRefs: Map<string, string>;
-  subRefs: Map<string, string>;
-  pendingConfirmations: Map<string, { confirmationId: string; resolved: boolean }>;
+/** Состояние диалога с ассистентом; сбрасывается вместе с сессией. */
+export interface AssistantState {
+  /** `constraints` из последнего ответа — контекст для patch и уточнений. */
+  previous: Record<string, unknown> | null;
+  /** Код последнего уточнения: ответ пользователя пойдёт с `answering`. */
+  clarifyCode: string | null;
+  /** Последняя фраза пользователя — для кнопки «Обычный поиск». */
+  lastMessage: string | null;
+  /** Короткая история, не больше 12 реплик (лимит контракта). */
+  history: AssistantTurn[];
 }
 
-const MAX_HISTORY_TURNS = 10;
-
-export function makeUserRef(chatId: number | string): string {
-  const hash = createHash('sha256').update(`tg:${String(chatId)}`).digest('hex').slice(0, 24);
-  return `tg_${hash}`;
+export interface SessionData {
+  awaitingQuery: boolean;
+  search: SearchState | null;
+  draft: SubscriptionDraft | null;
+  /** Первый шаг выбора периода: начало уже выбрано, ждём конец. */
+  rangeDraftStart: string | null;
+  assistant: AssistantState;
 }
 
+export function createAssistantState(): AssistantState {
+  return {
+    previous: null,
+    clarifyCode: null,
+    lastMessage: null,
+    history: [],
+  };
+}
+
+export function createSessionData(): SessionData {
+  return {
+    awaitingQuery: false,
+    search: null,
+    draft: null,
+    rangeDraftStart: null,
+    assistant: createAssistantState(),
+  };
+}
+
+export function createSearchState(partial: Partial<SearchState> = {}): SearchState {
+  return {
+    q: partial.q ?? null,
+    city: partial.city ?? null,
+    category: partial.category ?? null,
+    date: partial.date ?? null,
+    dateFrom: partial.dateFrom ?? null,
+    dateTo: partial.dateTo ?? null,
+    priceMax: partial.priceMax ?? null,
+    freeOnly: partial.freeOnly ?? false,
+    age: partial.age ?? null,
+    venueId: partial.venueId ?? null,
+    language: partial.language ?? null,
+    sort: partial.sort ?? 'date',
+    page: partial.page ?? 1,
+    totalPages: partial.totalPages ?? 0,
+    queryTruncated: partial.queryTruncated ?? false,
+    facets: partial.facets ?? null,
+    relaxations: partial.relaxations ?? [],
+  };
+}
+
+export function createSubscriptionDraft(partial: Partial<SubscriptionDraft> = {}): SubscriptionDraft {
+  return {
+    city: partial.city ?? null,
+    category: partial.category ?? null,
+    period: partial.period ?? null,
+  };
+}
+
+interface Entry {
+  data: SessionData;
+  updatedAt: number;
+}
+
+export interface SessionStoreOptions {
+  ttlMs?: number;
+  maxEntries?: number;
+  now?: () => number;
+}
+
+/**
+ * Состояние диалога в памяти процесса. При рестарте бота состояния сбрасываются:
+ * для уровня 1 это осознанное ограничение, сами подписки живут в API.
+ */
 export class SessionStore {
-  private readonly sessions = new Map<string, ChatSession>();
+  private readonly entries = new Map<number, Entry>();
+  private readonly ttlMs: number;
+  private readonly maxEntries: number;
+  private readonly now: () => number;
 
-  get(chatId: number | string): ChatSession {
-    const key = String(chatId);
-    let session = this.sessions.get(key);
-    if (!session) {
-      session = {
-        userRef: makeUserRef(key),
-        city: null,
-        category: null,
-        period: null,
-        freeOnly: false,
-        page: 1,
-        quickReplies: [],
-        history: [],
-        eventRefs: new Map(),
-        subRefs: new Map(),
-        pendingConfirmations: new Map(),
-      };
-      this.sessions.set(key, session);
-    }
+  constructor(options: SessionStoreOptions = {}) {
+    this.ttlMs = options.ttlMs ?? 2 * 60 * 60 * 1000;
+    this.maxEntries = options.maxEntries ?? 5000;
+    this.now = options.now ?? Date.now;
+  }
+
+  get(userId: number): SessionData {
+    this.prune();
+    const existing = this.entries.get(userId);
+    if (existing) return existing.data;
+
+    const data = createSessionData();
+    this.entries.set(userId, { data, updatedAt: this.now() });
+    this.ensureCapacity();
+    return data;
+  }
+
+  update(userId: number, mutate: (session: SessionData) => void): SessionData {
+    const session = this.get(userId);
+    mutate(session);
+    const entry = this.entries.get(userId);
+    if (entry) entry.updatedAt = this.now();
     return session;
   }
 
-  reset(chatId: number | string): ChatSession {
-    const fresh: ChatSession = {
-      userRef: makeUserRef(chatId),
-      city: null,
-      category: null,
-      period: null,
-      freeOnly: false,
-      page: 1,
-      quickReplies: [],
-      history: [],
-      eventRefs: new Map(),
-      subRefs: new Map(),
-      pendingConfirmations: new Map(),
-    };
-    this.sessions.set(String(chatId), fresh);
-    return fresh;
+  reset(userId: number): SessionData {
+    const data = createSessionData();
+    this.entries.delete(userId);
+    this.entries.set(userId, { data, updatedAt: this.now() });
+    return data;
   }
 
-  pushHistory(session: ChatSession, role: 'user' | 'assistant', content: string): void {
-    const trimmed = content.trim().slice(0, 480);
-    if (!trimmed) return;
-    session.history.push({ role, content: trimmed });
-    if (session.history.length > MAX_HISTORY_TURNS) {
-      session.history = session.history.slice(-MAX_HISTORY_TURNS);
+  delete(userId: number): void {
+    this.entries.delete(userId);
+  }
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  clear(): void {
+    this.entries.clear();
+  }
+
+  private prune(): void {
+    const cutoff = this.now() - this.ttlMs;
+    for (const [userId, entry] of this.entries) {
+      if (entry.updatedAt < cutoff) this.entries.delete(userId);
     }
   }
 
-  registerEventRef(session: ChatSession, eventId: string): string {
-    for (const [token, existing] of session.eventRefs.entries()) {
-      if (existing === eventId) return token;
+  private ensureCapacity(): void {
+    if (this.entries.size <= this.maxEntries) return;
+    let oldestUserId: number | null = null;
+    let oldestAt = Number.POSITIVE_INFINITY;
+    for (const [userId, entry] of this.entries) {
+      if (entry.updatedAt < oldestAt) {
+        oldestAt = entry.updatedAt;
+        oldestUserId = userId;
+      }
     }
-    const token = randomBytes(4).toString('hex');
-    if (session.eventRefs.size >= 100) {
-      const firstKey = session.eventRefs.keys().next().value;
-      if (firstKey) session.eventRefs.delete(firstKey);
-    }
-    session.eventRefs.set(token, eventId);
-    return token;
-  }
-
-  registerSubRef(session: ChatSession, subId: string): string {
-    for (const [token, existing] of session.subRefs.entries()) {
-      if (existing === subId) return token;
-    }
-    const token = randomBytes(4).toString('hex');
-    session.subRefs.set(token, subId);
-    return token;
-  }
-
-  registerConfirmation(session: ChatSession, confirmationId: string): string {
-    const token = randomBytes(4).toString('hex');
-    session.pendingConfirmations.set(token, { confirmationId, resolved: false });
-    return token;
+    if (oldestUserId !== null) this.entries.delete(oldestUserId);
   }
 }

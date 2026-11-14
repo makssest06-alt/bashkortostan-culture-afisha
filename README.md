@@ -23,7 +23,7 @@
 - **Контракт v1 готов**: схема события по п. 8.1, OpenAPI 3.1, инструменты агента п. 7.2 (см. ниже).
 - **Сайт** (`web/`, влит из [PR #17](https://github.com/makssest06-alt/bashkortostan-culture-afisha/pull/17)): каталог с фильтрами в адресе, карточка с блоком «Источники», `/ask` с резервным поиском, виджет, `/developers`, `/about` с формой заявки, админка `/admin`, РУС/БАШ. Событие по сети ходит в форме контракта v1. Без бэка сайт работает на своих моках с синтетическими событиями (`synthetic: true`), бэк подключается переменной окружения (см. «Как подключить бэк к сайту»).
 - **Бэкенд и контур ИИ-агента** (`backend/`, [`backend/README.md`](backend/README.md)): REST API v1 на TypeScript + Hono (`contracts/api.openapi.yaml` + маршруты сайта `/dictionaries`, `/facets`, `/assistant/query`, `/assistant/confirm`, `/admin/applications`, `/admin/traces`), миграции и сид PostgreSQL 16 (через `pg` / `postgres:16-alpine` и встроенный `@electric-sql/pglite`), идемпотентный CSV/JSON/multipart-импорт, дедупликация по `dedup_key`, очередь модерации с `merge`, оптимистическая блокировка `ETag`/`If-Match`, журнал `audit_log`, подписки, форма обратной связи с honeypot и лимитами, трассы агента и `/metrics` (Prometheus).
-- **Telegram-бот** (`bot/`, [`bot/README.md`](bot/README.md)): тонкий сервис на TypeScript поверх `backend/` API v1 — меню `/start` с инлайн-кнопками (город, категория, период, «бесплатные»), пагинация, HTML-карточки, подписки и отписки, свободные диалоговые запросы в `/assistant/query` с историей (`history`), быстрыми подсказками, одноразовыми кнопками подтверждения (`/assistant/confirm`) и автоматическим резервным поиском по каталогу при `503`/таймауте модели.
+- **Telegram-бот** (`bot/`, [`bot/README.md`](bot/README.md)): отдельный сервис на Node.js 22, канал к REST API v1 без доступа к базе. Закрывает уровень 1 ТЗ и даёт карточку 2.0: `/start` с брендовым жетоном и дисклеймером, поиск, все сеансы, тарифы, `.ics`-календарь, карта, шаринг, deep link `event_<uuid>`, «Похожие события», расписание площадки, фильтры возраста/языка/сортировки/периода, серверные ослабления пустой выдачи, переход из подписки к событиям и адаптер ассистента за флагом (по умолчанию выключен). В выдаче видны счётчики скрытых событий с неизвестной ценой/возрастом. 196 тестов в 12 файлах, `typecheck` и `build` проходят. Запуск и проверка — в [`bot/README.md`](bot/README.md).
 - **Админка на сайте** (`/admin`): вкладки событий, импорта, модерации, обращений, аудита и **«Трассы ИИ»** (`GET /api/v1/admin/traces`, детали шагов/токенов/стоимости в ₽); в `/ask` поддержаны многошаговый диалог и подтверждение подписок/обращений через `/assistant/confirm`.
 - **Eval-контур и отчёт** (`evals/run-evals.mjs`, [`docs/EVAL_REPORT.md`](docs/EVAL_REPORT.md)): автоматический прогон 120 запросов `evals/search/queries.jsonl`, 25 сквозных сценариев (включая сравнение с keyword-поиском и цикл подтверждения `200 -> 409`), 100-строчного импорта `import-100.csv` и проверок ИБ из `evals/security/scenarios.jsonl`.
 
@@ -34,11 +34,11 @@
 По ТЗ (п. 10) сервис поднимается так, на чистой машине, не дольше 10 минут:
 
 ```bash
-cp .env.example .env   # при необходимости задать ADMIN_TOKEN, LLM_API_KEY и BOT_TOKEN
+cp .env.example .env   # при необходимости задать ADMIN_TOKEN, LLM_API_KEY и TELEGRAM_BOT_TOKEN
 docker compose up --build
 ```
 
-Корневой [`docker-compose.yml`](docker-compose.yml) поднимает `postgres` (`postgres:16-alpine` с healthcheck и томом `afisha-postgres-data`), `api` (`backend/`, порт `${API_PORT:-8000}`, healthcheck `/api/v1/health`), `bot` (`bot/`, порт `${BOT_PORT:-8081}`, режим `standby` при пустом `BOT_TOKEN`) и `web` через `include: [web/compose.yaml]` на `http://localhost:3210` (по умолчанию `NEXT_PUBLIC_API_BASE_URL=http://api:8000`).
+Корневой [`docker-compose.yml`](docker-compose.yml) поднимает `postgres` (`postgres:16-alpine` с healthcheck и томом `afisha-postgres-data`), `api` (`backend/`, порт `${API_PORT:-8000}`, healthcheck `/api/v1/health`), `bot` (`bot/`, long polling; нужен `TELEGRAM_BOT_TOKEN`) и `web` через `include: [web/compose.yaml]` на `http://localhost:3210` (по умолчанию `NEXT_PUBLIC_API_BASE_URL=http://api:8000`).
 
 ### Бэкенд локально (без Docker и внешнего PostgreSQL)
 
@@ -59,7 +59,7 @@ npm run dev                    # http://localhost:8000 (миграции + си�
 ```bash
 cd bot
 npm ci
-BOT_TOKEN=<токен_от_BotFather> API_BASE_URL=http://127.0.0.1:8000 npm run dev
+TELEGRAM_BOT_TOKEN=<токен_от_BotFather> API_BASE_URL=http://127.0.0.1:8000 npm run dev
 ```
 
 Проверки в `bot/`: `npm run typecheck && npm test && npm run build` (подробнее — [`bot/README.md`](bot/README.md)).
@@ -99,6 +99,20 @@ docker compose up --build      # http://localhost:3210, сайт на моках
 ```
 
 Значения переменных можно положить в `web/.env` рядом с `compose.yaml`. Образ собирается из `web/Dockerfile` (standalone-сборка Next.js, запуск не от root, правки админки на моках хранятся в томе `/data`).
+
+### Telegram-бот локально
+
+Нужен Node.js 22+ и запущенный API.
+
+```bash
+cd bot
+npm ci
+cp .env.example .env      # вписать TELEGRAM_BOT_TOKEN и при необходимости API_BASE_URL
+npm run build
+npm start
+```
+
+Для разработки — `npm run dev`. Проверки: `npm run typecheck && npm test && npm run build`. Подробности, переменные окружения и результаты живой проверки — в [`bot/README.md`](bot/README.md).
 
 ### Проверка контрактов
 
@@ -237,13 +251,14 @@ curl -s 'http://localhost:3210/api/v1/events?page_size=1'
 .
 ├── .github/          # Шаблон PR
 ├── backend/          # REST API v1, PostgreSQL 16 (pg/PGlite), импорт, админка, ИИ-агент, метрики и тесты
-├── bot/              # Telegram-бот (polling/webhook/standby, меню, подписки, ИИ-агент и fallback)
+├── bot/              # Telegram-бот: long polling, карточка 2.0, фильтры, подписки, адаптер ассистента
 ├── contracts/        # Контракт v1 и исследовательские схемы
 ├── design/           # Визуальный кит Башкортостана
 ├── docs/             # ТЗ, соответствие ТЗ, решения, план, исследования
 ├── evals/            # Наборы запросов, сценарии ИБ и единый раннер evals/run-evals.mjs
 ├── scripts/          # Служебные скрипты дизайн-кита
 ├── security/         # Машиночитаемые политики безопасности
+├── bot/              # Telegram-бот: отдельный сервис к REST API v1
 ├── web/              # Сайт на Next.js: каталог, карточка, /ask, виджет, админка; свои Dockerfile и compose.yaml
 ├── .env.example      # Переменные окружения полного стека
 ├── docker-compose.yml # Стек postgres + api + bot + web

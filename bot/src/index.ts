@@ -1,86 +1,128 @@
-import { BackendApiClient } from './api-client.js';
-import { loadBotConfig } from './config.js';
-import { BotHandler } from './handlers.js';
+import { createApiClient } from './api/client.js';
+import { createBot } from './bot.js';
+import { ConfigError, loadConfig } from './config.js';
+import { DirectoryService } from './directory-service.js';
+import { createLogger } from './logger.js';
 import { SessionStore } from './session.js';
-import { createBotHttpServer, TelegramApi } from './telegram.js';
+import { BOT_COMMANDS } from './texts.js';
 
-async function main() {
-  const config = loadBotConfig();
-  const api = new BackendApiClient(
-    config.apiBaseUrl,
-    fetch,
-    config.requestTimeoutMs,
-    config.assistantTimeoutMs,
-  );
-  const sessions = new SessionStore();
-  const handler = new BotHandler(api, sessions, config);
-  const tgApi = config.botToken ? new TelegramApi(config.botToken) : null;
+async function main(): Promise<void> {
+  let config;
+  try {
+    config = loadConfig();
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      console.error(error.message);
+      console.error('Заполните переменные окружения по образцу bot/.env.example.');
+      process.exit(1);
+    }
+    throw error;
+  }
 
-  const server = createBotHttpServer(config, handler, tgApi);
-  server.listen(config.port, () => {
-    console.log(
-      JSON.stringify({
-        time: new Date().toISOString(),
-        level: 'info',
-        message: 'bot_started',
-        mode: config.resolvedMode,
-        port: config.port,
-        api_base_url: config.apiBaseUrl,
-      }),
-    );
+  const logger = createLogger(config.logLevel);
+  const api = createApiClient({
+    baseUrl: config.apiBaseUrl,
+    timeoutMs: config.apiTimeoutMs,
+    retryAttempts: config.apiRetryAttempts,
+  });
+  const sessions = new SessionStore({ ttlMs: config.sessionTtlMs });
+  const directories = new DirectoryService();
+
+  const [healthResult, catalogsResult] = await Promise.allSettled([
+    api.health(),
+    directories.refresh(api),
+  ]);
+
+  if (healthResult.status === 'fulfilled') {
+    const health = healthResult.value;
+    if (health.status === 'ok') {
+      logger.info('api_health', { status: health.status, base_url: config.apiBaseUrl });
+    } else {
+      logger.warn('api_health_degraded', { status: health.status, base_url: config.apiBaseUrl });
+    }
+  } else {
+    logger.warn('api_health_failed', {
+      error:
+        healthResult.reason instanceof Error
+          ? healthResult.reason.message
+          : String(healthResult.reason),
+      base_url: config.apiBaseUrl,
+    });
+  }
+
+  if (catalogsResult.status === 'rejected') {
+    logger.warn('directories_refresh_failed', {
+      error:
+        catalogsResult.reason instanceof Error
+          ? catalogsResult.reason.message
+          : String(catalogsResult.reason),
+    });
+  } else {
+    const catalogs = catalogsResult.value;
+    if (catalogs.cities.loaded && catalogs.categories.loaded) {
+      logger.info('directories_loaded', {
+        cities: catalogs.cities.count,
+        categories: catalogs.categories.count,
+      });
+    } else {
+      logger.warn('directories_fallback', {
+        cities: catalogs.cities,
+        categories: catalogs.categories,
+      });
+    }
+    if (catalogs.cities.truncated || catalogs.categories.truncated) {
+      logger.warn('directories_truncated', {
+        cities: catalogs.cities.truncated ? catalogs.cities.count : undefined,
+        categories: catalogs.categories.truncated ? catalogs.categories.count : undefined,
+      });
+    }
+  }
+
+  const bot = createBot(config.telegramBotToken, {
+    api,
+    sessions,
+    config,
+    logger,
+    directories,
   });
 
-  if (config.resolvedMode === 'standby') {
-    console.log(
-      JSON.stringify({
-        time: new Date().toISOString(),
-        level: 'info',
-        message: 'bot_standby_no_token',
-      }),
-    );
-    return;
+  try {
+    await bot.api.setMyCommands(BOT_COMMANDS);
+    logger.info('bot_commands_set', { count: BOT_COMMANDS.length });
+  } catch (error) {
+    logger.warn('bot_commands_failed', { error });
   }
 
-  if (config.resolvedMode === 'webhook' && tgApi && config.webhookUrl) {
-    await tgApi.setWebhook(config.webhookUrl, config.webhookSecret);
-    return;
+  let stopping = false;
+  async function shutdown(signal: string): Promise<void> {
+    if (stopping) return;
+    stopping = true;
+    logger.info('shutdown', { signal });
+    try {
+      await bot.stop();
+    } finally {
+      process.exit(0);
+    }
   }
 
-  let running = true;
   process.once('SIGINT', () => {
-    running = false;
-    server.close();
+    void shutdown('SIGINT');
   });
   process.once('SIGTERM', () => {
-    running = false;
-    server.close();
+    void shutdown('SIGTERM');
   });
 
-  let offset = 0;
-  while (running && tgApi) {
-    try {
-      const updates = await tgApi.getUpdates(offset, config.pollTimeoutSec);
-      for (const upd of updates) {
-        offset = Math.max(offset, upd.update_id + 1);
-        const result = await handler.handleUpdate(upd);
-        if (result) {
-          if (result.callbackQueryId) {
-            await tgApi.answerCallbackQuery(result.callbackQueryId, result.reply.callback_alert);
-          }
-          await tgApi.sendMessage(result.chatId, result.reply);
-        }
-      }
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          time: new Date().toISOString(),
-          level: 'error',
-          message: 'bot_polling_error',
-          error: err instanceof Error ? err.message : 'unknown',
-        }),
-      );
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+  logger.info('bot_starting', { api_base_url: config.apiBaseUrl });
+  try {
+    await bot.start({
+      allowed_updates: ['message', 'callback_query'],
+      onStart: (me) => {
+        logger.info('bot_started', { username: me.username, id: me.id });
+      },
+    });
+  } catch (error) {
+    logger.error('bot_start_failed', { error });
+    process.exitCode = 1;
   }
 }
 
