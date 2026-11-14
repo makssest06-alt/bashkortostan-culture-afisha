@@ -295,7 +295,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/subscriptions', jsonBodyLimit(16 * 1024, 'Тело запроса подписки слишком большое'));
   app.use('/api/v1/subscriptions/*', jsonBodyLimit(16 * 1024, 'Тело запроса подписки слишком большое'));
   app.use('/api/v1/feedback', jsonBodyLimit(32 * 1024, 'Обращение слишком длинное'));
-  app.use('/api/v1/admin/*', jsonBodyLimit(MAX_IMPORT_BYTES + 64 * 1024, 'Тело запроса админки слишком большое'));
+  // Admin body limit подключается после проверки токена — ниже, чтобы 401 не читал тело.
 
   // --- Служебные маршруты ---
 
@@ -958,6 +958,9 @@ export function createApp(options: CreateAppOptions) {
     c.set('adminActor', auth.actor);
     await next();
   });
+
+  // Уже после проверки токена: неаутентифицированный запрос получает 401, не читая тело.
+  app.use('/api/v1/admin/*', jsonBodyLimit(MAX_IMPORT_BYTES + 64 * 1024, 'Тело запроса админки слишком большое'));
 
   app.get('/api/v1/admin/events', async (c) => {
     const status = c.req.query('status')?.trim();

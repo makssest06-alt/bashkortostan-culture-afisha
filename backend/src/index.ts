@@ -49,6 +49,12 @@ async function main(): Promise<void> {
 
   await runMigrations(db);
   const seedResult = await seedDatabase(db, { publicWebUrl: config.publicWebUrl });
+  if (config.production && /localhost|127\.0\.0\.1/.test(config.publicWebUrl)) {
+    logEvent('warn', 'public_web_url_localhost', {
+      message: 'PUBLIC_WEB_URL указывает на localhost: ссылки на события в проде будут неверными',
+      public_web_url: config.publicWebUrl,
+    });
+  }
   await runRetention(db, config);
   const retentionTimer = setInterval(() => void runRetention(db, config), RETENTION_INTERVAL_MS);
   retentionTimer.unref();

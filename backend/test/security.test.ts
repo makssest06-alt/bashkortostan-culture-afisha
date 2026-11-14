@@ -81,6 +81,14 @@ describe('P0-1: админка не открыта по умолчанию', () 
         headers: { Origin: 'https://partner.example', 'Access-Control-Request-Method': 'GET' },
       });
       expect(publicPreflight.headers.get('access-control-allow-origin')).toBe('*');
+
+      // Неаутентифицированный admin-запрос не должен читать большое тело.
+      const unauthBig = await ctx.req('/api/v1/admin/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'x'.repeat(2_000_000),
+      });
+      expect(unauthBig.status).toBe(401);
     } finally {
       await ctx.close();
     }
