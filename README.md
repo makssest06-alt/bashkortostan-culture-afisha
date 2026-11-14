@@ -15,6 +15,7 @@
 | Админка | <https://89-125-129-170.nip.io:8445/admin> — вход по имени и токену модератора `ADMIN_TOKEN` из `.env` на сервере |
 | Telegram-бот | [@bash_hackathon102bot](https://t.me/bash_hackathon102bot) |
 | Eval-отчёт | [`docs/EVAL_REPORT.md`](docs/EVAL_REPORT.md) |
+| Текст выступления на 3 минуты | [`docs/PITCH_3MIN.md`](docs/PITCH_3MIN.md) |
 
 Стенд поднят через `docker compose` (`postgres` + `api` + `web` + `bot`), TLS-сертификат Let's Encrypt, HTTP редиректит на HTTPS. Состояние сервисов и переменные окружения — в разделе «Запуск».
 
