@@ -8,7 +8,7 @@
 import { MAX_IMPORT_BYTES, detectFormat } from '../../../../../lib/admin/import';
 import { withAdmin } from '../../../../../lib/admin/route-kit';
 import { listImports, runImport } from '../../../../../lib/admin/service';
-import { errorResponse, json, methodNotAllowed, preflight } from '../../../../../lib/api/http';
+import { errorResponse, json, methodNotAllowed, preflightAdmin } from '../../../../../lib/api/http';
 
 const TOO_BIG = `Файл больше ${MAX_IMPORT_BYTES / 1024 / 1024} МБ. Разбейте его на части`;
 
@@ -56,7 +56,7 @@ export function POST(request: Request): Promise<Response> {
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('GET, POST, OPTIONS');

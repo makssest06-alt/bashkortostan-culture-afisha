@@ -14,6 +14,8 @@ const FALLBACK_HOST = 'localhost:3210';
 export async function getSiteOrigin(): Promise<string> {
   const configured = configuredSiteOrigin();
   if (configured) return configured.origin;
+  // В production не отражаем клиентский Host/XFH в примерах кода.
+  if (process.env.NODE_ENV === 'production') return `http://${FALLBACK_HOST}`;
   const store = await headers();
   const forwarded = store.get('x-forwarded-host')?.split(',')[0]?.trim();
   const candidate = forwarded || store.get('host') || FALLBACK_HOST;

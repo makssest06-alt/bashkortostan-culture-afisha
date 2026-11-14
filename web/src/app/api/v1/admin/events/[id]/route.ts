@@ -6,7 +6,7 @@
 
 import { withAdmin } from '../../../../../../lib/admin/route-kit';
 import { editEvent, getAdminEvent } from '../../../../../../lib/admin/service';
-import { errorResponse, json, methodNotAllowed, notFound, preflight } from '../../../../../../lib/api/http';
+import { errorResponse, json, methodNotAllowed, notFound, preflightAdmin } from '../../../../../../lib/api/http';
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -40,7 +40,7 @@ export function PATCH(request: Request, context: Context): Promise<Response> {
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('GET, PATCH, OPTIONS');

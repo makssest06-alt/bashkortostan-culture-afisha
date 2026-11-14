@@ -16,9 +16,17 @@ import {
   sessionValue,
   tokenMatches,
 } from '../../../../../lib/admin/auth';
-import { errorResponse, internalError, json, methodNotAllowed, preflight, requestIdOf, stripCorsHeaders } from '../../../../../lib/api/http';
+import { errorResponse, internalError, json, methodNotAllowed, preflightAdmin, requestIdOf, stripCorsHeaders } from '../../../../../lib/api/http';
 import { readLimitedBody } from '../../../../../lib/api/forward';
 import { clientIp, hitRate } from '../../../../../lib/api/rate-limit';
+
+function adminError(...args: Parameters<typeof errorResponse>): Response {
+  return stripCorsHeaders(errorResponse(...args));
+}
+
+function adminInternal(error: unknown, requestId: string): Response {
+  return stripCorsHeaders(internalError(error, requestId));
+}
 
 function cookie(name: string, value: string, maxAge: number, secure: boolean, httpOnly = true): string {
   return [`${name}=${value}`, 'Path=/', `Max-Age=${maxAge}`, 'SameSite=Strict', httpOnly ? 'HttpOnly' : '', secure ? 'Secure' : '']
@@ -43,11 +51,17 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const mode = adminMode();
     if (mode === 'disabled') {
-      return errorResponse(503, 'unavailable', 'Админка выключена: на сервере не задан ADMIN_TOKEN', undefined, { requestId });
+      return adminError(503, 'unavailable', 'Админка выключена: на сервере не задан ADMIN_TOKEN', undefined, { requestId });
     }
-    const limit = hitRate(`admin-login:${clientIp(request)}`, 10, 10 * 60_000);
+    const limit = hitRate(
+      process.env.TRUST_PROXY_CLIENT_IP === '1'
+        ? `admin-login:${clientIp(request)}`
+        : 'admin-login:global',
+      process.env.TRUST_PROXY_CLIENT_IP === '1' ? 10 : 100,
+      10 * 60_000,
+    );
     if (!limit.ok) {
-      return errorResponse(429, 'rate_limited', `Слишком много попыток входа. Попробуйте через ${Math.ceil(limit.retryAfter / 60)} мин.`, undefined, {
+      return adminError(429, 'rate_limited', `Слишком много попыток входа. Попробуйте через ${Math.ceil(limit.retryAfter / 60)} мин.`, undefined, {
         requestId,
         headers: { 'Retry-After': String(limit.retryAfter) },
       });
@@ -55,21 +69,21 @@ export async function POST(request: Request): Promise<Response> {
     let body: { token?: unknown; name?: unknown } = {};
     const limited = await readLimitedBody(request, 4 * 1024);
     if (!limited.ok) {
-      return errorResponse(413, 'payload_too_large', 'Тело входа слишком большое', undefined, { requestId });
+      return adminError(413, 'payload_too_large', 'Тело входа слишком большое', undefined, { requestId });
     }
     try {
       body = JSON.parse(new TextDecoder().decode(limited.body)) as typeof body;
     } catch {
-      return errorResponse(400, 'invalid_json', 'Ожидается JSON: { "token": "…", "name": "…" }', undefined, { requestId });
+      return adminError(400, 'invalid_json', 'Ожидается JSON: { "token": "…", "name": "…" }', undefined, { requestId });
     }
     const name = cleanActor(typeof body.name === 'string' ? body.name : null, '');
     if (!name) {
-      return errorResponse(400, 'validation_error', 'Укажите имя: оно попадёт в журнал изменений', [
+      return adminError(400, 'validation_error', 'Укажите имя: оно попадёт в журнал изменений', [
         { field: 'name', message: 'Укажите имя: оно попадёт в журнал изменений' },
       ], { requestId });
     }
     if (mode === 'token' && !(typeof body.token === 'string' && tokenMatches(body.token))) {
-      return errorResponse(401, 'unauthorized', 'Неверный токен модератора', [{ field: 'token', message: 'Неверный токен модератора' }], {
+      return adminError(401, 'unauthorized', 'Неверный токен модератора', [{ field: 'token', message: 'Неверный токен модератора' }], {
         requestId,
       });
     }
@@ -79,7 +93,7 @@ export async function POST(request: Request): Promise<Response> {
     response.headers.append('Set-Cookie', cookie(NAME_COOKIE, encodeURIComponent(name), SESSION_MAX_AGE, secure));
     return stripCorsHeaders(response);
   } catch (error) {
-    return internalError(error, requestId);
+    return adminInternal(error, requestId);
   }
 }
 
@@ -93,7 +107,7 @@ export function DELETE(request: Request): Response {
 }
 
 export function OPTIONS(): Response {
-  return preflight();
+  return preflightAdmin();
 }
 
 const notAllowed = methodNotAllowed('GET, POST, DELETE, OPTIONS');
