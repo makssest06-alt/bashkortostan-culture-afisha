@@ -2,7 +2,7 @@
  * Доступ к админке.
  *
  * Режимы:
- *   token     задан ADMIN_TOKEN (от 12 знаков): вход по токену, сессия в cookie HttpOnly + SameSite=Strict,
+ *   token     задан ADMIN_TOKEN (от 12 знаков в dev, от 32 в production): вход по токену, сессия в cookie HttpOnly + SameSite=Strict,
  *             или заголовок Authorization: Bearer <токен> для скриптов;
  *   open      локальная разработка без токена: админка открыта, над ней пометка «демо»;
  *   disabled  боевая сборка без токена: админка выключена, чтобы чужие не правили афишу.
