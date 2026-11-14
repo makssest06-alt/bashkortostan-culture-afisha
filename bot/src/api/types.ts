@@ -90,16 +90,148 @@ export const EventListItemSchema = EventSchema.extend({
   primary_occurrence_id: z.string().optional(),
 });
 
+export const FacetEntrySchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  count: z.number().int().nonnegative(),
+});
+
+export const AgeFacetSchema = z.looseObject({
+  value: z.number().int().nullable(),
+  count: z.number().int().nonnegative(),
+});
+
+export const PriceFacetSchema = z.looseObject({
+  free: z.number().int().nonnegative().default(0),
+  paid: z.number().int().nonnegative().default(0),
+  unknown: z.number().int().nonnegative().default(0),
+});
+
+/**
+ * Счётчики для фильтров. Все поля необязательны: старый бэкенд может
+ * не отдать `facets`, а частичный ответ не должен ломать всю выдачу.
+ */
+export const FacetsSchema = z.looseObject({
+  cities: z.array(FacetEntrySchema).default([]),
+  categories: z.array(FacetEntrySchema).default([]),
+  age_limits: z.array(AgeFacetSchema).default([]),
+  price: PriceFacetSchema.default({ free: 0, paid: 0, unknown: 0 }),
+  total: z.number().int().nonnegative().default(0),
+});
+
+export const RelaxationLabelSchema = z.union([
+  z.string(),
+  z.looseObject({ ru: z.string(), ba: z.string().optional() }),
+]);
+
+/**
+ * Вариант ослабления пустой выдачи, который предлагает сервер.
+ * `query` — готовые параметры GET /events, `patch` — правка условий
+ * ассистента. Бот использует `query`, а `patch` оставляет для будущего.
+ */
+export const RelaxationSchema = z.looseObject({
+  code: z.string(),
+  codes: z.array(z.string()).default([]),
+  label: RelaxationLabelSchema,
+  patch: z.record(z.string(), z.unknown()).optional(),
+  query: z.record(z.string(), z.unknown()).optional(),
+  count: z.number().int().nonnegative(),
+});
+
 export const EventListResponseSchema = z.looseObject({
   items: z.array(EventListItemSchema),
   page: z.number().int(),
   page_size: z.number().int(),
   total: z.number().int(),
   total_pages: z.number().int(),
-  facets: z.unknown().optional(),
-  relaxations: z.array(z.unknown()).default([]),
+  facets: FacetsSchema.optional(),
+  relaxations: z.array(RelaxationSchema).default([]),
   hidden_unknown_price: z.number().int().optional(),
   hidden_unknown_age: z.number().int().optional(),
+});
+
+export const VenueSchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  city_id: z.string(),
+  city: z.string(),
+  address: z.string().nullable().optional(),
+  lat: z.number().nullable().optional(),
+  lon: z.number().nullable().optional(),
+});
+
+export const VenueScheduleSchema = z.looseObject({
+  venue: VenueSchema,
+  date_from: z.string(),
+  date_to: z.string(),
+  items: z.array(EventSchema).default([]),
+});
+
+/**
+ * Ответ ассистента. Схема намеренно loose: бэкенд уровня 3 ещё в PR #19,
+ * а старый стенд может не знать метода. Неизвестные поля не ломают разбор,
+ * отсутствующие массивы получают безопасные значения по умолчанию.
+ */
+export const AssistantActionSchema = z.enum([
+  'search',
+  'clarify',
+  'out_of_scope',
+  'confirmation_required',
+]);
+
+export const AssistantChipSchema = z.looseObject({
+  key: z.string(),
+  kind: z.string().default(''),
+  label: z.string(),
+  value: z.string().default(''),
+  removable: z.boolean().optional(),
+  unset: z.array(z.string()).default([]),
+});
+
+export const AssistantAssumptionSchema = z.looseObject({
+  key: z.string().default(''),
+  text: z.string(),
+});
+
+export const AssistantClarifySchema = z.looseObject({
+  code: z.string(),
+  pending: z.array(z.string()).default([]),
+  question: z.string(),
+  quick_replies: z.array(z.string()).default([]),
+});
+
+export const AssistantResultSchema = z.looseObject({
+  event: EventListItemSchema,
+  occurrence_id: z.string().nullable().optional(),
+  reasons: z.array(z.string()).default([]),
+  caveats: z.array(z.string()).default([]),
+});
+
+export const AssistantConfirmationSchema = z.looseObject({
+  confirmation_id: z.string(),
+  summary: z.string().default(''),
+  expires_at: z.string().optional(),
+});
+
+export const AssistantResponseSchema = z.looseObject({
+  action: AssistantActionSchema,
+  message: z.string(),
+  constraints: z.record(z.string(), z.unknown()).default({}),
+  chips: z.array(AssistantChipSchema).default([]),
+  assumptions: z.array(AssistantAssumptionSchema).default([]),
+  clarify: AssistantClarifySchema.optional(),
+  results: z.array(AssistantResultSchema).default([]),
+  total: z.number().int().nonnegative().default(0),
+  hidden_unknown_price: z.number().int().nonnegative().optional(),
+  hidden_unknown_age: z.number().int().nonnegative().optional(),
+  relaxations: z.array(RelaxationSchema).default([]),
+  unsupported_actions: z.array(z.string()).default([]),
+  confirmation: AssistantConfirmationSchema.optional(),
+  events_query: z.record(z.string(), z.unknown()).optional(),
+  reference_date: z.string().optional(),
+  timezone: z.string().default('Asia/Yekaterinburg'),
+  engine: z.string().default(''),
+  trace_id: z.string().optional(),
 });
 
 export const CitySchema = z.looseObject({
@@ -156,6 +288,20 @@ export type EventSource = z.infer<typeof EventSourceSchema>;
 export type Event = z.infer<typeof EventSchema>;
 export type EventListItem = z.infer<typeof EventListItemSchema>;
 export type EventListResponse = z.infer<typeof EventListResponseSchema>;
+export type FacetEntry = z.infer<typeof FacetEntrySchema>;
+export type AgeFacet = z.infer<typeof AgeFacetSchema>;
+export type PriceFacet = z.infer<typeof PriceFacetSchema>;
+export type Facets = z.infer<typeof FacetsSchema>;
+export type Relaxation = z.infer<typeof RelaxationSchema>;
+export type Venue = z.infer<typeof VenueSchema>;
+export type VenueSchedule = z.infer<typeof VenueScheduleSchema>;
+export type AssistantAction = z.infer<typeof AssistantActionSchema>;
+export type AssistantChip = z.infer<typeof AssistantChipSchema>;
+export type AssistantAssumption = z.infer<typeof AssistantAssumptionSchema>;
+export type AssistantClarify = z.infer<typeof AssistantClarifySchema>;
+export type AssistantResult = z.infer<typeof AssistantResultSchema>;
+export type AssistantConfirmation = z.infer<typeof AssistantConfirmationSchema>;
+export type AssistantResponse = z.infer<typeof AssistantResponseSchema>;
 export type City = z.infer<typeof CitySchema>;
 export type Category = z.infer<typeof CategorySchema>;
 export type Subscription = z.infer<typeof SubscriptionSchema>;

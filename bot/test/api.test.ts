@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, createApiClient } from '../src/api/client.js';
-import { makeEvent, makeListResponse } from './fixtures.js';
+import { makeAssistantResponse, makeEvent, makeListResponse } from './fixtures.js';
 
 interface Call {
   url: string;
   init?: RequestInit;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
   });
 }
 
@@ -28,12 +28,16 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
   return { fetchImpl: fetchImpl as typeof fetch, calls };
 }
 
-function clientWith(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+function clientWith(
+  handler: (url: string, init?: RequestInit) => Response | Promise<Response>,
+  extra: { retryAttempts?: number } = {},
+) {
   const fake = fakeFetch(handler);
   const client = createApiClient({
     baseUrl: 'http://api.test/api/v1/',
     timeoutMs: 1000,
     fetchImpl: fake.fetchImpl,
+    ...extra,
   });
   return { client, calls: fake.calls };
 }
@@ -92,17 +96,151 @@ describe('ApiClient', () => {
     expect(url.searchParams.has('price_max')).toBe(false);
   });
 
-  it('обрезает q до 200 знаков', async () => {
+  it('передаёт возраст, язык, площадку и сортировку', async () => {
+    const { client, calls } = clientWith(() => jsonResponse(makeListResponse()));
+    await client.searchEvents({
+      age: 6,
+      language: 'ba',
+      venue_id: 'demo-hall-1',
+      sort: 'price',
+    });
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.searchParams.get('age')).toBe('6');
+    expect(url.searchParams.get('language')).toBe('ba');
+    expect(url.searchParams.get('venue_id')).toBe('demo-hall-1');
+    expect(url.searchParams.get('sort')).toBe('price');
+  });
+
+  it('не смешивает конкретную дату и период: период важнее', async () => {
+    const { client, calls } = clientWith(() => jsonResponse(makeListResponse()));
+    await client.searchEvents({
+      date: 'today',
+      date_from: '2026-11-20',
+      date_to: '2026-11-25',
+    });
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.searchParams.has('date')).toBe(false);
+    expect(url.searchParams.get('date_from')).toBe('2026-11-20');
+    expect(url.searchParams.get('date_to')).toBe('2026-11-25');
+  });
+
+  it('передаёт период в похожие события', async () => {
+    const { client, calls } = clientWith(() => jsonResponse(makeListResponse()));
+    await client.getSimilarEvents('11111111-1111-4111-8111-111111111111', {
+      date: 'weekend',
+      date_from: '2026-11-20',
+      date_to: '2026-11-22',
+    });
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.searchParams.has('date')).toBe(false);
+    expect(url.searchParams.get('date_from')).toBe('2026-11-20');
+    expect(url.searchParams.get('date_to')).toBe('2026-11-22');
+  });
+
+  it('запрашивает расписание площадки', async () => {
+    const schedule = {
+      venue: { id: 'demo-hall-1', name: 'Зал', city_id: 'ufa', city: 'Уфа' },
+      date_from: '2026-11-20',
+      date_to: '2026-12-04',
+      items: [makeEvent()],
+    };
+    const { client, calls } = clientWith(() => jsonResponse(schedule));
+    const result = await client.getVenueSchedule('demo-hall-1', {
+      date_from: '2026-11-20',
+      date_to: '2026-12-04',
+    });
+    expect(result.venue.name).toBe('Зал');
+    expect(result.items).toHaveLength(1);
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.pathname).toBe('/api/v1/venues/demo-hall-1/schedule');
+    expect(url.searchParams.get('date_from')).toBe('2026-11-20');
+    expect(url.searchParams.get('date_to')).toBe('2026-12-04');
+  });
+
+  it('повторяет GET после 5xx, но не повторяет POST', async () => {
+    let attempts = 0;
+    const { client } = clientWith(
+      () => {
+        attempts += 1;
+        return attempts === 1
+          ? jsonResponse({ code: 'unavailable', message: 'Временно', details: [] }, 503)
+          : jsonResponse(makeListResponse());
+      },
+      { retryAttempts: 1 },
+    );
+    const result = await client.searchEvents({});
+    expect(result.items).toHaveLength(1);
+    expect(attempts).toBe(2);
+
+    let posts = 0;
+    const second = clientWith(
+      () => {
+        posts += 1;
+        return jsonResponse({ code: 'unavailable', message: 'Временно', details: [] }, 503);
+      },
+      { retryAttempts: 2 },
+    );
+    await expect(
+      second.client.createSubscription({
+        channel: 'telegram',
+        user_ref: 'telegram_00000123',
+        city: 'ufa',
+        category: 'concert',
+        period: null,
+      }),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(posts).toBe(1);
+  });
+
+  it('не повторяет запрос, если 429 просит ждать слишком долго', async () => {
+    let attempts = 0;
+    const { client } = clientWith(
+      () => {
+        attempts += 1;
+        return jsonResponse(
+          { code: 'rate_limited', message: 'Слишком много запросов', details: [] },
+          429,
+          { 'retry-after': '60' },
+        );
+      },
+      { retryAttempts: 2 },
+    );
+
+    await expect(client.searchEvents({})).rejects.toMatchObject({ status: 429 });
+    expect(attempts).toBe(1);
+  });
+
+  it('обрезает q до 100 знаков', async () => {
     const { client, calls } = clientWith(() => jsonResponse(makeListResponse()));
     await client.searchEvents({ q: 'я'.repeat(250) });
     const url = new URL(calls[0]?.url ?? '');
-    expect(url.searchParams.get('q')).toHaveLength(200);
+    expect(url.searchParams.get('q')).toHaveLength(100);
   });
 
   it('получает карточку события', async () => {
     const { client } = clientWith(() => jsonResponse(makeEvent()));
     const event = await client.getEvent('11111111-1111-4111-8111-111111111111');
     expect(event.title).toBe('Вечер башкирской музыки');
+  });
+
+  it('запрашивает похожие события с городом, датой и пагинацией', async () => {
+    const { client, calls } = clientWith(() => jsonResponse(makeListResponse()));
+    const result = await client.getSimilarEvents('11111111-1111-4111-8111-111111111111', {
+      city: 'ufa',
+      date: 'weekend',
+      page: 2,
+      page_size: 5,
+    });
+
+    expect(result.items).toHaveLength(1);
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.pathname).toBe(
+      '/api/v1/events/11111111-1111-4111-8111-111111111111/similar',
+    );
+    expect(url.searchParams.get('city')).toBe('ufa');
+    expect(url.searchParams.get('date')).toBe('weekend');
+    expect(url.searchParams.get('page')).toBe('2');
+    expect(url.searchParams.get('page_size')).toBe('5');
   });
 
   it('разбирает ошибку API и не теряет сообщение бэкенда', async () => {
@@ -226,6 +364,78 @@ describe('ApiClient', () => {
   it('отклоняет не-JSON успешный ответ', async () => {
     const { client } = clientWith(() => new Response('<html>oops</html>', { status: 200 }));
     await expect(client.searchEvents({})).rejects.toMatchObject({ kind: 'contract' });
+  });
+
+  it('отправляет запрос ассистенту и разбирает ответ', async () => {
+    const response = makeAssistantResponse({
+      results: [],
+      total: 0,
+      chips: [
+        {
+          key: 'hard.cities',
+          kind: 'city',
+          label: 'Город',
+          value: 'Уфа',
+          removable: true,
+          unset: ['hard.cities'],
+        },
+      ],
+    });
+    const { client, calls } = clientWith(() => jsonResponse(response));
+
+    const result = await client.queryAssistant({
+      message: 'концерт в Уфе',
+      previous: { hard: { cities: ['ufa'] } },
+      answering: 'city',
+      history: [{ role: 'user', content: 'концерт' }],
+      user_ref: 'telegram_test',
+    });
+
+    expect(result.action).toBe('search');
+    expect(result.chips[0]?.unset).toEqual(['hard.cities']);
+    expect(calls[0]?.url).toBe('http://api.test/api/v1/assistant/query');
+    expect(calls[0]?.init?.method).toBe('POST');
+    const body = JSON.parse(String(calls[0]?.init?.body));
+    expect(body).toMatchObject({
+      message: 'концерт в Уфе',
+      previous: { hard: { cities: ['ufa'] } },
+      answering: 'city',
+      user_ref: 'telegram_test',
+      channel: 'telegram',
+      limit: 6,
+    });
+    expect(body.history).toHaveLength(1);
+  });
+
+  it('не падает на неполном ответе ассистента', async () => {
+    const { client } = clientWith(() =>
+      jsonResponse({
+        action: 'clarify',
+        message: 'Уточните город',
+        constraints: {},
+        chips: [],
+        assumptions: [],
+        reference_date: '2026-11-14',
+        timezone: 'Asia/Yekaterinburg',
+        engine: 'rules-v2',
+      }),
+    );
+    const result = await client.queryAssistant({ message: 'куда сходить' });
+    expect(result.action).toBe('clarify');
+    expect(result.results).toEqual([]);
+    expect(result.relaxations).toEqual([]);
+  });
+
+  it('отправляет подтверждение ассистента без повторов', async () => {
+    const { client, calls } = clientWith(() => jsonResponse({ status: 'ok' }));
+    await client.confirmAssistant('cnf_123456', 'approve');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('http://api.test/api/v1/assistant/confirm');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      confirmation_id: 'cnf_123456',
+      decision: 'approve',
+    });
   });
 
   it('оборачивает сетевую ошибку', async () => {

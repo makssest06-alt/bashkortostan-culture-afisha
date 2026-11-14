@@ -11,10 +11,13 @@ export const BOT_COMMANDS: BotCommandInfo[] = [
   { command: 'tomorrow', description: 'События на завтра' },
   { command: 'weekend', description: 'События на выходных' },
   { command: 'week', description: 'События на неделю' },
-  { command: 'date', description: 'Конкретный день: /date 2026-11-20' },
+  { command: 'date', description: 'День или период: /date 2026-11-20..2026-11-25' },
   { command: 'city', description: 'Фильтр по городу' },
   { command: 'category', description: 'Фильтр по категории' },
   { command: 'price', description: 'Цена: /price free или /price 1000' },
+  { command: 'age', description: 'Возраст: /age 6 или /age any' },
+  { command: 'sort', description: 'Сортировка: date, price, popularity' },
+  { command: 'language', description: 'Язык: /language ru, ba или any' },
   { command: 'filters', description: 'Все фильтры поиска' },
   { command: 'subscriptions', description: 'Мои подписки' },
   { command: 'about', description: 'О сервисе и дисклеймер' },
@@ -51,7 +54,8 @@ export const HELP_TEXT = [
   '🔍 <b>Поиск.</b> Напишите запрос текстом: «концерт в Уфе», «выставка на выходных», «детский спектакль». Поиск идёт по названию, описанию, площадке и тегам.',
   '🗓 <b>Ближайшие.</b> События на неделю.',
   '🎭 <b>Категории и города.</b> Готовые срезы каталога.',
-  '🎛 <b>Фильтры.</b> Дата, цена, город и категория. Фильтры применяются к текущему поиску.',
+  '🎛 <b>Фильтры.</b> Дата или период, цена, возраст, язык, город, категория и сортировка. Фильтры применяются к текущему поиску.',
+  '🧠 <b>Ассистент.</b> Если он включён на стенде, свободный запрос разбирается на условия, бот может задать уточняющий вопрос. При недоступности ассистента поиск работает как обычно.',
   '🔔 <b>Подписки.</b> Город, категория и период. Подписка сохраняется в сервисе; отписаться можно в «Мои подписки».',
   '',
   '<b>Команды</b>',
@@ -60,9 +64,10 @@ export const HELP_TEXT = [
   '/cancel — отменить сценарий и вернуться в меню',
   '/search — подсказка поиска',
   '/today, /tomorrow, /weekend, /week — готовые периоды',
-  '/date 2026-11-20 — конкретный день',
+  '/date 2026-11-20 — конкретный день; /date 2026-11-20..2026-11-25 — период до 31 дня',
   '/city Уфа, /category концерты — фильтры по городу и категории',
   '/price free или /price 1000 — бесплатно или до 1 000 ₽',
+  '/age 6, /sort price, /language ba — возраст, сортировка и язык',
   '/filters — фильтры текущего поиска',
   '/categories, /cities — справочники',
   '/subscriptions, /unsubscribe — мои подписки',
@@ -94,7 +99,7 @@ export const CANCEL_TEXT = 'Отменил текущий сценарий. Че
 export const UNKNOWN_COMMAND_TEXT = [
   'Не знаю такую команду.',
   '',
-  'Доступны /start, /menu, /help, /cancel, /search, /today, /weekend, /date, /city, /category, /price, /filters, /categories, /cities, /subscriptions и /about.',
+  'Доступны /start, /menu, /help, /cancel, /search, /today, /weekend, /date, /city, /category, /price, /age, /sort, /language, /filters, /categories, /cities, /subscriptions и /about.',
   'Можно просто написать запрос текстом.',
 ].join('\n');
 
@@ -142,11 +147,24 @@ export const FILTERS_TITLE = [
 export const DATE_PICKER_TITLE = [
   '📅 <b>Выберите день</b>',
   '',
-  'Показаны ближайшие 10 дней. Для периода используйте «Сегодня», «Завтра», «Выходные» или «Неделя».',
+  'Показаны ближайшие 10 дней. Для периода откройте «📆 Период» в фильтрах: сначала начало, потом конец, до 31 дня.',
 ].join('\n');
 
 export const NO_SEARCH_FILTERS_TEXT =
   'Сначала задайте запрос или откройте фильтры из меню. После этого их можно менять.';
+
+export const ASSISTANT_CONFIRMATIONS_OFF_TEXT =
+  'Подтверждения действий в боте пока отключены из соображений безопасности. Подписку можно оформить через «Мои подписки».';
+
+export const ASSISTANT_UNAVAILABLE_TEXT =
+  'Ассистент временно недоступен. Откройте меню или напишите запрос — покажу обычный поиск.';
+
+export const ASSISTANT_CONFIRMATION_DONE_TEXT = 'Готово.';
+
+export const ASSISTANT_CONFIRMATION_REJECTED_TEXT = 'Действие отменено.';
+
+export const ASSISTANT_CONFIRMATION_STALE_TEXT =
+  'Подтверждение устарело или уже использовано. Начните сценарий заново.';
 
 export function rateLimitedText(retryAfterSec: number): string {
   return `Слишком много запросов подряд. Подождите ${Math.max(1, retryAfterSec)} сек. и попробуйте снова.`;

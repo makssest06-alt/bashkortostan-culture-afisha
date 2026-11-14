@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   escapeHtml,
+  eventDeepLink,
+  eventMapUrl,
+  eventShareUrl,
   eventSiteUrl,
   eventSourcePageUrl,
   eventTicketsUrl,
   formatAge,
+  formatAssistantResponse,
   formatAvailability,
   formatDate,
   formatDateRange,
@@ -16,23 +20,33 @@ import {
   formatFreshness,
   formatNoResults,
   formatOccurrence,
+  formatOffers,
   formatPrice,
+  formatRelaxationLabel,
   formatSearchResults,
+  formatSessionsList,
+  formatSimilarResults,
   formatSubscription,
   formatSubscriptionCreated,
   formatSubscriptionsList,
   formatDuration,
   formatRubles,
+  formatVenueSchedule,
+  isEventUuid,
   isSoldOut,
+  pickOccurrence,
   pickPrimaryOccurrence,
   searchDateLabel,
+  sortOccurrences,
   telegramSafeHttpUrl,
   truncate,
   urlHost,
 } from '../src/format.js';
-import { EVENT_ID, makeEvent, makeListItem, makeListResponse, makeOccurrence } from './fixtures.js';
+import { DirectoryService } from '../src/directory-service.js';
+import { EVENT_ID, makeAssistantResponse, makeEvent, makeListItem, makeListResponse, makeOccurrence } from './fixtures.js';
 
 const NOW = new Date('2026-11-13T12:00:00Z');
+const DIRECTORIES = new DirectoryService();
 
 describe('даты', () => {
   it('форматирует дату по-русски', () => {
@@ -116,7 +130,7 @@ describe('цена и возраст', () => {
 
 describe('карточка события', () => {
   it('содержит ключевые поля и HTML-разметку', () => {
-    const text = formatEventCard(makeEvent(), NOW);
+    const text = formatEventCard(makeEvent(), DIRECTORIES, NOW);
     expect(text).toContain('<b>Вечер башкирской музыки</b>');
     expect(text).toContain('20 ноября, пт, 19:00');
     expect(text).toContain('Башкирская государственная филармония');
@@ -129,6 +143,7 @@ describe('карточка события', () => {
   it('экранирует данные из API, чтобы не сломать разметку', () => {
     const text = formatEventCard(
       makeEvent({ title: '<script>alert(1)</script>', venue: 'A&B', description: '<i>нет</i>' }),
+      DIRECTORIES,
       NOW,
     );
     expect(text).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -145,6 +160,7 @@ describe('карточка события', () => {
         synthetic: true,
         occurrences: [makeOccurrence({ status: 'cancelled' })],
       }),
+      DIRECTORIES,
       NOW,
     );
     expect(text).toContain('Событие отменено');
@@ -153,7 +169,7 @@ describe('карточка события', () => {
   });
 
   it('не обещает цену, которой нет', () => {
-    const text = formatEventCard(makeEvent({ price_min: null, price_max: null, is_free: false }), NOW);
+    const text = formatEventCard(makeEvent({ price_min: null, price_max: null, is_free: false }), DIRECTORIES, NOW);
     expect(text).toContain('Цена не указана');
     expect(text).not.toContain('Бесплатно');
   });
@@ -164,6 +180,7 @@ describe('карточка события', () => {
         verified_at: '2026-11-13T10:30:00Z',
         occurrences: [makeOccurrence({ availability: 'sold_out' })],
       }),
+      DIRECTORIES,
       NOW,
     );
     expect(isSoldOut(makeEvent({ occurrences: [makeOccurrence({ availability: 'sold_out' })] }))).toBe(
@@ -242,16 +259,58 @@ describe('выдача поиска', () => {
       city: 'ufa',
       category: 'concert',
       date: 'weekend',
-    });
+    }, DIRECTORIES);
     expect(text).toContain('Поиск <b>«музыка»</b> · найдено 7');
     expect(text).toContain('<b>6. Первое</b>');
     expect(text).toContain('<b>7. Второе</b>');
-    expect(text).toContain('📍 Город: Уфа · 🎭 Категория: Концерты · 📅 Когда: На выходных');
+    expect(text).toContain('📍 Город: Уфа · 🎭 Категория: Концерт · 📅 Когда: На выходных');
+    expect(text).toContain('Страница 2 из 2');
+  });
+
+  it('поясняет, сколько событий скрыто из-за неизвестной цены и возраста', () => {
+    const response = makeListResponse([makeListItem()], {
+      total: 1,
+      hidden_unknown_price: 3,
+      hidden_unknown_age: 2,
+    });
+    const text = formatSearchResults(
+      response,
+      { q: null, city: null, category: null, date: null, priceMax: 1000 },
+      DIRECTORIES,
+      { now: NOW },
+    );
+    expect(text).toContain('Ещё 3: цена не указана');
+    expect(text).toContain('Ещё 2: возраст не указан');
+  });
+
+  it('не пишет про скрытые события, когда счётчики нулевые', () => {
+    const text = formatSearchResults(
+      makeListResponse([makeListItem()]),
+      { q: null, city: null, category: null, date: null },
+      DIRECTORIES,
+      { now: NOW },
+    );
+    expect(text).not.toContain('цена не указана');
+    expect(text).not.toContain('возраст не указан');
+  });
+
+  it('форматирует похожие события отдельным списком', () => {
+    const response = makeListResponse(
+      [
+        makeListItem({ id: 'a', title: 'Первое' }),
+        makeListItem({ id: 'b', title: 'Второе' }),
+      ],
+      { total: 2, page: 2, page_size: 1, total_pages: 2, hidden_unknown_price: 1 },
+    );
+    const text = formatSimilarResults(response, DIRECTORIES, NOW);
+    expect(text).toContain('🎯 <b>Похожие события</b> · найдено 2');
+    expect(text).toContain('<b>3. Второе</b>');
+    expect(text).toContain('Ещё 1: цена не указана');
     expect(text).toContain('Страница 2 из 2');
   });
 
   it('сообщает, что ничего не найдено', () => {
-    const text = formatNoResults({ q: 'балет', city: 'sibay', category: null, date: null });
+    const text = formatNoResults({ q: 'балет', city: 'sibay', category: null, date: null }, DIRECTORIES);
     expect(text).toContain('Ничего не нашлось');
     expect(text).toContain('«балет»');
     expect(text).toContain('📍 Город: Сибай');
@@ -260,12 +319,12 @@ describe('выдача поиска', () => {
 
   it('показывает цену в строке фильтров', () => {
     expect(
-      formatFilterLine({ q: null, city: null, category: null, date: null, priceMax: 1000 }),
+      formatFilterLine({ q: null, city: null, category: null, date: null, priceMax: 1000 }, DIRECTORIES),
     ).toBe('💰 Цена: до 1\u00A0000\u00A0₽');
     expect(
-      formatFilterLine({ q: null, city: 'ufa', category: 'concert', date: null, freeOnly: true }),
-    ).toBe('📍 Город: Уфа · 🎭 Категория: Концерты · 💰 Цена: Бесплатно');
-    expect(formatFilterLine({ q: null, city: null, category: null, date: null })).toBe(
+      formatFilterLine({ q: null, city: 'ufa', category: 'concert', date: null, freeOnly: true }, DIRECTORIES),
+    ).toBe('📍 Город: Уфа · 🎭 Категория: Концерт · 💰 Цена: Бесплатно');
+    expect(formatFilterLine({ q: null, city: null, category: null, date: null }, DIRECTORIES)).toBe(
       'Все города и категории',
     );
   });
@@ -282,22 +341,22 @@ describe('подписки', () => {
   };
 
   it('описывает подписку', () => {
-    expect(formatSubscription(subscription)).toBe('Концерты · Уфа · На этой неделе');
+    expect(formatSubscription(subscription, DIRECTORIES)).toBe('Концерт · Уфа · На этой неделе');
   });
 
   it('перечисляет подписки и пустое состояние', () => {
-    expect(formatSubscriptionsList([])).toContain('Подписок пока нет');
+    expect(formatSubscriptionsList([], DIRECTORIES)).toContain('Подписок пока нет');
     const text = formatSubscriptionsList([
       subscription,
       { ...subscription, id: 'x', city: null, category: null, period: null },
-    ]);
+    ], DIRECTORIES);
     expect(text).toContain('Ваши подписки (2)');
-    expect(text).toContain('Концерты · Уфа');
+    expect(text).toContain('Концерт · Уфа');
     expect(text).toContain('Все категории · Любой город');
   });
 
   it('подтверждает создание без обещания рассылки', () => {
-    const text = formatSubscriptionCreated(subscription);
+    const text = formatSubscriptionCreated(subscription, DIRECTORIES);
     expect(text).toContain('Подписка сохранена');
     expect(text).toContain('Мои подписки');
     expect(text).not.toContain('пришлём');
@@ -309,5 +368,184 @@ describe('truncate', () => {
     expect(truncate('  одно   два  ', 50)).toBe('одно два');
     expect(truncate('слово слово слово', 12)).toMatch(/…$/);
     expect(truncate('слово слово слово', 12).length).toBeLessThanOrEqual(12);
+  });
+});
+
+describe('сеансы, тарифы и ссылки', () => {
+  const event = makeEvent({
+    lat: 54.7388,
+    lon: 55.9721,
+    occurrences: [
+      makeOccurrence({ id: 'a', date_start: '2026-11-21T19:00:00+05:00' }),
+      makeOccurrence({ id: 'b', date_start: '2026-11-20T21:00:00+05:00' }),
+    ],
+  });
+
+  it('выбирает запрошенный сеанс и нумерует его в карточке', () => {
+    expect(pickOccurrence(event, 'a')?.id).toBe('a');
+    expect(pickOccurrence(event, 'missing')?.id).toBe('b');
+    const text = formatEventCard(event, DIRECTORIES, NOW, { occurrenceId: 'a' });
+    expect(text).toContain('21 ноября, сб, 19:00');
+    expect(text).toContain('сеанс 2 из 2');
+  });
+
+  it('сортирует сеансы: будущие по времени, прошедшие в конце', () => {
+    const occurrences = [
+      makeOccurrence({ id: 'past', date_start: '2026-11-01T19:00:00+05:00', is_past: true }),
+      makeOccurrence({ id: 'late', date_start: '2026-11-21T19:00:00+05:00' }),
+      makeOccurrence({ id: 'early', date_start: '2026-11-20T19:00:00+05:00' }),
+    ];
+    expect(sortOccurrences(occurrences).map((item) => item.id)).toEqual(['early', 'late', 'past']);
+  });
+
+  it('перечисляет все сеансы со статусами', () => {
+    const text = formatSessionsList(
+      makeEvent({
+        occurrences: [
+          makeOccurrence({ id: 'a', date_start: '2026-11-20T19:00:00+05:00' }),
+          makeOccurrence({
+            id: 'b',
+            date_start: '2026-11-21T19:00:00+05:00',
+            availability: 'sold_out',
+          }),
+        ],
+      }),
+      NOW,
+      DIRECTORIES,
+    );
+    expect(text).toContain('Все сеансы');
+    expect(text).toContain('1. 20 ноября, пт, 19:00');
+    expect(text).toContain('2. 21 ноября, сб, 19:00');
+    expect(text).toContain('билеты проданы');
+  });
+
+  it('показывает тарифы с аудиторией и свободной ценой', () => {
+    const text = formatOffers(
+      makeEvent({
+        offers: [
+          { name: 'Взрослый', price: 800, audience: 'adult', is_free: false },
+          { name: 'Детский', price: null, audience: 'child', is_free: false },
+          { price: null, is_free: true },
+        ],
+      }),
+    );
+    expect(text).toContain('Взрослый — 800');
+    expect(text).toContain('взрослый');
+    expect(text).toContain('Детский — цена не указана');
+    expect(text).toContain('бесплатно');
+  });
+
+  it('строит ссылки на карту, шаринг и deep link только из валидных данных', () => {
+    expect(eventMapUrl(event)).toContain('yandex.ru/maps');
+    expect(eventMapUrl(makeEvent({ lat: null, lon: null }))).toBeNull();
+    expect(eventMapUrl(makeEvent({ lat: 200, lon: 55 }))).toBeNull();
+    expect(eventDeepLink('afisha_test_bot', EVENT_ID)).toBe(
+      `https://t.me/afisha_test_bot?start=event_${EVENT_ID}`,
+    );
+    expect(eventDeepLink('bad name', EVENT_ID)).toBeNull();
+    expect(eventDeepLink('afisha_test_bot', 'not-a-uuid')).toBeNull();
+    expect(isEventUuid(EVENT_ID)).toBe(true);
+    expect(isEventUuid('nope')).toBe(false);
+    const share = eventShareUrl(`https://afisha-rb.ru/events/${EVENT_ID}`, event.title);
+    expect(share).toContain('https://t.me/share/url?');
+    expect(share).toContain(encodeURIComponent(EVENT_ID));
+  });
+
+  it('форматирует расписание площадки', () => {
+    const text = formatVenueSchedule(
+      {
+        venue: {
+          id: 'demo-hall-1',
+          name: 'Демо-зал',
+          city_id: 'ufa',
+          city: 'Уфа',
+          address: 'ул. Примерная, 1',
+        },
+        date_from: '2026-11-20',
+        date_to: '2026-12-04',
+        items: [event],
+      },
+      DIRECTORIES,
+      NOW,
+    );
+    expect(text).toContain('Демо-зал');
+    expect(text).toContain('Уфа');
+    expect(text).toContain('Вечер башкирской музыки');
+  });
+
+  it('показывает серверные варианты ослабления пустой выдачи', () => {
+    expect(
+      formatRelaxationLabel({
+        code: 'budget',
+        codes: ['budget'],
+        label: { ru: 'Без ограничения цены', ba: 'Сикләмәһеҙ' },
+        count: 7,
+      }),
+    ).toBe('Без ограничения цены');
+    const text = formatNoResults(
+      { q: 'балет', city: null, category: null, date: 'today', priceMax: 500 },
+      DIRECTORIES,
+      NOW,
+      [
+        {
+          code: 'budget',
+          codes: ['budget'],
+          label: 'Без ограничения цены',
+          count: 7,
+        },
+      ],
+    );
+    expect(text).toContain('Без ограничения цены — 7');
+  });
+});
+
+describe('ответ ассистента', () => {
+  it('экранирует текст API и показывает результаты, причины и счётчики', () => {
+    const response = makeAssistantResponse({
+      message: 'Нашлось <b>1</b> событие & ещё пара.',
+      assumptions: [{ key: 'date_resolved', text: 'сегодня = 14 ноября' }],
+      results: [
+        {
+          event: makeListItem({ title: 'Концерт <script>' }),
+          occurrence_id: '33333333-3333-4333-8333-333333333333',
+          reasons: ['подходит по городу', 'есть билеты'],
+          caveats: ['цена уточняется'],
+        },
+      ],
+      total: 3,
+      hidden_unknown_price: 2,
+      hidden_unknown_age: 1,
+      relaxations: [
+        { code: 'date', codes: ['date'], label: 'Без даты', count: 4 },
+      ],
+    });
+    const text = formatAssistantResponse(response, DIRECTORIES, NOW);
+
+    expect(text).toContain('Нашлось &lt;b&gt;1&lt;/b&gt; событие &amp; ещё пара.');
+    expect(text).toContain('Что учёл');
+    expect(text).toContain('сегодня = 14 ноября');
+    expect(text).toContain('1. Концерт &lt;script&gt;');
+    expect(text).toContain('↳ подходит по городу; есть билеты');
+    expect(text).toContain('цена уточняется');
+    expect(text).toContain('Показано 1 из 3');
+    expect(text).toContain('Ещё 2: цена не указана');
+    expect(text).toContain('Ещё 1: возраст не указан');
+    expect(text).toContain('Можно ослабить условия');
+  });
+
+  it('объясняет пустую выдачу и неподдерживаемое действие', () => {
+    const text = formatAssistantResponse(
+      makeAssistantResponse({
+        action: 'out_of_scope',
+        message: 'Я помогаю только с афишей.',
+        results: [],
+        total: 0,
+        unsupported_actions: ['purchase'],
+      }),
+      DIRECTORIES,
+      NOW,
+    );
+    expect(text).toContain('Я помогаю только с афишей.');
+    expect(text).toContain('Это действие бот не выполняет');
   });
 });

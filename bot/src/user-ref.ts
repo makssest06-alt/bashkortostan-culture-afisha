@@ -13,16 +13,36 @@ export class UserRefError extends Error {
 
 /**
  * Стабильный псевдоним пользователя для REST API.
- * API требует 16–128 символов [A-Za-z0-9_-], поэтому числовой id дополняем
- * нулями слева до 8 знаков. Нули не меняют id и не ломают сортировку.
+ *
+ * `hmac` (по умолчанию в боте) не даёт перебирать подписки по числовому
+ * Telegram id. `legacy` оставлен для отката и старых подписок:
+ * `telegram_00000123`.
  */
-export function telegramUserRef(telegramUserId: number | string): string {
+export function telegramUserRef(
+  telegramUserId: number | string,
+  options: { mode?: 'hmac' | 'legacy'; secret?: string | null } = {},
+): string {
   const raw = String(telegramUserId).trim();
   if (!/^\d+$/.test(raw)) {
     throw new UserRefError('Telegram user id должен состоять только из цифр');
   }
-  const padded = raw.padStart(MIN_DIGITS, '0');
-  const ref = `${TELEGRAM_PREFIX}${padded}`;
+
+  const mode = options.mode ?? 'legacy';
+  let ref: string;
+  if (mode === 'hmac') {
+    if (!options.secret) {
+      throw new UserRefError('Для HMAC user_ref нужен секрет');
+    }
+    const digest = createHmac('sha256', options.secret)
+      .update(`telegram-user:${raw}`)
+      .digest('base64url')
+      .slice(0, 32);
+    ref = `${TELEGRAM_PREFIX}${digest}`;
+  } else {
+    const padded = raw.padStart(MIN_DIGITS, '0');
+    ref = `${TELEGRAM_PREFIX}${padded}`;
+  }
+
   if (!USER_REF_RE.test(ref)) {
     throw new UserRefError('Не удалось построить корректный user_ref для API');
   }

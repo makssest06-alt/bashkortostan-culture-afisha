@@ -9,6 +9,13 @@ describe('SessionStore', () => {
       awaitingQuery: false,
       search: null,
       draft: null,
+      rangeDraftStart: null,
+      assistant: {
+        previous: null,
+        clarifyCode: null,
+        lastMessage: null,
+        history: [],
+      },
     });
   });
 

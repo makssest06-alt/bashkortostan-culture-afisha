@@ -1,4 +1,6 @@
-import type { CategoryId, CityId, DatePreset, SearchDate } from './dictionaries.js';
+import type { Facets, Relaxation } from './api/types.js';
+import type { CategoryId, CityId } from './directory-service.js';
+import type { DatePreset, SearchDate, SearchSort } from './search-options.js';
 
 export interface SearchState {
   q: string | null;
@@ -6,13 +8,28 @@ export interface SearchState {
   category: CategoryId | null;
   /** Пресет (`today`, `weekend`, …) или конкретный день `ГГГГ-ММ-ДД`. */
   date: SearchDate | null;
+  /** Начало периода включительно; взаимоисключающе с `date`. */
+  dateFrom: string | null;
+  /** Конец периода включительно; взаимоисключающе с `date`. */
+  dateTo: string | null;
   /** Потолок цены за человека в рублях. */
   priceMax: number | null;
   /** Только события с явной пометкой «бесплатно». */
   freeOnly: boolean;
+  /** Возраст посетителя, а не возрастной рейтинг события. */
+  age: number | null;
+  /** Код площадки. */
+  venueId: string | null;
+  /** Язык мероприятия по ISO 639. */
+  language: string | null;
+  sort: SearchSort;
   page: number;
   totalPages: number;
   queryTruncated: boolean;
+  /** Счётчики из последней выдачи; null, если старый бэкенд их не прислал. */
+  facets: Facets | null;
+  /** Серверные варианты ослабления пустой выдачи. */
+  relaxations: Relaxation[];
 }
 
 export interface SubscriptionDraft {
@@ -21,10 +38,39 @@ export interface SubscriptionDraft {
   period: DatePreset | null;
 }
 
+export interface AssistantTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** Состояние диалога с ассистентом; сбрасывается вместе с сессией. */
+export interface AssistantState {
+  /** `constraints` из последнего ответа — контекст для patch и уточнений. */
+  previous: Record<string, unknown> | null;
+  /** Код последнего уточнения: ответ пользователя пойдёт с `answering`. */
+  clarifyCode: string | null;
+  /** Последняя фраза пользователя — для кнопки «Обычный поиск». */
+  lastMessage: string | null;
+  /** Короткая история, не больше 12 реплик (лимит контракта). */
+  history: AssistantTurn[];
+}
+
 export interface SessionData {
   awaitingQuery: boolean;
   search: SearchState | null;
   draft: SubscriptionDraft | null;
+  /** Первый шаг выбора периода: начало уже выбрано, ждём конец. */
+  rangeDraftStart: string | null;
+  assistant: AssistantState;
+}
+
+export function createAssistantState(): AssistantState {
+  return {
+    previous: null,
+    clarifyCode: null,
+    lastMessage: null,
+    history: [],
+  };
 }
 
 export function createSessionData(): SessionData {
@@ -32,6 +78,8 @@ export function createSessionData(): SessionData {
     awaitingQuery: false,
     search: null,
     draft: null,
+    rangeDraftStart: null,
+    assistant: createAssistantState(),
   };
 }
 
@@ -41,11 +89,19 @@ export function createSearchState(partial: Partial<SearchState> = {}): SearchSta
     city: partial.city ?? null,
     category: partial.category ?? null,
     date: partial.date ?? null,
+    dateFrom: partial.dateFrom ?? null,
+    dateTo: partial.dateTo ?? null,
     priceMax: partial.priceMax ?? null,
     freeOnly: partial.freeOnly ?? false,
+    age: partial.age ?? null,
+    venueId: partial.venueId ?? null,
+    language: partial.language ?? null,
+    sort: partial.sort ?? 'date',
     page: partial.page ?? 1,
     totalPages: partial.totalPages ?? 0,
     queryTruncated: partial.queryTruncated ?? false,
+    facets: partial.facets ?? null,
+    relaxations: partial.relaxations ?? [],
   };
 }
 

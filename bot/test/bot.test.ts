@@ -1,16 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Update } from 'grammy/types';
 
-import { ApiError, type ApiClient, type CreateSubscriptionInput, type SearchEventsParams } from '../src/api/client.js';
-import type { EventListResponse, Subscription } from '../src/api/types.js';
+import { ApiError, type ApiClient, type AssistantQueryInput, type CreateSubscriptionInput, type SearchEventsParams } from '../src/api/client.js';
+import type { AssistantResponse, EventListResponse, Subscription } from '../src/api/types.js';
 import { CallbackStore } from '../src/callback-store.js';
 import type { Callback } from '../src/callbacks.js';
 import { createBot } from '../src/bot.js';
 import type { BotConfig } from '../src/config.js';
+import { DirectoryService } from '../src/directory-service.js';
 import { createLogger, type LogSink } from '../src/logger.js';
 import { SessionStore } from '../src/session.js';
 import { BOT_COMMANDS } from '../src/texts.js';
-import { EVENT_ID, EVENT_ID_2, makeEvent, makeListItem, makeListResponse } from './fixtures.js';
+import { telegramUserRef } from '../src/user-ref.js';
+import { EVENT_ID, EVENT_ID_2, makeAssistantResponse, makeEvent, makeListItem, makeListResponse, makeOccurrence } from './fixtures.js';
 
 const TOKEN = '12345:AAHfake_token_for_tests_1234567890';
 const USER = {
@@ -41,6 +43,8 @@ const CONFIG: BotConfig = {
   rateLimitPerMinute: 1000,
   brandImagePath: null,
 };
+
+const USER_REF = telegramUserRef(USER.id, { mode: 'hmac', secret: TOKEN });
 
 interface ApiCall {
   method: string;
@@ -113,6 +117,13 @@ function makeStubApi() {
       : makeEvent(),
   );
 
+  const getSimilarEvents = vi.fn(async (): Promise<EventListResponse> =>
+    makeListResponse(
+      [makeListItem({ id: EVENT_ID_2, title: 'Второе событие', category: 'performance' })],
+      { page: 1, page_size: 5, total: 1, total_pages: 1 },
+    ),
+  );
+
   const createSubscription = vi.fn(async (input: CreateSubscriptionInput): Promise<Subscription> => {
     createdCount += 1;
     const subscription: Subscription = {
@@ -134,26 +145,51 @@ function makeStubApi() {
   });
   const health = vi.fn(async () => ({ status: 'ok' }));
   const getCities = vi.fn(async () => [{ id: 'ufa', name: 'Уфа' }]);
-  const getCategories = vi.fn(async () => [{ id: 'concert', name: 'Концерты' }]);
+  const getCategories = vi.fn(async () => [{ id: 'concert', name: 'Концерт' }]);
+  const getVenueSchedule = vi.fn(async () => ({
+    venue: {
+      id: 'demo-hall-1',
+      name: 'Демо-площадка «Зал № 1»',
+      city_id: 'ufa',
+      city: 'Уфа',
+      address: 'ул. Примерная, 1',
+    },
+    date_from: '2026-11-20',
+    date_to: '2026-12-04',
+    items: [],
+  }));
+
+  const queryAssistant = vi.fn(
+    async (_input: AssistantQueryInput): Promise<AssistantResponse> => makeAssistantResponse(),
+  );
+  const confirmAssistant = vi.fn(async () => ({ status: 'ok' }));
 
   const api: ApiClient = {
     health,
     searchEvents,
     getEvent,
+    getSimilarEvents,
+    getVenueSchedule,
     getCities,
     getCategories,
     listSubscriptions,
     createSubscription,
     deleteSubscription,
+    queryAssistant,
+    confirmAssistant,
   };
 
   return {
     api,
     searchEvents,
     getEvent,
+    getSimilarEvents,
+    getVenueSchedule,
     createSubscription,
     listSubscriptions,
     deleteSubscription,
+    queryAssistant,
+    confirmAssistant,
     setSubscriptions: (items: Subscription[]) => {
       subscriptions = items;
     },
@@ -164,6 +200,7 @@ interface HarnessOptions {
   config?: Partial<BotConfig>;
   logSink?: LogSink;
   failPhoto?: boolean;
+  directories?: DirectoryService;
 }
 
 async function makeHarness(options: HarnessOptions = {}) {
@@ -174,7 +211,15 @@ async function makeHarness(options: HarnessOptions = {}) {
   const sink = options.logSink ?? { log: () => {}, error: () => {} };
   const logger = createLogger('debug', sink);
   const config: BotConfig = { ...CONFIG, ...options.config };
-  const bot = createBot(TOKEN, { api: stub.api, sessions, config, logger, callbacks });
+  const directories = options.directories ?? new DirectoryService();
+  const bot = createBot(TOKEN, {
+    api: stub.api,
+    sessions,
+    config,
+    logger,
+    callbacks,
+    directories,
+  });
 
   bot.api.config.use(async (_prev, method, payload) => {
     calls.push({ method, payload: payload as Record<string, unknown> });
@@ -389,8 +434,55 @@ describe('сценарии бота', () => {
     expect(harness.keyboardButtons()).toContain('🎟 Билеты');
     expect(harness.keyboardButtons()).toContain('🌐 Источник');
     expect(harness.keyboardButtons()).toContain('🌐 На сайте');
-    expect(harness.keyboardButtons()).toContain('🔔 Подписаться: Концерты · Уфа');
+    expect(harness.keyboardButtons()).toContain('🔔 Подписаться: Концерт · Уфа');
+    expect(harness.keyboardButtons()).toContain('🎯 Похожие');
     expect(harness.keyboardButtons()).toContain('← К результатам');
+  });
+
+  it('кнопка «Похожие» открывает список и позволяет перейти к событию', async () => {
+    const harness = await makeHarness();
+    await harness.press({ type: 'similar', id: EVENT_ID, page: 1 });
+
+    expect(harness.getSimilarEvents).toHaveBeenCalledWith(EVENT_ID, { page: 1, page_size: 5 });
+    const text = harness.lastText();
+    expect(text).toContain('🎯 <b>Похожие события</b> · найдено 1');
+    expect(text).toContain('Второе событие');
+    expect(harness.keyboardButtons()).toContain('1. Второе событие');
+    expect(harness.keyboardButtons()).toContain('← К событию');
+    expect(harness.keyboardButtons()).toContain('🏠 Меню');
+  });
+
+  it('если метода похожих нет в API, бот не падает и предлагает меню', async () => {
+    const harness = await makeHarness();
+    harness.getSimilarEvents.mockRejectedValueOnce(
+      new ApiError('API 404 not_found', {
+        kind: 'http',
+        status: 404,
+        code: 'not_found',
+        userMessage: 'Не найдено',
+      }),
+    );
+    await harness.press({ type: 'similar', id: EVENT_ID, page: 1 });
+
+    const text = harness.lastText();
+    expect(text).toContain('Похожие события сейчас недоступны');
+    expect(harness.keyboardButtons()).toContain('🏠 В меню');
+  });
+
+  it('если событие исчезло, быстрая подписка из карточки не падает', async () => {
+    const harness = await makeHarness();
+    harness.getEvent.mockRejectedValueOnce(
+      new ApiError('API 404 not_found', {
+        kind: 'http',
+        status: 404,
+        code: 'not_found',
+        userMessage: 'Не найдено',
+      }),
+    );
+    await harness.press({ type: 'subscribe', action: 'event', id: EVENT_ID });
+
+    expect(harness.lastText()).toContain('Событие не найдено');
+    expect(harness.createSubscription).not.toHaveBeenCalled();
   });
 
   it('не показывает ссылки на битые demo-адреса', async () => {
@@ -418,14 +510,14 @@ describe('сценарии бота', () => {
 
     expect(harness.createSubscription).toHaveBeenCalledWith({
       channel: 'telegram',
-      user_ref: 'telegram_00000123',
+      user_ref: USER_REF,
       city: 'ufa',
       category: 'concert',
       period: null,
     });
     const text = harness.lastText();
     expect(text).toContain('Подписка сохранена');
-    expect(text).toContain('Концерты · Уфа');
+    expect(text).toContain('Концерт · Уфа');
   });
 
   it('повторная подписка объясняет конфликт', async () => {
@@ -457,10 +549,10 @@ describe('сценарии бота', () => {
     await harness.press({ type: 'menu', target: 'subs' }, 12);
     expect(harness.listSubscriptions).toHaveBeenCalled();
     expect(harness.lastText()).toContain('Ваши подписки (1)');
-    expect(harness.lastText()).toContain('Концерты · Уфа');
+    expect(harness.lastText()).toContain('Концерт · Уфа');
 
     await harness.press({ type: 'subscriptions', action: 'delete', id: id as string }, 13);
-    expect(harness.deleteSubscription).toHaveBeenCalledWith(id, 'telegram_00000123');
+    expect(harness.deleteSubscription).toHaveBeenCalledWith(id, USER_REF);
     expect(harness.lastText()).toContain('Подписка удалена');
     expect(harness.lastText()).toContain('Подписок пока нет');
   });
@@ -549,6 +641,263 @@ describe('сценарии бота', () => {
     );
   });
 
+  it('возраст, язык и сортировка уходят в API', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate('музыка'));
+
+    await harness.press({ type: 'filter', action: 'setAge', age: 6 }, 52);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: 'музыка', age: 6 }),
+    );
+
+    await harness.press({ type: 'filter', action: 'setLanguage', language: 'ba' }, 53);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ age: 6, language: 'ba' }),
+    );
+
+    await harness.press({ type: 'filter', action: 'setSort', sort: 'price' }, 54);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ language: 'ba', sort: 'price' }),
+    );
+
+    await harness.press({ type: 'filter', action: 'clear', field: 'all' }, 55);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ age: null, language: null, sort: 'date' }),
+    );
+  });
+
+  it('период дат собирается из двух шагов и заменяет пресет', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate('музыка'));
+    await harness.press({ type: 'filter', action: 'setDate', date: 'today' }, 56);
+
+    await harness.press({ type: 'filter', action: 'rangeStart', date: '2026-11-20' }, 57);
+    expect(harness.sessions.get(USER.id).rangeDraftStart).toBe('2026-11-20');
+    expect(harness.editedTexts().at(-1)).toContain('Теперь выберите конец периода');
+
+    await harness.press({ type: 'filter', action: 'rangeEnd', date: '2026-11-25' }, 58);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        date: null,
+        date_from: '2026-11-20',
+        date_to: '2026-11-25',
+      }),
+    );
+    expect(harness.sessions.get(USER.id).rangeDraftStart).toBeNull();
+  });
+
+  it('не принимает конец периода раньше начала', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate('музыка'));
+    await harness.press({ type: 'filter', action: 'rangeStart', date: '2026-11-20' }, 59);
+    await harness.press({ type: 'filter', action: 'rangeEnd', date: '2026-11-19' }, 60);
+
+    expect(harness.editedTexts().at(-1)).toContain('не раньше начала');
+    expect(harness.searchEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it('серверное ослабление пустой выдачи запускает новый поиск', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate('музыка'));
+    harness.searchEvents.mockResolvedValueOnce(
+      makeListResponse([], {
+        page: 1,
+        page_size: 5,
+        total: 0,
+        total_pages: 0,
+        relaxations: [
+          {
+            code: 'date',
+            codes: ['date'],
+            label: 'Без даты',
+            query: { date_from: '2026-11-20', date_to: '2026-11-25' },
+            count: 7,
+          },
+        ],
+      }),
+    );
+
+    await harness.press({ type: 'filter', action: 'setPrice', priceMax: 1000, freeOnly: false }, 61);
+    expect(harness.lastText()).toContain('Без даты — 7');
+    expect(harness.keyboardButtons()).toContain('Без даты · 7');
+
+    await harness.pressButton('Без даты · 7', 62);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        q: 'музыка',
+        date: null,
+        date_from: '2026-11-20',
+        date_to: '2026-11-25',
+        price_max: 1000,
+      }),
+    );
+  });
+
+  it('deep link /start event_<uuid> открывает карточку события', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate(`/start event_${EVENT_ID}`));
+
+    expect(harness.getEvent).toHaveBeenCalledWith(EVENT_ID);
+    expect(harness.lastText()).toContain('Вечер башкирской музыки');
+    expect(harness.keyboardButtons()).toContain('📅 В календарь');
+    expect(harness.keyboardButtons()).toContain('🎯 Похожие');
+  });
+
+  it('битый deep link показывает обычный /start', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate('/start event_not-a-uuid'));
+
+    expect(harness.getEvent).not.toHaveBeenCalled();
+    expect(harness.lastText()).toContain('бот афиши культуры Башкортостана');
+  });
+
+  it('показывает все сеансы, тарифы и выбранный сеанс', async () => {
+    const harness = await makeHarness();
+    const detailed = makeEvent({
+      occurrences: [
+        makeOccurrence({ id: 'a', date_start: '2026-11-20T19:00:00+05:00' }),
+        makeOccurrence({ id: 'b', date_start: '2026-11-21T21:00:00+05:00' }),
+      ],
+      offers: [{ name: 'Взрослый', price: 800, audience: 'adult', is_free: false }],
+    });
+    harness.getEvent.mockResolvedValue(detailed);
+
+    await harness.press({ type: 'event', id: EVENT_ID, page: null }, 63);
+    expect(harness.keyboardButtons()).toContain('📅 Все сеансы (2)');
+    expect(harness.keyboardButtons()).toContain('🎟 Тарифы');
+
+    await harness.press({ type: 'sessions', id: EVENT_ID }, 64);
+    expect(harness.lastText()).toContain('Все сеансы');
+    expect(harness.lastText()).toContain('20 ноября, пт, 19:00');
+    expect(harness.lastText()).toContain('21 ноября, сб, 21:00');
+
+    await harness.press({ type: 'offers', id: EVENT_ID }, 65);
+    expect(harness.lastText()).toContain('Тарифы');
+    expect(harness.lastText()).toContain('Взрослый — 800');
+
+    await harness.press(
+      { type: 'event', id: EVENT_ID, page: null, occurrenceId: 'b' },
+      66,
+    );
+    expect(harness.lastText()).toContain('21 ноября, сб, 21:00');
+    expect(harness.lastText()).toContain('сеанс 2 из 2');
+  });
+
+  it('отправляет .ics выбранного сеанса', async () => {
+    const harness = await makeHarness();
+    const detailed = makeEvent({
+      occurrences: [
+        makeOccurrence({ id: 'a', date_start: '2026-11-20T19:00:00+05:00' }),
+        makeOccurrence({ id: 'b', date_start: '2026-11-21T21:00:00+05:00' }),
+      ],
+    });
+    harness.getEvent.mockResolvedValue(detailed);
+
+    await harness.press(
+      { type: 'calendar', id: EVENT_ID, occurrenceId: 'b' },
+      67,
+    );
+
+    const call = harness.calls.find((item) => item.method === 'sendDocument');
+    expect(call).toBeTruthy();
+    expect(String(call?.payload.caption)).toContain('Вечер башкирской музыки');
+    expect(call?.payload.document).toBeTruthy();
+  });
+
+  it('не отправляет календарь для прошедшего или отменённого сеанса', async () => {
+    const harness = await makeHarness();
+    harness.getEvent.mockResolvedValue(
+      makeEvent({
+        occurrences: [makeOccurrence({ id: 'past', is_past: true })],
+      }),
+    );
+    await harness.press({ type: 'calendar', id: EVENT_ID, occurrenceId: 'past' }, 68);
+    expect(harness.lastText()).toContain('уже прошёл');
+    expect(harness.calls.some((item) => item.method === 'sendDocument')).toBe(false);
+
+    harness.getEvent.mockResolvedValue(
+      makeEvent({ occurrences: [makeOccurrence({ id: 'cancelled', status: 'cancelled' })] }),
+    );
+    await harness.press({ type: 'calendar', id: EVENT_ID, occurrenceId: 'cancelled' }, 69);
+    expect(harness.lastText()).toContain('отменён');
+    expect(harness.calls.some((item) => item.method === 'sendDocument')).toBe(false);
+  });
+
+  it('не отправляет календарь для прошедшей даты без сеансов', async () => {
+    const harness = await makeHarness();
+    harness.getEvent.mockResolvedValue(
+      makeEvent({
+        occurrences: [],
+        date_start: '2020-01-01T10:00:00+05:00',
+        date_end: null,
+      }),
+    );
+
+    await harness.press({ type: 'calendar', id: EVENT_ID, occurrenceId: null }, 72);
+
+    expect(harness.lastText()).toContain('уже прошёл');
+    expect(harness.calls.some((item) => item.method === 'sendDocument')).toBe(false);
+  });
+
+  it('открывает афишу площадки и мягко обрабатывает отсутствие метода', async () => {
+    const harness = await makeHarness();
+    await harness.press(
+      { type: 'venue', venueId: 'demo-hall-1', date: '2026-11-20' },
+      70,
+    );
+    expect(harness.getVenueSchedule).toHaveBeenCalledWith('demo-hall-1', {
+      date_from: '2026-11-20',
+      date_to: '2026-12-03',
+    });
+    expect(harness.lastText()).toContain('Демо-площадка');
+
+    harness.getVenueSchedule.mockRejectedValueOnce(
+      new ApiError('API 404 not_found', {
+        kind: 'http',
+        status: 404,
+        code: 'not_found',
+        userMessage: 'Не найдено',
+      }),
+    );
+    await harness.press(
+      { type: 'venue', venueId: 'demo-hall-1', date: '2026-11-20' },
+      71,
+    );
+    expect(harness.lastText()).toContain('Расписание площадки пока недоступно');
+  });
+
+  it('переход из подписки открывает её события', async () => {
+    const harness = await makeHarness();
+    await harness.press(
+      { type: 'subscribe', action: 'quick', city: 'ufa', category: 'concert' },
+      72,
+    );
+    const created = await harness.createSubscription.mock.results[0]?.value;
+    const id = created.id as string;
+    harness.searchEvents.mockClear();
+
+    await harness.press({ type: 'subscriptions', action: 'show', id }, 73);
+    expect(harness.searchEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        city: 'ufa',
+        category: 'concert',
+        date: null,
+        page: 1,
+      }),
+    );
+  });
+
+  it('USER_REF_MODE=legacy возвращает старый user_ref для отката', async () => {
+    const harness = await makeHarness({ config: { userRefMode: 'legacy' } });
+    await harness.press(
+      { type: 'subscribe', action: 'quick', city: 'ufa', category: 'concert' },
+      74,
+    );
+    expect(harness.createSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ user_ref: 'telegram_00000123' }),
+    );
+  });
+
   it('пустая выдача предлагает ослабить фильтры', async () => {
     const harness = await makeHarness();
     await harness.run(messageUpdate('музыка'));
@@ -620,6 +969,49 @@ describe('сценарии бота', () => {
 
     await harness.run(messageUpdate('/about', 84));
     expect(harness.lastText()).toContain('неофициальный информационный сервис');
+  });
+
+  it('текстовые команды возраста, сортировки, языка и периода', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate('/date 2026-11-20..2026-11-25', 85));
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        date: null,
+        date_from: '2026-11-20',
+        date_to: '2026-11-25',
+      }),
+    );
+
+    await harness.run(messageUpdate('/age 6', 86));
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ age: 6 }),
+    );
+
+    await harness.run(messageUpdate('/sort price', 87));
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ age: 6, sort: 'price' }),
+    );
+
+    await harness.run(messageUpdate('/language ba', 88));
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'price', language: 'ba' }),
+    );
+
+    await harness.run(messageUpdate('/age any', 89));
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ age: null, language: 'ba' }),
+    );
+  });
+
+  it('некорректные команды фильтров не ходят в API', async () => {
+    const harness = await makeHarness();
+    await harness.run(messageUpdate('/age 7', 90));
+    expect(harness.searchEvents).not.toHaveBeenCalled();
+    expect(harness.lastText()).toContain('Доступны');
+
+    await harness.run(messageUpdate('/date 2026-11-01..2026-12-31', 91));
+    expect(harness.searchEvents).not.toHaveBeenCalled();
+    expect(harness.lastText()).toContain('31 день');
   });
 
   it('лимит частоты не пускает бесконечные запросы', async () => {
@@ -703,10 +1095,336 @@ describe('сценарии бота', () => {
     expect(harness.searchEvents).not.toHaveBeenCalled();
   });
 
+  it('берёт города и категории из DirectoryService, а не из встроенного списка', async () => {
+    const directories = new DirectoryService({
+      cities: [{ id: 'novy', name: 'Новый город' }],
+      categories: [{ id: 'opera', name: 'Опера' }],
+    });
+    const harness = await makeHarness({ directories });
+
+    await harness.run(messageUpdate('/city Новый город', 130));
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ city: 'novy' }),
+    );
+
+    await harness.run(messageUpdate('/category Опера', 131));
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: 'opera' }),
+    );
+
+    await harness.press({ type: 'menu', target: 'cities' }, 132);
+    expect(harness.keyboardButtons()).toContain('Новый город');
+    expect(harness.keyboardButtons()).not.toContain('Уфа');
+  });
+
+  it('листает длинные справочники и принимает выбор со второй страницы', async () => {
+    const directories = new DirectoryService({
+      cities: Array.from({ length: 30 }, (_, index) => ({
+        id: `city-${index + 1}`,
+        name: `Город ${index + 1}`,
+      })),
+    });
+    const harness = await makeHarness({ directories });
+
+    await harness.press({ type: 'menu', target: 'cities' }, 140);
+    expect(harness.keyboardButtons()).toContain('Город 24');
+    expect(harness.keyboardButtons()).not.toContain('Город 25');
+    expect(harness.keyboardButtons()).toContain('Ещё ➡️');
+
+    await harness.pressButton('Ещё ➡️', 141);
+    expect(harness.keyboardButtons()).toContain('Город 30');
+    expect(harness.keyboardButtons()).toContain('⬅️ Назад');
+
+    await harness.press({ type: 'filter', action: 'open' }, 142);
+    await harness.pressButton('📍 Все города', 143);
+    await harness.pressButton('Ещё ➡️', 144);
+    await harness.pressButton('Город 25', 145);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ city: 'city-25' }),
+    );
+
+    await harness.press({ type: 'subscribe', action: 'add' }, 146);
+    await harness.press({ type: 'subscribe', action: 'pick', field: 'city' }, 147);
+    await harness.pressButton('Ещё ➡️', 148);
+    await harness.pressButton('Город 29', 149);
+    expect(harness.editedTexts().at(-1)).toContain('Город 29');
+  });
+
+  it('не принимает идентификаторы вне справочника и показывает свежее меню', async () => {
+    const harness = await makeHarness();
+
+    await harness.press({ type: 'search', action: 'city', id: 'mars' }, 150);
+    expect(harness.lastText()).toContain('устарела');
+    expect(harness.keyboardButtons()).toContain('🔍 Найти событие');
+
+    await harness.press(
+      { type: 'filter', action: 'setCategory', category: 'opera' },
+      151,
+    );
+    expect(harness.lastText()).toContain('устарела');
+
+    await harness.press(
+      { type: 'subscribe', action: 'quick', city: 'ufa', category: 'opera' },
+      152,
+    );
+    expect(harness.lastText()).toContain('устарела');
+    expect(harness.createSubscription).not.toHaveBeenCalled();
+  });
+
   it('команды для меню Telegram корректны', () => {
     for (const item of BOT_COMMANDS) {
       expect(item.command).toMatch(/^[a-z0-9_]{1,32}$/);
       expect(item.description.length).toBeLessThanOrEqual(256);
     }
+  });
+
+  it('ассистент отвечает на свободный текст и запоминает контекст', async () => {
+    const harness = await makeHarness({ config: { assistantEnabled: true } });
+    harness.queryAssistant.mockResolvedValueOnce(
+      makeAssistantResponse({
+        message: 'Нашлось 1 событие по вашим условиям.',
+        assumptions: [{ key: 'date_resolved', text: 'сегодня = 14 ноября' }],
+        chips: [
+          {
+            key: 'hard.cities',
+            kind: 'city',
+            label: 'Город',
+            value: 'Уфа',
+            removable: true,
+            unset: ['hard.cities'],
+          },
+        ],
+      }),
+    );
+
+    await harness.run(messageUpdate('концерт в Уфе для ребёнка', 160));
+
+    expect(harness.queryAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'концерт в Уфе для ребёнка',
+        channel: 'telegram',
+        user_ref: USER_REF,
+        previous: null,
+        limit: 6,
+      }),
+    );
+    expect(harness.lastText()).toContain('Нашлось 1 событие');
+    expect(harness.lastText()).toContain('сегодня = 14 ноября');
+    expect(harness.keyboardButtons()).toContain('1. Вечер башкирской музыки');
+    expect(harness.keyboardButtons()).toContain('✖️ Город: Уфа');
+    expect(harness.sessions.get(USER.id).assistant.history).toHaveLength(2);
+
+    await harness.pressButton('✖️ Город: Уфа', 161);
+    expect(harness.queryAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        previous: { hard: { cities: ['ufa'] }, soft: {} },
+        patch: { unset: ['hard.cities'] },
+      }),
+    );
+    expect(harness.queryAssistant.mock.calls[1]?.[0].message).toBeUndefined();
+  });
+
+  it('ассистент принимает сообщение до 1000 знаков, а не 100', async () => {
+    const harness = await makeHarness({ config: { assistantEnabled: true } });
+    harness.queryAssistant.mockResolvedValueOnce(
+      makeAssistantResponse({ message: 'Принял длинный запрос.' }),
+    );
+
+    await harness.run(messageUpdate('а'.repeat(1200), 176));
+
+    const call = harness.queryAssistant.mock.calls[0]?.[0];
+    expect(call?.message).toHaveLength(1000);
+  });
+
+  it('обычный поиск обрезает запрос до 100 знаков и сообщает об этом', async () => {
+    const harness = await makeHarness();
+
+    await harness.run(messageUpdate('б'.repeat(150), 177));
+
+    expect(harness.searchEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ q: 'б'.repeat(100) }),
+    );
+    expect(harness.lastText()).toContain('сокращён до 100 знаков');
+  });
+
+  it('ассистент задаёт уточнение и принимает быстрый ответ', async () => {
+    const harness = await makeHarness({ config: { assistantEnabled: true } });
+    harness.queryAssistant.mockResolvedValueOnce(
+      makeAssistantResponse({
+        action: 'clarify',
+        message: 'В каком городе искать?',
+        assumptions: [],
+        results: [],
+        total: 0,
+        clarify: {
+          code: 'city',
+          pending: ['city'],
+          question: 'В каком городе искать?',
+          quick_replies: ['Уфа', 'Стерлитамак'],
+        },
+      }),
+    );
+
+    await harness.run(messageUpdate('куда сходить с ребёнком', 162));
+    expect(harness.keyboardButtons()).toContain('Уфа');
+
+    await harness.pressButton('Уфа', 163);
+    expect(harness.queryAssistant).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        message: 'Уфа',
+        answering: 'city',
+        previous: { hard: { cities: ['ufa'] }, soft: {} },
+      }),
+    );
+  });
+
+  it('при 503 ассистент мягко откатывается на обычный поиск', async () => {
+    const harness = await makeHarness({ config: { assistantEnabled: true } });
+    harness.queryAssistant.mockRejectedValueOnce(
+      new ApiError('API 503 unavailable', {
+        kind: 'http',
+        status: 503,
+        code: 'unavailable',
+      }),
+    );
+
+    await harness.run(messageUpdate('музыка', 164));
+
+    expect(harness.searchEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ q: 'музыка', page: 1 }),
+    );
+    expect(harness.lastText()).toContain('Вечер башкирской музыки');
+  });
+
+  it('при 429 ассистент просит подождать и не обходит лимит поиском', async () => {
+    const harness = await makeHarness({ config: { assistantEnabled: true } });
+    harness.queryAssistant.mockRejectedValueOnce(
+      new ApiError('API 429 rate_limited', {
+        kind: 'http',
+        status: 429,
+        code: 'rate_limited',
+      }),
+    );
+
+    await harness.run(messageUpdate('музыка', 165));
+
+    expect(harness.searchEvents).not.toHaveBeenCalled();
+    expect(harness.lastText()).toContain('Слишком много запросов');
+  });
+
+  it('по умолчанию не показывает подтверждения и предлагает обычный поиск', async () => {
+    const harness = await makeHarness({ config: { assistantEnabled: true } });
+    harness.queryAssistant.mockResolvedValueOnce(
+      makeAssistantResponse({
+        action: 'confirmation_required',
+        message: 'Подтвердите оформление подписки.',
+        results: [],
+        total: 0,
+        confirmation: {
+          confirmation_id: 'cnf_123456',
+          summary: 'Подписка на концерты',
+          expires_at: '2026-11-14T12:00:00+05:00',
+        },
+      }),
+    );
+
+    await harness.run(messageUpdate('подпишись на концерты', 166));
+
+    expect(harness.lastText()).toContain('Подтверждения действий в боте пока отключены');
+    expect(harness.keyboardButtons()).not.toContain('✅ Подтвердить');
+    expect(harness.keyboardButtons()).toContain('🔎 Обычный поиск');
+
+    await harness.pressButton('🔎 Обычный поиск', 167);
+    expect(harness.searchEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ q: 'подпишись на концерты' }),
+    );
+  });
+
+  it('с явным флагом подтверждает и отменяет действие ассистента', async () => {
+    const harness = await makeHarness({
+      config: { assistantEnabled: true, assistantConfirmations: true },
+    });
+    const confirmation = makeAssistantResponse({
+      action: 'confirmation_required',
+      message: 'Подтвердите оформление подписки.',
+      results: [],
+      total: 0,
+      confirmation: {
+        confirmation_id: 'cnf_123456',
+        summary: 'Подписка на концерты',
+        expires_at: '2026-11-14T12:00:00+05:00',
+      },
+    });
+    harness.queryAssistant.mockResolvedValue(confirmation);
+
+    await harness.run(messageUpdate('подпишись на концерты', 168));
+    expect(harness.keyboardButtons()).toContain('✅ Подтвердить');
+    await harness.pressButton('✅ Подтвердить', 169);
+    expect(harness.confirmAssistant).toHaveBeenCalledWith('cnf_123456', 'approve');
+    expect(harness.lastText()).toContain('Готово');
+
+    await harness.run(messageUpdate('подпишись на концерты', 170));
+    await harness.pressButton('❌ Отменить', 171);
+    expect(harness.confirmAssistant).toHaveBeenLastCalledWith('cnf_123456', 'reject');
+    expect(harness.lastText()).toContain('Действие отменено');
+  });
+
+  it('при 429 на подтверждении просит подождать, а не падает', async () => {
+    const harness = await makeHarness({
+      config: { assistantEnabled: true, assistantConfirmations: true },
+    });
+    harness.queryAssistant.mockResolvedValue(
+      makeAssistantResponse({
+        action: 'confirmation_required',
+        message: 'Подтвердите оформление подписки.',
+        results: [],
+        total: 0,
+        confirmation: {
+          confirmation_id: 'cnf_123456',
+          summary: 'Подписка на концерты',
+          expires_at: '2026-11-14T12:00:00+05:00',
+        },
+      }),
+    );
+    harness.confirmAssistant.mockRejectedValueOnce(
+      new ApiError('API 429 rate_limited', {
+        kind: 'http',
+        status: 429,
+        code: 'rate_limited',
+      }),
+    );
+
+    await harness.run(messageUpdate('подпишись на концерты', 174));
+    await harness.pressButton('✅ Подтвердить', 175);
+
+    expect(harness.lastText()).toContain('Слишком много запросов');
+  });
+
+  it('кнопка ослабления из ответа ассистента запускает поиск', async () => {
+    const harness = await makeHarness({ config: { assistantEnabled: true } });
+    harness.queryAssistant.mockResolvedValueOnce(
+      makeAssistantResponse({
+        message: 'Ничего не нашлось.',
+        results: [],
+        total: 0,
+        relaxations: [
+          {
+            code: 'date',
+            codes: ['date'],
+            label: 'Без даты',
+            query: { date_from: '2026-11-20', date_to: '2026-11-25' },
+            count: 7,
+          },
+        ],
+      }),
+    );
+
+    await harness.run(messageUpdate('балет на выходных', 172));
+    expect(harness.keyboardButtons()).toContain('Без даты · 7');
+
+    await harness.pressButton('Без даты · 7', 173);
+    expect(harness.searchEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ date_from: '2026-11-20', date_to: '2026-11-25' }),
+    );
   });
 });

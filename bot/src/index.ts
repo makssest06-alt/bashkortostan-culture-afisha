@@ -1,6 +1,7 @@
 import { createApiClient } from './api/client.js';
 import { createBot } from './bot.js';
 import { ConfigError, loadConfig } from './config.js';
+import { DirectoryService } from './directory-service.js';
 import { createLogger } from './logger.js';
 import { SessionStore } from './session.js';
 import { BOT_COMMANDS } from './texts.js';
@@ -22,23 +23,68 @@ async function main(): Promise<void> {
   const api = createApiClient({
     baseUrl: config.apiBaseUrl,
     timeoutMs: config.apiTimeoutMs,
+    retryAttempts: config.apiRetryAttempts,
   });
   const sessions = new SessionStore({ ttlMs: config.sessionTtlMs });
-  const bot = createBot(config.telegramBotToken, { api, sessions, config, logger });
+  const directories = new DirectoryService();
 
-  try {
-    const health = await api.health();
+  const [healthResult, catalogsResult] = await Promise.allSettled([
+    api.health(),
+    directories.refresh(api),
+  ]);
+
+  if (healthResult.status === 'fulfilled') {
+    const health = healthResult.value;
     if (health.status === 'ok') {
       logger.info('api_health', { status: health.status, base_url: config.apiBaseUrl });
     } else {
       logger.warn('api_health_degraded', { status: health.status, base_url: config.apiBaseUrl });
     }
-  } catch (error) {
+  } else {
     logger.warn('api_health_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error:
+        healthResult.reason instanceof Error
+          ? healthResult.reason.message
+          : String(healthResult.reason),
       base_url: config.apiBaseUrl,
     });
   }
+
+  if (catalogsResult.status === 'rejected') {
+    logger.warn('directories_refresh_failed', {
+      error:
+        catalogsResult.reason instanceof Error
+          ? catalogsResult.reason.message
+          : String(catalogsResult.reason),
+    });
+  } else {
+    const catalogs = catalogsResult.value;
+    if (catalogs.cities.loaded && catalogs.categories.loaded) {
+      logger.info('directories_loaded', {
+        cities: catalogs.cities.count,
+        categories: catalogs.categories.count,
+      });
+    } else {
+      logger.warn('directories_fallback', {
+        cities: catalogs.cities,
+        categories: catalogs.categories,
+      });
+    }
+    if (catalogs.cities.truncated || catalogs.categories.truncated) {
+      logger.warn('directories_truncated', {
+        cities: catalogs.cities.truncated ? catalogs.cities.count : undefined,
+        categories: catalogs.categories.truncated ? catalogs.categories.count : undefined,
+      });
+    }
+  }
+
+  const bot = createBot(config.telegramBotToken, {
+    api,
+    sessions,
+    config,
+    logger,
+    directories,
+  });
 
   try {
     await bot.api.setMyCommands(BOT_COMMANDS);

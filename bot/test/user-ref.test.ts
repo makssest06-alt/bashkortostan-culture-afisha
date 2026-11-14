@@ -26,6 +26,25 @@ describe('telegramUserRef', () => {
     expect(ref.length).toBeLessThanOrEqual(128);
     expect(isUserRef(ref)).toBe(true);
   });
+
+  it('в HMAC-режиме не содержит id и стабилен при одном секрете', () => {
+    const first = telegramUserRef(123, { mode: 'hmac', secret: 'secret-one' });
+    const second = telegramUserRef(123, { mode: 'hmac', secret: 'secret-one' });
+    const otherSecret = telegramUserRef(123, { mode: 'hmac', secret: 'secret-two' });
+    const otherUser = telegramUserRef(124, { mode: 'hmac', secret: 'secret-one' });
+
+    expect(first).toBe(second);
+    expect(first).not.toBe(otherSecret);
+    expect(first).not.toBe(otherUser);
+    expect(first).not.toContain('00000123');
+    expect(first).toMatch(/^telegram_[A-Za-z0-9_-]{16,}$/);
+    expect(isUserRef(first)).toBe(true);
+  });
+
+  it('HMAC-режим требует секрет, legacy остаётся для отката', () => {
+    expect(() => telegramUserRef(123, { mode: 'hmac' })).toThrow(UserRefError);
+    expect(telegramUserRef(123, { mode: 'legacy' })).toBe('telegram_00000123');
+  });
 });
 
 describe('hashTelegramUserId', () => {

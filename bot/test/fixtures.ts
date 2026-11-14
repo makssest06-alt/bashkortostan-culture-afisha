@@ -1,4 +1,4 @@
-import type { Event, EventListItem, Occurrence } from '../src/api/types.js';
+import type { AssistantResponse, Event, EventListItem, Occurrence } from '../src/api/types.js';
 
 export const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 export const EVENT_ID_2 = '22222222-2222-4222-8222-222222222222';
@@ -62,10 +62,46 @@ export function makeListResponse(items: EventListItem[] = [makeListItem()], over
     page_size: 5,
     total: items.length,
     total_pages: items.length > 0 ? 1 : 0,
-    facets: {},
+    facets: {
+      cities: [{ id: 'ufa', name: 'Уфа', count: items.length }],
+      categories: [{ id: 'concert', name: 'Концерт', count: items.length }],
+      age_limits: [{ value: 12, count: items.length }],
+      price: { free: 0, paid: items.length, unknown: 0 },
+      total: items.length,
+    },
     relaxations: [],
     hidden_unknown_price: 0,
     hidden_unknown_age: 0,
+    ...overrides,
+  };
+}
+
+export function makeAssistantResponse(
+  overrides: Partial<AssistantResponse> = {},
+): AssistantResponse {
+  return {
+    action: 'search',
+    message: 'Нашлось 1 событие по вашим условиям.',
+    constraints: { hard: { cities: ['ufa'] }, soft: {} },
+    chips: [],
+    assumptions: [],
+    results: [
+      {
+        event: makeListItem(),
+        occurrence_id: '33333333-3333-4333-8333-333333333333',
+        reasons: ['подходит по городу'],
+        caveats: [],
+      },
+    ],
+    total: 1,
+    hidden_unknown_price: 0,
+    hidden_unknown_age: 0,
+    relaxations: [],
+    unsupported_actions: [],
+    reference_date: '2026-11-13',
+    timezone: 'Asia/Yekaterinburg',
+    engine: 'rules-v2',
+    trace_id: 'trace-1',
     ...overrides,
   };
 }

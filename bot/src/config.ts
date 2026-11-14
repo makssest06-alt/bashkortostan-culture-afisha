@@ -4,6 +4,12 @@ import { z } from 'zod';
 
 const emptyToUndefined = (value: unknown) => (value === '' ? undefined : value);
 
+const envBoolean = z.preprocess((value) => {
+  if (value === undefined || value === '') return undefined;
+  if (typeof value === 'boolean') return value;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+}, z.boolean());
+
 const DEFAULT_BRAND_IMAGE_PATH = fileURLToPath(
   new URL('../assets/token-height.png', import.meta.url),
 );
@@ -25,6 +31,10 @@ const EnvSchema = z.object({
   API_TIMEOUT_MS: z.preprocess(
     emptyToUndefined,
     z.coerce.number().int().min(500).max(60_000).default(10_000),
+  ),
+  API_RETRY_ATTEMPTS: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().min(0).max(5).default(2),
   ),
   LOG_LEVEL: z.preprocess(
     emptyToUndefined,
@@ -50,6 +60,16 @@ const EnvSchema = z.object({
     emptyToUndefined,
     z.string().min(16, 'LOG_HASH_SECRET должен быть не короче 16 символов').max(200).optional(),
   ),
+  USER_REF_SECRET: z.preprocess(
+    emptyToUndefined,
+    z.string().min(16, 'USER_REF_SECRET должен быть не короче 16 символов').max(200).optional(),
+  ),
+  USER_REF_MODE: z.preprocess(
+    emptyToUndefined,
+    z.enum(['hmac', 'legacy']).default('hmac'),
+  ),
+  ASSISTANT_ENABLED: envBoolean.default(false),
+  ASSISTANT_CONFIRMATIONS: envBoolean.default(false),
   BRAND_IMAGE_PATH: z.preprocess(
     emptyToUndefined,
     z
@@ -74,10 +94,19 @@ export interface BotConfig {
   sessionTtlMs: number;
   /** Необязательные поля: тесты могут собирать конфиг без них. */
   callbackTtlMs?: number;
+  apiRetryAttempts?: number;
   rateLimitPerMinute?: number;
   brandImagePath?: string | null;
   /** Ключ HMAC для псевдонимов в логах; по умолчанию — токен бота. */
   logHashSecret?: string | null;
+  /** Ключ HMAC для user_ref подписок; по умолчанию — logHashSecret или токен. */
+  userRefSecret?: string | null;
+  /** `hmac` — непредсказуемый user_ref, `legacy` — откат к telegram_<id>. */
+  userRefMode?: 'hmac' | 'legacy';
+  /** Ассистент в боте; по умолчанию выключен. */
+  assistantEnabled?: boolean;
+  /** Подтверждения ассистента; включать только после фикса привязки токена. */
+  assistantConfirmations?: boolean;
 }
 
 export class ConfigError extends Error {
@@ -116,6 +145,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BotConfig {
     telegramBotToken: value.TELEGRAM_BOT_TOKEN,
     apiBaseUrl: normalizeBaseUrl(value.API_BASE_URL),
     apiTimeoutMs: value.API_TIMEOUT_MS,
+    apiRetryAttempts: value.API_RETRY_ATTEMPTS,
     logLevel: value.LOG_LEVEL,
     publicWebUrl: value.PUBLIC_WEB_URL ? value.PUBLIC_WEB_URL.replace(/\/+$/, '') : null,
     sessionTtlMs: value.SESSION_TTL_MINUTES * 60_000,
@@ -123,5 +153,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BotConfig {
     rateLimitPerMinute: value.RATE_LIMIT_PER_MINUTE,
     brandImagePath: value.BRAND_IMAGE_PATH,
     logHashSecret: value.LOG_HASH_SECRET ?? null,
+    userRefSecret: value.USER_REF_SECRET ?? null,
+    userRefMode: value.USER_REF_MODE,
+    assistantEnabled: value.ASSISTANT_ENABLED,
+    assistantConfirmations: value.ASSISTANT_CONFIRMATIONS,
   };
 }

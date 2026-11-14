@@ -28,6 +28,11 @@ describe('loadConfig', () => {
         PUBLIC_WEB_URL: 'http://localhost:3210/',
         SESSION_TTL_MINUTES: '30',
         LOG_HASH_SECRET: '0123456789abcdef',
+        USER_REF_SECRET: 'fedcba9876543210',
+        USER_REF_MODE: 'legacy',
+        API_RETRY_ATTEMPTS: '3',
+        ASSISTANT_ENABLED: '1',
+        ASSISTANT_CONFIRMATIONS: 'true',
       }),
     );
     expect(config.apiBaseUrl).toBe('http://localhost:8000');
@@ -39,6 +44,11 @@ describe('loadConfig', () => {
     expect(config.callbackTtlMs).toBe(720 * 60_000);
     expect(config.brandImagePath).toContain('token-height.png');
     expect(config.logHashSecret).toBe('0123456789abcdef');
+    expect(config.userRefSecret).toBe('fedcba9876543210');
+    expect(config.userRefMode).toBe('legacy');
+    expect(config.apiRetryAttempts).toBe(3);
+    expect(config.assistantEnabled).toBe(true);
+    expect(config.assistantConfirmations).toBe(true);
   });
 
   it('подставляет значения по умолчанию', () => {
@@ -47,6 +57,11 @@ describe('loadConfig', () => {
     expect(config.logLevel).toBe('info');
     expect(config.publicWebUrl).toBeNull();
     expect(config.rateLimitPerMinute).toBe(20);
+    expect(config.apiRetryAttempts).toBe(2);
+    expect(config.userRefMode).toBe('hmac');
+    expect(config.userRefSecret).toBeNull();
+    expect(config.assistantEnabled).toBe(false);
+    expect(config.assistantConfirmations).toBe(false);
   });
 
   it('позволяет выключить жетон и лимит', () => {

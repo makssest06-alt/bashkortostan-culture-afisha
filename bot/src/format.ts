@@ -1,17 +1,25 @@
+import type { CategoryId, CityId, DirectoryLookup } from './directory-service.js';
 import {
-  categoryName,
-  categoryNameOne,
-  cityName,
+  ageLabel,
   datePresetLabel,
   isDatePreset,
   isIsoDate,
+  languageLabel,
+  sortLabel,
   todayIsoDate,
-  type CategoryId,
-  type CityId,
   type DatePreset,
   type SearchDate,
-} from './dictionaries.js';
-import type { Event, EventListItem, Occurrence, Subscription } from './api/types.js';
+} from './search-options.js';
+import type {
+  AssistantResponse,
+  Event,
+  EventListItem,
+  Occurrence,
+  Offer,
+  Relaxation,
+  Subscription,
+  VenueSchedule,
+} from './api/types.js';
 
 const MONTHS_GENITIVE = [
   'января',
@@ -31,6 +39,11 @@ const MONTHS_GENITIVE = [
 const WEEKDAYS_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** UUID события: используется и для ссылок, и для deep link `/start event_<uuid>`. */
+export function isEventUuid(value: string | null | undefined): boolean {
+  return typeof value === 'string' && UUID_RE.test(value);
+}
 
 export interface DateParts {
   year: number;
@@ -171,8 +184,32 @@ export function pickPrimaryOccurrence(event: Event | EventListItem): Occurrence 
   return future[0] ?? event.occurrences[0] ?? null;
 }
 
-export function formatEventWhen(event: Event | EventListItem, now: Date = new Date()): string {
-  const occurrence = pickPrimaryOccurrence(event);
+/** Выбранный сеанс или ближайший подходящий, если выбор не передан. */
+export function pickOccurrence(
+  event: Event | EventListItem,
+  occurrenceId?: string | null,
+): Occurrence | null {
+  if (occurrenceId) {
+    const selected = event.occurrences.find((occurrence) => occurrence.id === occurrenceId);
+    if (selected) return selected;
+  }
+  return pickPrimaryOccurrence(event);
+}
+
+/** Все сеансы в хронологическом порядке; прошедшие остаются в конце. */
+export function sortOccurrences(occurrences: readonly Occurrence[]): Occurrence[] {
+  return [...occurrences].sort((a, b) => {
+    if (a.is_past !== b.is_past) return a.is_past ? 1 : -1;
+    return a.date_start.localeCompare(b.date_start);
+  });
+}
+
+export function formatEventWhen(
+  event: Event | EventListItem,
+  now: Date = new Date(),
+  occurrenceId?: string | null,
+): string {
+  const occurrence = pickOccurrence(event, occurrenceId);
   if (occurrence) return formatOccurrence(occurrence, now);
   if (event.date_start) {
     const range = formatDateRange(event.date_start, event.date_end, now);
@@ -180,6 +217,75 @@ export function formatEventWhen(event: Event | EventListItem, now: Date = new Da
     return time ? `${range}, ${time}` : range;
   }
   return 'дата уточняется';
+}
+
+export function occurrenceStatusLine(occurrence: Occurrence): string | null {
+  if (occurrence.is_past) return 'сеанс уже прошёл';
+  if (occurrence.status === 'cancelled') return 'отменён';
+  if (occurrence.status === 'postponed') return 'перенесён, дата уточняется';
+  if (occurrence.status === 'rescheduled') return 'перенесён на новую дату';
+  if (occurrence.status === 'unknown') return 'статус не подтверждён';
+  if (occurrence.availability === 'sold_out') return 'билеты проданы';
+  if (occurrence.availability === 'available') return 'есть билеты';
+  return null;
+}
+
+export function formatSessionsList(
+  event: Event,
+  now: Date = new Date(),
+  directories?: DirectoryLookup,
+): string {
+  const lines = [`🎟 ${bold('Все сеансы')} · ${esc(truncate(event.title, 120))}`, ''];
+  if (event.occurrences.length === 0) {
+    lines.push('У события пока нет опубликованных сеансов.');
+    return lines.join('\n');
+  }
+
+  sortOccurrences(event.occurrences).forEach((occurrence, index) => {
+    const status = occurrenceStatusLine(occurrence);
+    const place = directories ? (directories.cityName(event.city_id) ?? event.city) : event.city;
+    lines.push(
+      `${index + 1}. ${esc(formatOccurrence(occurrence, now))} · ${esc(truncate(event.venue, 60))}${
+        place ? ` · ${esc(place)}` : ''
+      }`,
+    );
+    if (status) lines.push(`   ${esc(status)}`);
+  });
+  lines.push('');
+  lines.push('Выберите сеанс кнопкой ниже или откройте карточку события.');
+  return lines.join('\n');
+}
+
+const AUDIENCE_LABELS: Record<Offer['audience'] & string, string> = {
+  adult: 'взрослый',
+  child: 'детский',
+  reduced: 'льготный',
+};
+
+export function formatOffers(event: Event): string {
+  const lines = [`🎟 ${bold('Тарифы')} · ${esc(truncate(event.title, 120))}`, ''];
+  if (event.offers.length === 0) {
+    lines.push('Тарифы не указаны. Уточняйте стоимость у организатора.');
+    return lines.join('\n');
+  }
+  event.offers.forEach((offer) => {
+    const name = offer.name?.trim() || 'Билет';
+    const audience = offer.audience ? AUDIENCE_LABELS[offer.audience] : null;
+    const price = offer.is_free
+      ? 'бесплатно'
+      : offer.price === null
+        ? 'цена не указана'
+        : formatRubles(offer.price);
+    lines.push(`• ${esc(name)} — ${esc(price)}${audience ? ` · ${esc(audience)}` : ''}`);
+  });
+  lines.push('');
+  lines.push('Стоимость и наличие мест уточняйте у организатора.');
+  return lines.join('\n');
+}
+
+export function formatRelaxationLabel(relaxation: Relaxation): string {
+  const label = relaxation.label;
+  return typeof label === 'string' ? label : label.ru;
 }
 
 export function formatPrice(
@@ -255,27 +361,58 @@ export interface SearchFilterState {
   city: CityId | null;
   category: CategoryId | null;
   date: SearchDate | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
   priceMax?: number | null;
   freeOnly?: boolean;
+  age?: number | null;
+  language?: string | null;
+  sort?: string | null;
 }
 
-export function formatFilterLine(filters: SearchFilterState, now: Date = new Date()): string {
+export function formatFilterLine(
+  filters: SearchFilterState,
+  directories: DirectoryLookup,
+  now: Date = new Date(),
+): string {
   const parts: string[] = [];
-  if (filters.city) parts.push(`📍 Город: ${esc(cityName(filters.city) ?? filters.city)}`);
-  if (filters.category) {
-    parts.push(`🎭 Категория: ${esc(categoryName(filters.category) ?? filters.category)}`);
+  if (filters.city) {
+    parts.push(`📍 Город: ${esc(directories.cityName(filters.city) ?? filters.city)}`);
   }
-  if (filters.date) parts.push(`📅 Когда: ${esc(searchDateLabel(filters.date, now))}`);
+  if (filters.category) {
+    parts.push(
+      `🎭 Категория: ${esc(directories.categoryName(filters.category) ?? filters.category)}`,
+    );
+  }
+  if (filters.dateFrom && filters.dateTo) {
+    parts.push(`📅 Период: ${esc(formatDateRange(filters.dateFrom, filters.dateTo, now))}`);
+  } else if (filters.date) {
+    parts.push(`📅 Когда: ${esc(searchDateLabel(filters.date, now))}`);
+  }
   if (filters.freeOnly) {
     parts.push('💰 Цена: Бесплатно');
   } else if (filters.priceMax !== null && filters.priceMax !== undefined) {
     parts.push(`💰 Цена: до ${formatRubles(filters.priceMax)}`);
   }
+  if (filters.age !== null && filters.age !== undefined) {
+    parts.push(`👶 Возраст: ${esc(ageLabel(filters.age))}`);
+  }
+  if (filters.language) {
+    parts.push(`🌐 Язык: ${esc(languageLabel(filters.language))}`);
+  }
+  if (filters.sort && filters.sort !== 'date') {
+    parts.push(`🔀 Сортировка: ${esc(sortLabel(filters.sort))}`);
+  }
   return parts.length > 0 ? parts.join(' · ') : 'Все города и категории';
 }
 
-function formatSummaryLines(event: EventListItem, index: number, now: Date): string {
-  const city = cityName(event.city_id) ?? event.city;
+function formatSummaryLines(
+  event: EventListItem,
+  index: number,
+  now: Date,
+  directories: DirectoryLookup,
+): string {
+  const city = directories.cityName(event.city_id) ?? event.city;
   const price = formatPrice(event.price_min, event.price_max, event.is_free);
   const freshness = formatFreshness(event.verified_at ?? event.updated_at, now);
   const thirdLine = [`${city} · ${price}`, formatAge(event.age_limit)];
@@ -288,9 +425,39 @@ function formatSummaryLines(event: EventListItem, index: number, now: Date): str
   ].join('\n');
 }
 
+interface ListResult {
+  items: EventListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  hidden_unknown_price?: number;
+  hidden_unknown_age?: number;
+}
+
+/** Поясняет, почему часть событий не попала в фильтр по цене или возрасту. */
+function hiddenUnknownLines(result: {
+  hidden_unknown_price?: number;
+  hidden_unknown_age?: number;
+}): string[] {
+  const lines: string[] = [];
+  if ((result.hidden_unknown_price ?? 0) > 0) {
+    lines.push(
+      `Ещё ${result.hidden_unknown_price}: цена не указана — такие события не попали в фильтр.`,
+    );
+  }
+  if ((result.hidden_unknown_age ?? 0) > 0) {
+    lines.push(
+      `Ещё ${result.hidden_unknown_age}: возраст не указан — такие события не попали в фильтр.`,
+    );
+  }
+  return lines;
+}
+
 export function formatSearchResults(
-  result: { items: EventListItem[]; total: number; page: number; page_size: number; total_pages: number },
+  result: ListResult,
   filters: SearchFilterState,
+  directories: DirectoryLookup,
   options: { now?: Date; queryWasTruncated?: boolean } = {},
 ): string {
   const now = options.now ?? new Date();
@@ -300,17 +467,28 @@ export function formatSearchResults(
   lines.push(
     `🔎 ${query ? `Поиск ${bold(query)}` : bold('Афиша')} · найдено ${result.total}`,
   );
-  lines.push(formatFilterLine(filters, now));
+  lines.push(formatFilterLine(filters, directories, now));
   if (options.queryWasTruncated) {
-    lines.push('Запрос сокращён до 200 знаков — так требует API.');
+    lines.push('Запрос сокращён до 100 знаков — так требует API.');
   }
   lines.push('');
 
   result.items.forEach((event, index) => {
     lines.push(
-      formatSummaryLines(event, (result.page - 1) * Math.max(1, result.page_size) + index + 1, now),
+      formatSummaryLines(
+        event,
+        (result.page - 1) * Math.max(1, result.page_size) + index + 1,
+        now,
+        directories,
+      ),
     );
   });
+
+  const hidden = hiddenUnknownLines(result);
+  if (hidden.length > 0) {
+    lines.push('');
+    lines.push(...hidden);
+  }
 
   if (result.total_pages > 1) {
     lines.push('');
@@ -320,29 +498,143 @@ export function formatSearchResults(
   return lines.join('\n');
 }
 
-export function formatNoResults(filters: SearchFilterState, now: Date = new Date()): string {
+/** Выдача похожих событий: без фильтров, но с тем же форматом карточек. */
+export function formatSimilarResults(
+  result: ListResult,
+  directories: DirectoryLookup,
+  now: Date = new Date(),
+): string {
+  const lines: string[] = [`🎯 ${bold('Похожие события')} · найдено ${result.total}`, ''];
+
+  result.items.forEach((event, index) => {
+    lines.push(
+      formatSummaryLines(
+        event,
+        (result.page - 1) * Math.max(1, result.page_size) + index + 1,
+        now,
+        directories,
+      ),
+    );
+  });
+
+  const hidden = hiddenUnknownLines(result);
+  if (hidden.length > 0) {
+    lines.push('');
+    lines.push(...hidden);
+  }
+
+  if (result.total_pages > 1) {
+    lines.push('');
+    lines.push(`Страница ${result.page} из ${result.total_pages}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Ответ ассистента — обычный текст API. Экранируем его целиком и добавляем
+ * только карточки, причины и счётчики, которые уже отформатированы нами.
+ */
+export function formatAssistantResponse(
+  response: AssistantResponse,
+  directories: DirectoryLookup,
+  now: Date = new Date(),
+): string {
+  const lines: string[] = [esc(response.message.trim())];
+
+  if (response.assumptions.length > 0) {
+    lines.push('', `💡 ${bold('Что учёл')}`);
+    for (const assumption of response.assumptions.slice(0, 6)) {
+      const text = truncate(assumption.text, 140).trim();
+      if (text) lines.push(`• ${esc(text)}`);
+    }
+  }
+
+  if (response.action === 'search') {
+    lines.push('');
+    if (response.results.length === 0) {
+      lines.push('Событий по этим условиям нет.');
+    } else {
+      response.results.forEach((item, index) => {
+        lines.push(formatSummaryLines(item.event, index + 1, now, directories));
+        const reasons = item.reasons
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((reason) => truncate(reason, 110));
+        if (reasons.length > 0) lines.push(`↳ ${esc(reasons.join('; '))}`);
+        const caveats = item.caveats
+          .filter(Boolean)
+          .slice(0, 1)
+          .map((caveat) => truncate(caveat, 110));
+        if (caveats.length > 0) lines.push(`⚠️ ${esc(caveats.join('; '))}`);
+        lines.push('');
+      });
+      if (lines.at(-1) === '') lines.pop();
+      if (response.total > response.results.length) {
+        lines.push('', `Показано ${response.results.length} из ${response.total}.`);
+      }
+    }
+
+    const hidden = hiddenUnknownLines(response);
+    if (hidden.length > 0) {
+      lines.push('');
+      lines.push(...hidden);
+    }
+    if (response.relaxations.length > 0) {
+      lines.push('', 'Можно ослабить условия — кнопки ниже.');
+    }
+  }
+
+  if (response.unsupported_actions.length > 0) {
+    lines.push('', 'Это действие бот не выполняет: он только показывает афишу.');
+  }
+
+  return lines.join('\n').trim();
+}
+
+export function formatNoResults(
+  filters: SearchFilterState,
+  directories: DirectoryLookup,
+  now: Date = new Date(),
+  relaxations: readonly Relaxation[] = [],
+): string {
   const lines = [`😕 ${bold('Ничего не нашлось')}`];
   if (filters.q) lines.push(`Запрос: «${esc(truncate(filters.q, 80))}»`);
-  lines.push(formatFilterLine(filters, now));
+  lines.push(formatFilterLine(filters, directories, now));
   lines.push('');
+  if (relaxations.length > 0) {
+    lines.push('Можно ослабить одно условие — сервер уже посчитал, сколько событий найдётся:');
+    relaxations.slice(0, 5).forEach((relaxation) => {
+      lines.push(`• ${esc(formatRelaxationLabel(relaxation))} — ${relaxation.count}`);
+    });
+    lines.push('');
+  }
   lines.push('Попробуйте убрать один из фильтров кнопками ниже — поиск выполнится заново.');
   return lines.join('\n');
 }
 
-export function isSoldOut(event: Event | EventListItem): boolean {
-  return pickPrimaryOccurrence(event)?.availability === 'sold_out';
+export function isSoldOut(event: Event | EventListItem, occurrenceId?: string | null): boolean {
+  return pickOccurrence(event, occurrenceId)?.availability === 'sold_out';
 }
 
-export function formatAvailability(event: Event | EventListItem): string | null {
-  const occurrence = pickPrimaryOccurrence(event);
+export function formatAvailability(
+  event: Event | EventListItem,
+  occurrenceId?: string | null,
+): string | null {
+  const occurrence = pickOccurrence(event, occurrenceId);
   if (occurrence?.availability === 'sold_out') return 'Билеты на этот сеанс проданы';
   if (occurrence?.availability === 'available') return 'Билеты в продаже';
   return null;
 }
 
-export function formatEventCard(event: Event | EventListItem, now: Date = new Date()): string {
+export function formatEventCard(
+  event: Event | EventListItem,
+  directories: DirectoryLookup,
+  now: Date = new Date(),
+  options: { occurrenceId?: string | null } = {},
+): string {
   const lines: string[] = [];
-  const category = categoryNameOne(event.category) ?? 'Событие';
+  const category = directories.categoryName(event.category) ?? 'Событие';
   const header: string[] = [`🎭 ${bold(category)}`];
   if (event.age_limit !== null) header.push(`${event.age_limit}+`);
   const duration = formatDuration(event.duration_min);
@@ -355,7 +647,7 @@ export function formatEventCard(event: Event | EventListItem, now: Date = new Da
     lines.push(`❌ ${bold('Событие отменено')}`);
   }
 
-  const occurrence = pickPrimaryOccurrence(event);
+  const occurrence = pickOccurrence(event, options.occurrenceId);
   if (occurrence?.status === 'cancelled') {
     lines.push('❌ Этот сеанс отменён');
   } else if (occurrence?.status === 'postponed') {
@@ -365,23 +657,31 @@ export function formatEventCard(event: Event | EventListItem, now: Date = new Da
   } else if (occurrence?.status === 'unknown') {
     lines.push('ℹ️ Статус сеанса не подтверждён организатором');
   }
-  if (isSoldOut(event)) {
+  if (isSoldOut(event, options.occurrenceId)) {
     lines.push('❌ Билеты на этот сеанс проданы');
   }
 
-  lines.push(`📅 ${bold(formatEventWhen(event, now))}`);
+  const sessionSuffix = (() => {
+    if (event.occurrences.length <= 1 || !occurrence) return '';
+    const ordered = sortOccurrences(event.occurrences);
+    const index = ordered.findIndex((item) => item.id === occurrence.id);
+    return index >= 0 ? ` · сеанс ${index + 1} из ${ordered.length}` : '';
+  })();
+  lines.push(`📅 ${bold(formatEventWhen(event, now, options.occurrenceId))}${esc(sessionSuffix)}`);
 
-  const city = cityName(event.city_id) ?? event.city;
+  const city = directories.cityName(event.city_id) ?? event.city;
   lines.push(`📍 ${bold(city)} · ${esc(truncate(event.venue, 120))}`);
   if (event.address) lines.push(esc(`   ${truncate(event.address, 160)}`));
 
   const ticketLine = [`💰 ${esc(formatPrice(event.price_min, event.price_max, event.is_free))}`];
-  const availability = formatAvailability(event);
-  if (availability && !isSoldOut(event)) ticketLine.push(`🎟 ${esc(availability)}`);
+  const availability = formatAvailability(event, options.occurrenceId);
+  if (availability && !isSoldOut(event, options.occurrenceId)) {
+    ticketLine.push(`🎟 ${esc(availability)}`);
+  }
   lines.push(ticketLine.join(' · '));
 
   const extras: string[] = [];
-  if (event.language) extras.push(`Язык: ${event.language}`);
+  if (event.language) extras.push(`Язык: ${languageLabel(event.language)}`);
   if (extras.length > 0) lines.push(esc(extras.join(' · ')));
 
   if (event.tags.length > 0) {
@@ -420,15 +720,20 @@ export function formatEventCard(event: Event | EventListItem, now: Date = new Da
   return lines.join('\n');
 }
 
-function subscriptionParts(subscription: Subscription): {
+function subscriptionParts(
+  subscription: Subscription,
+  directories: DirectoryLookup,
+): {
   city: string;
   category: string;
   period: string;
 } {
   return {
-    city: subscription.city ? (cityName(subscription.city) ?? subscription.city) : 'Любой город',
+    city: subscription.city
+      ? (directories.cityName(subscription.city) ?? subscription.city)
+      : 'Любой город',
     category: subscription.category
-      ? (categoryName(subscription.category) ?? subscription.category)
+      ? (directories.categoryName(subscription.category) ?? subscription.category)
       : 'Все категории',
     period: subscription.period
       ? (datePresetLabel(subscription.period) ?? subscription.period)
@@ -436,12 +741,18 @@ function subscriptionParts(subscription: Subscription): {
   };
 }
 
-export function formatSubscription(subscription: Subscription): string {
-  const parts = subscriptionParts(subscription);
+export function formatSubscription(
+  subscription: Subscription,
+  directories: DirectoryLookup,
+): string {
+  const parts = subscriptionParts(subscription, directories);
   return `${parts.category} · ${parts.city} · ${parts.period}`;
 }
 
-export function formatSubscriptionsList(subscriptions: Subscription[]): string {
+export function formatSubscriptionsList(
+  subscriptions: Subscription[],
+  directories: DirectoryLookup,
+): string {
   if (subscriptions.length === 0) {
     return [
       `🔔 ${bold('Подписок пока нет')}`,
@@ -452,22 +763,25 @@ export function formatSubscriptionsList(subscriptions: Subscription[]): string {
 
   const lines = [`🔔 ${bold(`Ваши подписки (${subscriptions.length})`)}`, ''];
   subscriptions.slice(0, 20).forEach((subscription, index) => {
-    lines.push(`${index + 1}. ${esc(formatSubscription(subscription))}`);
+    lines.push(`${index + 1}. ${esc(formatSubscription(subscription, directories))}`);
   });
   if (subscriptions.length > 20) {
     lines.push('');
     lines.push(`Показаны первые 20 из ${subscriptions.length}.`);
   }
   lines.push('');
-  lines.push('Нажмите ❌ рядом с подпиской, чтобы удалить её.');
+  lines.push('Нажмите ▶️ рядом с подпиской, чтобы открыть её события, или ❌, чтобы удалить.');
   return lines.join('\n');
 }
 
-export function formatSubscriptionCreated(subscription: Subscription): string {
+export function formatSubscriptionCreated(
+  subscription: Subscription,
+  directories: DirectoryLookup,
+): string {
   return [
     `✅ ${bold('Подписка сохранена')}`,
     '',
-    esc(formatSubscription(subscription)),
+    esc(formatSubscription(subscription, directories)),
     '',
     'Она появилась в разделе «Мои подписки». Отписаться можно там же.',
   ].join('\n');
@@ -479,12 +793,15 @@ export interface SubscriptionDraftView {
   period: DatePreset | null;
 }
 
-export function formatSubscriptionDraft(draft: SubscriptionDraftView): string {
+export function formatSubscriptionDraft(
+  draft: SubscriptionDraftView,
+  directories: DirectoryLookup,
+): string {
   return [
     `🔔 ${bold('Новая подписка')}`,
     '',
-    `📍 Город: ${esc(draft.city ? (cityName(draft.city) ?? draft.city) : 'Любой')}`,
-    `🎭 Категория: ${esc(draft.category ? (categoryName(draft.category) ?? draft.category) : 'Любая')}`,
+    `📍 Город: ${esc(draft.city ? (directories.cityName(draft.city) ?? draft.city) : 'Любой')}`,
+    `🎭 Категория: ${esc(draft.category ? (directories.categoryName(draft.category) ?? draft.category) : 'Любая')}`,
     `🗓 Период: ${esc(draft.period ? (datePresetLabel(draft.period) ?? draft.period) : 'Любой')}`,
     '',
     'Выберите, что изменить, или сохраните подписку.',
@@ -509,6 +826,69 @@ export function eventSiteUrl(publicWebUrl: string | null | undefined, id: string
   const base = telegramSafeHttpUrl(publicWebUrl);
   if (!base) return null;
   return telegramSafeHttpUrl(`${base}/events/${id}`);
+}
+
+/** Ссылка на Яндекс.Карты по координатам площадки. */
+export function eventMapUrl(event: Event): string | null {
+  const lat = event.lat;
+  const lon = event.lon;
+  if (lat === null || lat === undefined || lon === null || lon === undefined) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return telegramSafeHttpUrl(`https://yandex.ru/maps/?pt=${lon},${lat}&z=17&l=map`);
+}
+
+/** Deep link «сайт → бот»: открывает карточку события по /start event_<uuid>. */
+export function eventDeepLink(
+  botUsername: string | null | undefined,
+  eventId: string,
+): string | null {
+  if (!botUsername || !/^[A-Za-z0-9_]{3,64}$/.test(botUsername)) return null;
+  if (!UUID_RE.test(eventId)) return null;
+  return telegramSafeHttpUrl(`https://t.me/${botUsername}?start=event_${eventId}`);
+}
+
+/** Системный диалог «Поделиться» Telegram. */
+export function eventShareUrl(url: string | null | undefined, title: string): string | null {
+  const safeUrl = telegramSafeHttpUrl(url);
+  if (!safeUrl) return null;
+  const query = new URLSearchParams({
+    url: safeUrl,
+    text: truncate(title, 180),
+  });
+  return telegramSafeHttpUrl(`https://t.me/share/url?${query.toString()}`);
+}
+
+export function formatVenueSchedule(
+  schedule: VenueSchedule,
+  directories: DirectoryLookup,
+  now: Date = new Date(),
+): string {
+  const venue = schedule.venue;
+  const city = directories.cityName(venue.city_id) ?? venue.city;
+  const lines = [
+    `🏛 ${bold(truncate(venue.name, 160))}`,
+    `📍 ${esc(city)}${venue.address ? ` · ${esc(truncate(venue.address, 160))}` : ''}`,
+    `📅 ${esc(formatDateRange(schedule.date_from, schedule.date_to, now))}`,
+    '',
+  ];
+
+  if (schedule.items.length === 0) {
+    lines.push('На этот период событий площадки нет.');
+    return lines.join('\n');
+  }
+
+  schedule.items.slice(0, 20).forEach((event, index) => {
+    const price = formatPrice(event.price_min, event.price_max, event.is_free);
+    lines.push(
+      `${index + 1}. ${bold(truncate(event.title, 100))}`,
+      `${esc(formatEventWhen(event, now))} · ${esc(price)}`,
+    );
+  });
+  if (schedule.items.length > 20) {
+    lines.push('', `Показаны первые 20 из ${schedule.items.length}.`);
+  }
+  return lines.join('\n');
 }
 
 export function urlHost(value: string | null | undefined): string | null {
