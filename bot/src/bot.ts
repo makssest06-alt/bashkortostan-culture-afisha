@@ -1620,7 +1620,7 @@ export function createBot(
     await typing(ctx);
     let result: { status?: string; message?: string } = {};
     try {
-      result = await api.confirmAssistant(id, decision);
+      result = await api.confirmAssistant(id, decision, userRefFor(ctx));
       logger.info('assistant_confirmed', {
         user: logUser(ctx),
         decision,

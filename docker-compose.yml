@@ -33,12 +33,16 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${API_PORT:-8000}:8000"
+      # P0-2: API не публикуется наружу — снаружи доступен только сайт.
+      # Прямой доступ (если нужен) — через localhost и отдельный reverse proxy.
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     environment:
       PORT: 8000
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-afisha}:${POSTGRES_PASSWORD:-afisha}@postgres:5432/${POSTGRES_DB:-afisha}}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
-      ADMIN_OPEN: ${ADMIN_OPEN:-1}
+      # P0-1: по умолчанию админка закрыта. ADMIN_OPEN=1 допустим только для локального демо
+      # и запрещён в production (бэкенд не стартует).
+      ADMIN_OPEN: ${ADMIN_OPEN:-}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3210}
       ASSISTANT_DISABLED: ${ASSISTANT_DISABLED:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
@@ -49,7 +53,14 @@ services:
       LLM_COST_OUT_RUB_PER_1K: ${LLM_COST_OUT_RUB_PER_1K:-0.06}
       FEEDBACK_RETENTION_DAYS: ${FEEDBACK_RETENTION_DAYS:-90}
       METRICS_RATE_LIMIT: ${METRICS_RATE_LIMIT:-120}
-      TRUST_PROXY: ${TRUST_PROXY:-1}
+      # P0-2: по умолчанию заголовкам прокси не доверяем; включаем только за известным прокси.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      # P0-3: лимиты и дневной бюджет ассистента.
+      ASSISTANT_RATE_LIMIT_10M: ${ASSISTANT_RATE_LIMIT_10M:-20}
+      ASSISTANT_DAILY_LIMIT: ${ASSISTANT_DAILY_LIMIT:-200}
+      ASSISTANT_CONFIRM_LIMIT_10M: ${ASSISTANT_CONFIRM_LIMIT_10M:-20}
+      ASSISTANT_MAX_TOKENS: ${ASSISTANT_MAX_TOKENS:-800}
+      ASSISTANT_DAILY_BUDGET_RUB: ${ASSISTANT_DAILY_BUDGET_RUB:-100}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/api/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s

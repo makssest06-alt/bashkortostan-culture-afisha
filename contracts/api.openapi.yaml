@@ -738,7 +738,6 @@ paths:
               example:
                 id: 4aae8858-6af9-4497-b466-efa2e7766c93
                 channel: telegram
-                user_ref: u_9f2c4e7a1b3d5f60
                 city: ufa
                 category: concert
                 period: weekend
@@ -762,9 +761,10 @@ paths:
       tags:
       - subscriptions
       summary: Подписки пользователя
-      security: []
+      security:
+      - bearerAuth: []
+      description: '`user_ref` передаётся заголовком `Authorization: Bearer <user_ref>` (P0-5). В query string — 400; без заголовка — 401. `user_ref` в ответе не возвращается.'
       parameters:
-      - $ref: '#/components/parameters/UserRef'
       - $ref: '#/components/parameters/RequestIdIn'
       responses:
         '200':
@@ -780,13 +780,14 @@ paths:
                 items:
                 - id: 4aae8858-6af9-4497-b466-efa2e7766c93
                   channel: telegram
-                  user_ref: u_9f2c4e7a1b3d5f60
                   city: ufa
                   category: concert
                   period: weekend
                   created_at: '2026-11-13T12:00:00+05:00'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
@@ -794,15 +795,16 @@ paths:
       x-codeSamples:
       - lang: Shell
         label: curl
-        source: curl "$API/subscriptions?user_ref=u_9f2c4e7a1b3d5f60"
+        source: 'curl "$API/subscriptions" -H "Authorization: Bearer u_9f2c4e7a1b3d5f60"'
   /subscriptions/{id}:
     delete:
       operationId: deleteSubscription
       tags:
       - subscriptions
       summary: Отписаться
-      security: []
-      description: Удаляет запись подписки полностью (ТЗ п. 10).
+      security:
+      - bearerAuth: []
+      description: 'Удаляет запись подписки полностью (ТЗ п. 10). `user_ref` обязателен и передаётся заголовком `Authorization: Bearer <user_ref>`: без него — 401, с чужим — 404. В query string не принимается.'
       parameters:
       - $ref: '#/components/parameters/SubscriptionId'
       - $ref: '#/components/parameters/RequestIdIn'
@@ -814,6 +816,8 @@ paths:
               $ref: '#/components/headers/XRequestId'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
@@ -823,7 +827,7 @@ paths:
       x-codeSamples:
       - lang: Shell
         label: curl
-        source: curl -X DELETE "$API/subscriptions/4aae8858-6af9-4497-b466-efa2e7766c93"
+        source: 'curl -X DELETE "$API/subscriptions/4aae8858-6af9-4497-b466-efa2e7766c93" -H "Authorization: Bearer u_9f2c4e7a1b3d5f60"'
   /feedback:
     post:
       operationId: createFeedback
@@ -1657,6 +1661,20 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Токен подтверждения уже использован.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: Время подтверждения истекло.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /admin/traces:
     get:
       operationId: adminListTraces
@@ -1891,8 +1909,9 @@ components:
     UserRef:
       name: user_ref
       in: query
-      required: true
-      description: Непрозрачный идентификатор пользователя, см. схему `SubscriptionCreate`.
+      deprecated: true
+      required: false
+      description: 'Не используется. `user_ref` передаётся заголовком `Authorization: Bearer <user_ref>`; в query string бэкенд его не принимает (P0-5).'
       schema:
         $ref: '#/components/schemas/UserRef'
     IfNoneMatch:
@@ -2516,10 +2535,10 @@ components:
           - null
     Subscription:
       type: object
+      description: Публичное представление подписки. `user_ref` в ответах не возвращается (P0-5).
       required:
       - id
       - channel
-      - user_ref
       - city
       - category
       - period
@@ -2533,8 +2552,6 @@ components:
           enum:
           - telegram
           - web
-        user_ref:
-          $ref: '#/components/schemas/UserRef'
         city:
           anyOf:
           - $ref: ./event.schema.json#/$defs/slug
@@ -3174,6 +3191,8 @@ components:
         confirmation_id:
           type: string
           minLength: 4
+        user_ref:
+          $ref: '#/components/schemas/UserRef'
         confirm:
           type: boolean
         decision:

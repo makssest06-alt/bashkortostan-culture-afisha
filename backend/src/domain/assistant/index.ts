@@ -3,9 +3,10 @@ import { z } from 'zod';
 
 import type { AppConfig } from '../../config.js';
 import type { Database } from '../../db/adapter.js';
+import { logEvent } from '../../observability/logger.js';
 import type { MetricsRegistry } from '../../observability/metrics.js';
 import type { SlidingRateLimiter } from '../rate-limit.js';
-import { formatRfc3339Local } from '../time.js';
+import { formatRfc3339Local, localNow, TZ_OFFSET } from '../time.js';
 import type { ApiErrorDetail } from '../types.js';
 import { PROMPT_VERSION, runLlmAgent } from './llm.js';
 import {
@@ -102,6 +103,17 @@ export function parseAssistantRequestBody(
   };
 }
 
+/** Потрачено на LLM за текущие локальные сутки (+05:00) по трассам. */
+async function assistantSpendTodayRub(db: Database, now: Date): Promise<number> {
+  const today = localNow(now).date;
+  const res = await db.query<{ total: string | number }>(
+    `SELECT COALESCE(SUM(cost_rub), 0) AS total FROM agent_traces WHERE created_at >= $1`,
+    [`${today}T00:00:00${TZ_OFFSET}`],
+  );
+  const total = Number(res.rows[0]?.total ?? 0);
+  return Number.isFinite(total) && total >= 0 ? total : 0;
+}
+
 export async function runAssistantPipeline(
   db: Database,
   config: AppConfig,
@@ -140,19 +152,44 @@ export async function runAssistantPipeline(
   let fallbackUsed = false;
   let errorText: string | null = null;
 
-  if (config.llmApiKey) {
-    try {
-      const llmRes = await runLlmAgent(request, config, runtime, now);
-      payload = llmRes.response;
-      tokenUsage = llmRes.tokenUsage;
-      costRub = llmRes.costRub;
-      modelUsed = config.llmModel;
-      planObj = llmRes.plan;
-    } catch (err) {
+  // P0-3: дневной бюджет. При его исчерпании LLM не вызывается вообще —
+  // ассистент отвечает по rules-движку, деньги не тратятся молча.
+  const useLlm = Boolean(config.llmApiKey);
+  if (useLlm) {
+    const spent = await assistantSpendTodayRub(db, now);
+    const budget = config.assistantDailyBudgetRub;
+    if (spent >= budget) {
       fallbackUsed = true;
-      errorText = err instanceof Error ? err.message : 'LLM error';
-      payload = await runDeterministicAssistant(request, runtime, now, 'rules-fallback-v2');
-      planObj = { constraints: payload.constraints, fallback: true };
+      errorText = `daily_budget_exhausted: ${spent.toFixed(4)} ₽ >= ${budget} ₽`;
+      payload = await runDeterministicAssistant(request, runtime, now, 'rules-budget-v2');
+      planObj = { constraints: payload.constraints, fallback: 'daily_budget_exhausted' };
+      options.metrics?.incAssistantBudgetFallback();
+      logEvent('warn', 'assistant_budget_exhausted', {
+        request_id: options.requestId,
+        spent_rub: Number(spent.toFixed(4)),
+        budget_rub: budget,
+      });
+    } else {
+      if (budget > 0 && spent >= budget * 0.8) {
+        logEvent('warn', 'assistant_budget_warning', {
+          request_id: options.requestId,
+          spent_rub: Number(spent.toFixed(4)),
+          budget_rub: budget,
+        });
+      }
+      try {
+        const llmRes = await runLlmAgent(request, config, runtime, now);
+        payload = llmRes.response;
+        tokenUsage = llmRes.tokenUsage;
+        costRub = llmRes.costRub;
+        modelUsed = config.llmModel;
+        planObj = llmRes.plan;
+      } catch (err) {
+        fallbackUsed = true;
+        errorText = err instanceof Error ? err.message : 'LLM error';
+        payload = await runDeterministicAssistant(request, runtime, now, 'rules-fallback-v2');
+        planObj = { constraints: payload.constraints, fallback: true };
+      }
     }
   } else {
     payload = await runDeterministicAssistant(request, runtime, now, 'rules-v2');

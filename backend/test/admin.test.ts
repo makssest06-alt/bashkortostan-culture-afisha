@@ -174,17 +174,42 @@ describe('Admin, Moderation, Audit, Subscriptions & Feedback Privacy', () => {
     });
     expect(dupSub.status).toBe(409);
 
-    const listSub = await ctx.req(`/api/v1/subscriptions?user_ref=${userRef}`);
+    const listSub = await ctx.req('/api/v1/subscriptions', {
+      headers: { Authorization: `Bearer ${userRef}` },
+    });
     expect(listSub.status).toBe(200);
     const listSubJson = await listSub.json();
     validators.assertValid('SubscriptionList', listSubJson);
     expect(listSubJson.items).toHaveLength(1);
+    expect(listSubJson.items[0].user_ref).toBeUndefined();
 
-    // Физическое удаление
-    const delSub = await ctx.req(`/api/v1/subscriptions/${subJson.id}`, { method: 'DELETE' });
+    // user_ref в query string больше не принимается (P0-5)
+    const querySub = await ctx.req(`/api/v1/subscriptions?user_ref=${userRef}`);
+    expect(querySub.status).toBe(400);
+
+    // без Authorization -> 401
+    const noAuthSub = await ctx.req('/api/v1/subscriptions');
+    expect(noAuthSub.status).toBe(401);
+
+    // Физическое удаление — только с Authorization, без query string (P0-5)
+    const delNoAuth = await ctx.req(`/api/v1/subscriptions/${subJson.id}`, { method: 'DELETE' });
+    expect(delNoAuth.status).toBe(401);
+
+    const delWrong = await ctx.req(`/api/v1/subscriptions/${subJson.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer u_someone_else_00001' },
+    });
+    expect(delWrong.status).toBe(404);
+
+    const delSub = await ctx.req(`/api/v1/subscriptions/${subJson.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${userRef}` },
+    });
     expect(delSub.status).toBe(204);
 
-    const afterDel = await ctx.req(`/api/v1/subscriptions?user_ref=${userRef}`);
+    const afterDel = await ctx.req('/api/v1/subscriptions', {
+      headers: { Authorization: `Bearer ${userRef}` },
+    });
     expect((await afterDel.json()).items).toHaveLength(0);
 
     // Honeypot: отвечает 202, но не попадает в /admin/applications

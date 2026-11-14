@@ -53,12 +53,32 @@ export class SlidingRateLimiter {
   }
 }
 
-export function clientIpFromHeaders(headers: Headers, fallbackIp = '127.0.0.1'): string {
-  const fwd = headers.get('x-forwarded-for');
-  if (fwd) {
-    const first = fwd.split(',')[0]?.trim();
-    if (first) return first;
+export function clientIpFromHeaders(
+  headers: Headers,
+  trustedProxyHops = 1,
+  fallbackIp = '127.0.0.1',
+): string {
+  const forwarded = headers.get('x-forwarded-for');
+  if (forwarded) {
+    const chain = forwarded
+      .split(',')
+      .map((part) => normalizeClientIp(part.trim()))
+      .filter(Boolean);
+    if (chain.length > 0) {
+      // Каждый доверенный прокси добавляет адрес своего клиента в конец цепочки.
+      // Берём адрес на N позиций справа, а не первый (его контролирует клиент).
+      const hops = Math.max(1, trustedProxyHops);
+      return chain[Math.max(0, chain.length - hops)] ?? fallbackIp;
+    }
   }
-  const realIp = headers.get('x-real-ip')?.trim();
+  const realIp = normalizeClientIp(headers.get('x-real-ip')?.trim() ?? '');
   return realIp || fallbackIp;
+}
+
+/** Приводит IPv4-mapped IPv6 (`::ffff:127.0.0.1`) к обычному IPv4. */
+export function normalizeClientIp(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  if (value.startsWith('::ffff:') && value.includes('.')) return value.slice('::ffff:'.length);
+  return value;
 }

@@ -229,6 +229,8 @@ export async function runLlmAgent(
         tools: AGENT_TOOL_DEFINITIONS,
         tool_choice: 'auto',
         temperature: 0.2,
+        // P0-3: потолок токенов ответа — нельзя выжечь бюджет одним длинным ответом.
+        max_tokens: config.assistantMaxTokens,
       }),
       signal: AbortSignal.timeout(config.llmTimeoutMs),
     });

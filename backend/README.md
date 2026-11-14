@@ -31,8 +31,8 @@ npm run dev
 |---|---|---|
 | `PORT` | `8000` | Порт HTTP-сервера |
 | `DATABASE_URL` | пусто | Строка PostgreSQL 16; если пуста — используется PGlite (`PGLITE_DATA_DIR=./data/pglite`) |
-| `ADMIN_TOKEN` | пусто | Bearer/header-токен модератора; заглушка из `.env.example` автоматически отклоняется |
-| `ADMIN_OPEN` | пусто | `1` открывает админку без токена (только для закрытого демо-стенда) |
+| `ADMIN_TOKEN` | пусто | Bearer/header-токен модератора; заглушка из `.env.example` автоматически отклоняется. В production обязателен, ≥ 32 символов |
+| `ADMIN_OPEN` | пусто | `1` открывает админку без токена — только для локального демо. В production бэкенд с `ADMIN_OPEN=1` не стартует |
 | `PUBLIC_WEB_URL` | `http://localhost:3210` | Публичный URL сайта (ссылки на события и источники) |
 | `ASSISTANT_DISABLED` | пусто | `1` отключает ассистента (`503` + `Retry-After: 60`) |
 | `LLM_API_KEY` | пусто | Ключ OpenAI-compatible LLM; без него активен локальный контур `rules-v2` |
@@ -40,9 +40,14 @@ npm run dev
 | `LLM_MODEL` | `gpt-4o-mini` | Имя модели |
 | `LLM_TIMEOUT_MS` | `12000` | Таймаут запроса к LLM (мс) |
 | `LLM_COST_IN_RUB_PER_1K` / `LLM_COST_OUT_RUB_PER_1K` | `0.015` / `0.06` | Расчёт стоимости токенов модели в ₽ |
+| `ASSISTANT_RATE_LIMIT_10M` | `20` | Лимит `/assistant/query` за 10 минут на IP и на `user_ref` |
+| `ASSISTANT_DAILY_LIMIT` | `200` | Суточный лимит `/assistant/query` на IP и на `user_ref` |
+| `ASSISTANT_CONFIRM_LIMIT_10M` | `20` | Лимит `/assistant/confirm` за 10 минут на IP и на `user_ref` |
+| `ASSISTANT_MAX_TOKENS` | `800` | Максимум токенов ответа LLM (`max_tokens`) |
+| `ASSISTANT_DAILY_BUDGET_RUB` | `100` | Дневной бюджет LLM; при исчерпании — `rules-budget-v2` без вызова модели |
 | `FEEDBACK_RETENTION_DAYS` | `90` | Срок хранения записей обратной связи (дней) |
 | `METRICS_RATE_LIMIT` | `120` | Лимит обращений к `/metrics` (req/min) |
-| `TRUST_PROXY` | `1` | Учитывать `X-Forwarded-For` при rate-limit |
+| `TRUST_PROXY` | `0` | `0` — брать адрес из сокета; `1` — один доверенный прокси; N — N прокси (адрес с конца `X-Forwarded-For`) |
 
 ## Основные группы эндпоинтов
 

@@ -548,6 +548,8 @@ export interface AssistantConfirmation {
 
 export interface AssistantConfirmRequest {
   confirmation_id: string;
+  /** Владелец подтверждения: токен привязан к user_ref, чужой получит 404. */
+  user_ref?: string;
   confirm?: boolean;
   decision?: 'approve' | 'reject';
 }

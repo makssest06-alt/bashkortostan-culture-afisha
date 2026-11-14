@@ -8,6 +8,8 @@ export class MetricsRegistry {
   private readonly feedbackTotal = new Map<string, number>();
   private readonly importRowsTotal = new Map<string, number>();
   private readonly assistantTotal = new Map<string, number>();
+  private readonly rateLimitedTotal = new Map<string, number>();
+  private assistantBudgetFallbacks = 0;
 
   observeHttp(method: string, route: string, status: number, durationSeconds: number): void {
     const key = `${method}|${route}|${status}`;
@@ -38,6 +40,14 @@ export class MetricsRegistry {
   incAssistant(engine: string, action: string): void {
     const key = `${engine}|${action}`;
     this.assistantTotal.set(key, (this.assistantTotal.get(key) ?? 0) + 1);
+  }
+
+  incRateLimited(scope: string): void {
+    this.rateLimitedTotal.set(scope, (this.rateLimitedTotal.get(scope) ?? 0) + 1);
+  }
+
+  incAssistantBudgetFallback(): void {
+    this.assistantBudgetFallbacks += 1;
   }
 
   formatPrometheus(): string {
@@ -82,6 +92,16 @@ export class MetricsRegistry {
       const [engine, action] = key.split('|');
       lines.push(`afisha_assistant_queries_total{engine="${engine}",action="${action}"} ${val}`);
     }
+
+    lines.push('# HELP afisha_rate_limited_total Requests rejected by a rate limiter.');
+    lines.push('# TYPE afisha_rate_limited_total counter');
+    for (const [scope, val] of this.rateLimitedTotal.entries()) {
+      lines.push(`afisha_rate_limited_total{scope="${scope}"} ${val}`);
+    }
+
+    lines.push('# HELP afisha_assistant_budget_fallbacks_total Assistant requests downgraded to rules because of the daily budget.');
+    lines.push('# TYPE afisha_assistant_budget_fallbacks_total counter');
+    lines.push(`afisha_assistant_budget_fallbacks_total ${this.assistantBudgetFallbacks}`);
 
     return `${lines.join('\n')}\n`;
   }

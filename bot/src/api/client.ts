@@ -139,6 +139,7 @@ export interface ApiClient {
   confirmAssistant: (
     confirmationId: string,
     decision: 'approve' | 'reject',
+    userRef: string,
   ) => Promise<{ status?: string; message?: string }>;
 }
 
@@ -470,8 +471,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     },
 
     async listSubscriptions(userRef) {
-      const query = new URLSearchParams({ user_ref: userRef });
-      const result = await request(`/api/v1/subscriptions?${query.toString()}`, SubscriptionListSchema);
+      // P0-5: user_ref уходит заголовком Authorization, а не в query string.
+      const result = await request('/api/v1/subscriptions', SubscriptionListSchema, {
+        headers: { authorization: `Bearer ${userRef}` },
+      });
       return result.items;
     },
 
@@ -483,10 +486,13 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     },
 
     async deleteSubscription(id, userRef) {
-      const query = new URLSearchParams({ user_ref: userRef });
-      await request(`/api/v1/subscriptions/${encodeURIComponent(id)}?${query.toString()}`, {
-        safeParse: (value) => ({ success: true, data: value }),
-      }, { method: 'DELETE' });
+      await request(
+        `/api/v1/subscriptions/${encodeURIComponent(id)}`,
+        {
+          safeParse: (value) => ({ success: true, data: value }),
+        },
+        { method: 'DELETE', headers: { authorization: `Bearer ${userRef}` } },
+      );
     },
 
     async queryAssistant(input) {
@@ -505,7 +511,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       });
     },
 
-    async confirmAssistant(confirmationId, decision) {
+    async confirmAssistant(confirmationId, decision, userRef) {
       return request(
         '/api/v1/assistant/confirm',
         {
@@ -518,7 +524,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         },
         {
           method: 'POST',
-          body: JSON.stringify({ confirmation_id: confirmationId, decision }),
+          body: JSON.stringify({ confirmation_id: confirmationId, user_ref: userRef, decision }),
         },
       );
     },

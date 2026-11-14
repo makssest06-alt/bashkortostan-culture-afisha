@@ -396,19 +396,26 @@ describe('ApiClient', () => {
     });
   });
 
-  it('кодирует user_ref при удалении и принимает 204', async () => {
+  it('кодирует id при удалении, передаёт user_ref заголовком Authorization и принимает 204', async () => {
     const { client, calls } = clientWith(() => new Response(null, { status: 204 }));
     await client.deleteSubscription('44444444-4444-4444-8444-444444444444', 'telegram_00000123');
     const url = new URL(calls[0]?.url ?? '');
-    expect(url.searchParams.get('user_ref')).toBe('telegram_00000123');
+    expect(url.searchParams.get('user_ref')).toBeNull();
+    expect((calls[0]?.init?.headers as Record<string, string>)['authorization']).toBe(
+      'Bearer telegram_00000123',
+    );
     expect(calls[0]?.init?.method).toBe('DELETE');
   });
 
-  it('перечисляет подписки', async () => {
+  it('перечисляет подписки с user_ref в заголовке Authorization', async () => {
     const { client, calls } = clientWith(() => jsonResponse({ items: [SUBSCRIPTION] }));
     const items = await client.listSubscriptions('telegram_00000123');
     expect(items).toHaveLength(1);
-    expect(new URL(calls[0]?.url ?? '').searchParams.get('user_ref')).toBe('telegram_00000123');
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.searchParams.get('user_ref')).toBeNull();
+    expect((calls[0]?.init?.headers as Record<string, string>)['authorization']).toBe(
+      'Bearer telegram_00000123',
+    );
   });
 
   it('разбирает справочники и health', async () => {
@@ -492,14 +499,15 @@ describe('ApiClient', () => {
     expect(result.relaxations).toEqual([]);
   });
 
-  it('отправляет подтверждение ассистента без повторов', async () => {
+  it('отправляет подтверждение ассистента без повторов и с user_ref', async () => {
     const { client, calls } = clientWith(() => jsonResponse({ status: 'ok' }));
-    await client.confirmAssistant('cnf_123456', 'approve');
+    await client.confirmAssistant('cnf_123456', 'approve', 'telegram_00000123');
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('http://api.test/api/v1/assistant/confirm');
     expect(calls[0]?.init?.method).toBe('POST');
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
       confirmation_id: 'cnf_123456',
+      user_ref: 'telegram_00000123',
       decision: 'approve',
     });
   });

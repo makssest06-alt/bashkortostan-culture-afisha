@@ -1360,12 +1360,12 @@ describe('сценарии бота', () => {
     await harness.run(messageUpdate('подпишись на концерты', 168));
     expect(harness.keyboardButtons()).toContain('✅ Подтвердить');
     await harness.pressButton('✅ Подтвердить', 169);
-    expect(harness.confirmAssistant).toHaveBeenCalledWith('cnf_123456', 'approve');
+    expect(harness.confirmAssistant).toHaveBeenCalledWith('cnf_123456', 'approve', USER_REF);
     expect(harness.lastText()).toContain('Готово');
 
     await harness.run(messageUpdate('подпишись на концерты', 170));
     await harness.pressButton('❌ Отменить', 171);
-    expect(harness.confirmAssistant).toHaveBeenLastCalledWith('cnf_123456', 'reject');
+    expect(harness.confirmAssistant).toHaveBeenLastCalledWith('cnf_123456', 'reject', USER_REF);
     expect(harness.lastText()).toContain('Действие отменено');
   });
 

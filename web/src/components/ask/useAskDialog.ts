@@ -13,6 +13,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 import { ApiClientError, askAssistant, confirmAssistantAction } from '@/lib/api/client';
 import { keywordFilters, mergeQueries } from '@/lib/api/keyword-filters';
+import { browserUserRef } from '@/lib/api/user-ref';
 import type {
   AssistantAction,
   AssistantAssumption,
@@ -333,7 +334,12 @@ export function useAskDialog(
         .filter((t): t is Extract<Turn, { role: 'user' | 'assistant' }> => t.role === 'user' || t.role === 'assistant')
         .slice(-8)
         .map((t) => ({ role: t.role, content: t.text }));
-      const payload: AssistantRequest = { message: text, limit: RESULT_LIMIT, channel: 'web' };
+      const payload: AssistantRequest = {
+        message: text,
+        limit: RESULT_LIMIT,
+        channel: 'web',
+        user_ref: browserUserRef(),
+      };
       if (history.length > 0) payload.history = history;
       if (current.constraints) payload.previous = current.constraints;
       if (current.clarify) payload.answering = current.clarify.code;
@@ -351,6 +357,7 @@ export function useAskDialog(
     try {
       const res = await confirmAssistantAction({
         confirmation_id: pending.confirmation_id,
+        user_ref: browserUserRef(),
         confirm: decision === 'approve',
         decision,
       });
@@ -367,7 +374,11 @@ export function useAskDialog(
       const current = latest.current;
       if (current.phase === 'thinking' || current.phase === 'updating') return;
       dispatch({ type: 'patch', note, optimisticChips: optimisticChips ?? null });
-      const payload: AssistantRequest = { patch, limit: RESULT_LIMIT };
+      const payload: AssistantRequest = {
+        patch,
+        limit: RESULT_LIMIT,
+        user_ref: browserUserRef(),
+      };
       if (current.constraints) payload.previous = current.constraints;
       void run(payload, 0);
     },

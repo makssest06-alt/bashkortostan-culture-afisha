@@ -73,7 +73,9 @@ export function checkAdminAuth(
     return { ok: true, actor: actorHint ?? 'moderator:token' };
   }
 
-  if (config.adminOpen) {
+  // Defense in depth: даже если конфиг собран в обход loadConfig, production
+  // не открывает админку без Bearer-токена.
+  if (config.adminOpen && !config.production) {
     return { ok: true, actor: actorHint ?? 'moderator:demo' };
   }
 

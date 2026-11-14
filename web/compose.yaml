@@ -26,8 +26,11 @@ services:
       - "${WEB_PORT:-3210}:3210"
     environment:
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
-      ADMIN_OPEN: ${ADMIN_OPEN:-1}
+      # P0-1: по умолчанию админка сайта закрыта; ADMIN_OPEN=1 — только локальное демо.
+      ADMIN_OPEN: ${ADMIN_OPEN:-}
       ASSISTANT_DISABLED: ${ASSISTANT_DISABLED:-}
+      # P0-2: сайт пересылает адрес клиента в бэк только за доверенным reverse proxy.
+      TRUST_PROXY_CLIENT_IP: ${TRUST_PROXY_CLIENT_IP:-0}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

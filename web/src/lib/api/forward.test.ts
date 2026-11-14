@@ -22,7 +22,7 @@ describe('backendUrlOf', () => {
 });
 
 describe('forwardToBackend', () => {
-  it('передаёт адрес посетителя, демо-заголовок ассистента и тело, но не cookie и чужой Authorization', async () => {
+  it('не пересылает клиентский X-Forwarded-For, но передаёт демо-заголовок ассистента и тело, а cookie и чужой Authorization отбрасывает', async () => {
     const fetchMock = stubFetch(() => new Response('{"items":[]}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
     const request = new Request('http://site.local/api/v1/assistant/query', {
       method: 'POST',
@@ -41,7 +41,8 @@ describe('forwardToBackend', () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as FetchCall;
     const sent = new Headers(init.headers);
     expect(url).toMatch(/\/api\/v1\/assistant\/query$/);
-    expect(sent.get('x-forwarded-for')).toBe('203.0.113.7');
+    // Подделываемый клиентом адрес в бэк не уходит (P0-2).
+    expect(sent.get('x-forwarded-for')).toBeNull();
     expect(sent.get('x-assistant-demo')).toBe('unavailable');
     expect(sent.get('x-request-id')).toBe('req-pub-1');
     expect(sent.get('cookie')).toBeNull();
@@ -49,6 +50,46 @@ describe('forwardToBackend', () => {
     expect(new TextDecoder().decode(init.body as ArrayBuffer)).toBe('{"message":"концерт"}');
     expect(response.status).toBe(200);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
+  it('за доверенным прокси (TRUST_PROXY_CLIENT_IP=1) ставит X-Forwarded-For из правого элемента цепочки', async () => {
+    const previous = process.env.TRUST_PROXY_CLIENT_IP;
+    process.env.TRUST_PROXY_CLIENT_IP = '1';
+    try {
+      const fetchMock = stubFetch(() => new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      const request = new Request('http://site.local/api/v1/feedback', {
+        method: 'POST',
+        headers: { 'X-Forwarded-For': '1.2.3.4, 203.0.113.7' },
+        body: '{}',
+      });
+      await forwardToBackend(request, { requestId: 'req-pub-3' });
+      const [, init] = fetchMock.mock.calls[0] as unknown as FetchCall;
+      expect(new Headers(init.headers).get('x-forwarded-for')).toBe('203.0.113.7');
+    } finally {
+      if (previous === undefined) delete process.env.TRUST_PROXY_CLIENT_IP;
+      else process.env.TRUST_PROXY_CLIENT_IP = previous;
+    }
+  });
+
+  it('передаёт Authorization для подписок (user_ref в заголовке), но не на другие пути', async () => {
+    const fetchMock = stubFetch(() => new Response('{"items":[]}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    await forwardToBackend(
+      new Request('http://site.local/api/v1/subscriptions', {
+        headers: { Authorization: 'Bearer u_9f2c4e7a1b3d5f60' },
+      }),
+      { requestId: 'req-pub-4' },
+    );
+    const [, init] = fetchMock.mock.calls[0] as unknown as FetchCall;
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer u_9f2c4e7a1b3d5f60');
+
+    await forwardToBackend(
+      new Request('http://site.local/api/v1/events', {
+        headers: { Authorization: 'Bearer u_9f2c4e7a1b3d5f60' },
+      }),
+      { requestId: 'req-pub-5' },
+    );
+    const [, eventsInit] = fetchMock.mock.calls[1] as unknown as FetchCall;
+    expect(new Headers(eventsInit.headers).get('authorization')).toBeNull();
   });
 
   it('отдаёт 304 без тела и с ETag бэка', async () => {

@@ -12,7 +12,6 @@ export const USER_REF_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 export interface SubscriptionRecord {
   id: string;
   channel: 'telegram' | 'web';
-  user_ref: string;
   city: CityId | null;
   category: CategoryId | null;
   period: DatePreset | null;
@@ -139,7 +138,6 @@ export async function createSubscription(
     subscription: {
       id,
       channel,
-      user_ref,
       city: city as CityId | null,
       category: category as CategoryId | null,
       period: period ?? null,
@@ -185,7 +183,7 @@ export async function listSubscriptions(
     items: res.rows.map((r) => ({
       id: r.id,
       channel: r.channel,
-      user_ref: r.user_ref,
+      // user_ref не возвращается: он и так известен владельцу, лишний раз в ответах ему не нужен.
       city: r.city,
       category: r.category,
       period: r.period,
@@ -198,8 +196,8 @@ export async function listSubscriptions(
 export async function deleteSubscription(
   db: Database,
   id: string,
-  userRef?: string | null,
-): Promise<{ ok: true } | { ok: false; status: 400 | 404; code: string; message: string }> {
+  userRef: string | null | undefined,
+): Promise<{ ok: true } | { ok: false; status: 400 | 401 | 404; code: string; message: string }> {
   if (!UUID_PATTERN.test(id)) {
     return {
       ok: false,
@@ -209,18 +207,20 @@ export async function deleteSubscription(
     };
   }
 
-  if (userRef && !USER_REF_PATTERN.test(userRef)) {
+  // P0-5: без user_ref удаление запрещено — по одному UUID удалить подписку нельзя.
+  if (!userRef || !USER_REF_PATTERN.test(userRef)) {
     return {
       ok: false,
-      status: 400,
-      code: 'validation_error',
-      message: 'Некорректный параметр user_ref',
+      status: 401,
+      code: 'unauthorized',
+      message: 'Требуется заголовок Authorization: Bearer <user_ref>',
     };
   }
 
-  const delRes = userRef
-    ? await db.query('DELETE FROM subscriptions WHERE id = $1 AND user_ref = $2', [id.toLowerCase(), userRef])
-    : await db.query('DELETE FROM subscriptions WHERE id = $1', [id.toLowerCase()]);
+  const delRes = await db.query('DELETE FROM subscriptions WHERE id = $1 AND user_ref = $2', [
+    id.toLowerCase(),
+    userRef,
+  ]);
 
   if (delRes.rowCount === 0) {
     return {

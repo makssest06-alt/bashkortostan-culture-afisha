@@ -5,8 +5,9 @@
  * говорят только с сайтом, а бэк может быть закрыт снаружи (в docker compose это http://api:8000).
  *
  * В бэк уходят только заголовки, нужные по контракту. Cookie сайта не уходит никогда.
- * Адрес посетителя передаётся в X-Forwarded-For: по нему бэк считает лимиты частоты,
- * иначе все посетители выглядели бы для бэка одним адресом сервера сайта.
+ * Адрес посетителя передаётся в X-Forwarded-For только за доверенным reverse proxy
+ * (`TRUST_PROXY_CLIENT_IP=1`): клиентский заголовок не пересылается, иначе лимиты
+ * частоты обходились бы его подменой. Без флага бэк берёт адрес сокета соединения.
  * Если бэк не ответил, сайт отвечает 503 unavailable в общем формате ошибок.
  */
 
@@ -40,13 +41,34 @@ function upstreamHeaders(request: Request, requestId: string, extra: Record<stri
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  const forwardedFor = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip');
+  // P0-2: клиентский X-Forwarded-For не пересылается в бэк — его подделывает любой,
+  // кто стучится на сайт напрямую. Адрес клиента ставим только за доверенным
+  // reverse proxy (TRUST_PROXY_CLIENT_IP=1), беря правый элемент цепочки — его
+  // дописал сам прокси. Без флага бэк видит адрес сокета сайта и считает лимиты по нему.
+  const forwardedFor = trustedClientIpOf(request);
   if (forwardedFor) headers.set('X-Forwarded-For', forwardedFor);
+  // P0-5: подписки принимают user_ref только в Authorization: Bearer. Проксируем
+  // этот заголовок лишь для публичного API подписок — на остальных путях он не нужен.
+  if (/^\/api\/v1\/subscriptions(?:\/|$)/.test(new URL(request.url).pathname)) {
+    const authorization = request.headers.get('authorization');
+    if (authorization) headers.set('Authorization', authorization);
+  }
   const url = new URL(request.url);
   headers.set('X-Forwarded-Host', request.headers.get('host') ?? url.host);
   headers.set('X-Forwarded-Proto', request.headers.get('x-forwarded-proto') ?? url.protocol.replace(':', ''));
   for (const [name, value] of Object.entries(extra)) headers.set(name, value);
   return headers;
+}
+
+/** Адрес клиента из доверенного reverse proxy; null, если доверия нет. */
+function trustedClientIpOf(request: Request): string | null {
+  if (process.env.TRUST_PROXY_CLIENT_IP !== '1') return null;
+  const chain = (request.headers.get('x-forwarded-for') ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (chain.length > 0) return chain[chain.length - 1];
+  return request.headers.get('x-real-ip')?.trim() || null;
 }
 
 export async function forwardToBackend(request: Request, options: ForwardOptions = {}): Promise<Response> {

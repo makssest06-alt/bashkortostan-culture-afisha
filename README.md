@@ -38,7 +38,7 @@ cp .env.example .env   # при необходимости задать ADMIN_TO
 docker compose up --build
 ```
 
-Корневой [`docker-compose.yml`](docker-compose.yml) поднимает `postgres` (`postgres:16-alpine` с healthcheck и томом `afisha-postgres-data`), `api` (`backend/`, порт `${API_PORT:-8000}`, healthcheck `/api/v1/health`), `bot` (`bot/`, long polling; нужен `TELEGRAM_BOT_TOKEN`) и `web` через `include: [web/compose.yaml]` на `http://localhost:3210` (по умолчанию `NEXT_PUBLIC_API_BASE_URL=http://api:8000`).
+Корневой [`docker-compose.yml`](docker-compose.yml) поднимает `postgres` (`postgres:16-alpine` с healthcheck и томом `afisha-postgres-data`), `api` (`backend/`, внутренний порт `8000`, наружу опубликован только на `127.0.0.1:${API_PORT:-8000}`, healthcheck `/api/v1/health`), `bot` (`bot/`, long polling; нужен `TELEGRAM_BOT_TOKEN`) и `web` через `include: [web/compose.yaml]` на `http://localhost:3210` (по умолчанию `NEXT_PUBLIC_API_BASE_URL=http://api:8000`).
 
 ### Бэкенд локально (без Docker и внешнего PostgreSQL)
 
@@ -229,8 +229,9 @@ curl -s 'http://localhost:3210/api/v1/events?page_size=1'
 | `NEXT_PUBLIC_API_BASE_URL` | при сборке | Адрес бэка. Пусто — моки |
 | `NEXT_PUBLIC_DATA_MODE` | при сборке | `live` убирает плашку «демо-данные». Ставить только с реальными событиями |
 | `NEXT_PUBLIC_TELEGRAM_BOT_URL` | при сборке | Ссылка на бота, например `https://t.me/имя_бота` |
-| `ADMIN_TOKEN` | при запуске | Токен модератора. С бэком совпадает с его токеном. Заглушка из примера не открывает админку |
-| `ADMIN_OPEN` | при запуске | `1` открывает админку без токена в production. Только для закрытого стенда |
+| `ADMIN_TOKEN` | при запуске | Токен модератора. С бэком совпадает с его токеном. Заглушка из примера не открывает админку. В production обязателен, ≥ 32 символов |
+| `ADMIN_OPEN` | при запуске | `1` открывает админку без токена — только локальное демо; в production бэкенд с `ADMIN_OPEN=1` не стартует. По умолчанию пусто |
+| `TRUST_PROXY_CLIENT_IP` | при запуске | `1` — сайт передаёт адрес клиента в `X-Forwarded-For` (только за доверенным reverse proxy). По умолчанию `0`: клиентский заголовок не пересылается |
 | `AFISHA_DATA_FILE` | при запуске | Файл правок админки на моках. С бэком не используется |
 | `ASSISTANT_DISABLED` | при запуске | `1` выключает ИИ-подбор: `/ask` показывает обычный поиск. Работает и с бэком |
 
@@ -271,11 +272,12 @@ curl -s 'http://localhost:3210/api/v1/events?page_size=1'
 - **Модель и промпт (`PROMPT_VERSION = afisha-agent-v2`)**: `gpt-4o-mini` через OpenAI-совместимый endpoint (`LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`), до 5 вызовов инструментов на ответ (`MAX_TOOL_CALLS_PER_ANSWER = 5`, `contracts/agent_tools.json`), память последних 5+ реплик (`history` + накопленные ограничения `previous`), фильтрация `grounding_ids` для исключения выдуманных событий и изоляция недоверенного текста карточек тегом `<untrusted_event_data>` с очисткой `<`/`>`.
 - **Расчёт стоимости диалога**: `0.015 ₽ / 1K prompt tokens + 0.06 ₽ / 1K completion tokens` (переопределяется через `LLM_COST_IN_RUB_PER_1K` / `LLM_COST_OUT_RUB_PER_1K`, хранится в `agent_traces.cost_rub`). Один ответ обходится в ~0,04–0,12 ₽, диалог на 5 реплик — ~0,25–0,60 ₽ (существенно ниже порога ТЗ п. 9.2 ≤ 5 ₽).
 - **Режимы без внешнего LLM (`rules-v2` и `rules-fallback-v2`)**: при пустом `LLM_API_KEY` работает детерминированный ИИ-пайплайн `rules-v2` (стоимость `0.00 ₽`); при ошибке/таймауте внешнего провайдера (`LLM_TIMEOUT_MS`) ассистент автоматически переходит на `rules-fallback-v2` (ошибка LLM пишется в трассу, а не роняет ответ). При `ASSISTANT_DISABLED=1` или `X-Assistant-Demo: unavailable` возвращается `503` + `Retry-After: 60`, а `/ask` и Telegram-бот автоматически переходят на обычный поиск.
+- **Лимиты и бюджет (P0-3)**: `/assistant/query` ограничен по IP и `user_ref` (`ASSISTANT_RATE_LIMIT_10M=20` за 10 минут, `ASSISTANT_DAILY_LIMIT=200` за сутки), `/assistant/confirm` — отдельно (`ASSISTANT_CONFIRM_LIMIT_10M=20`), ответ — `429` + `Retry-After`. Ответ модели ограничен `ASSISTANT_MAX_TOKENS=800`. Дневной бюджет `ASSISTANT_DAILY_BUDGET_RUB=100` считается по `agent_traces.cost_rub`: при исчерпании LLM не вызывается, ассистент отвечает `rules-budget-v2`, в трассу пишется `daily_budget_exhausted`, растут метрики `afisha_rate_limited_total` и `afisha_assistant_budget_fallbacks_total`; при 80% бюджета — предупреждение в лог.
 
 ## Данные и персональные данные
 
 - Выдуманных мероприятий нет. Демо-события в сиде и тестовых фикстурах (`backend/fixtures/*`) синтетические и помечены `synthetic: true`.
-- Подписка (`subscriptions`) хранит только непрозрачный идентификатор пользователя `user_ref` (в боте — SHA-256 хеш `tg_<24hex>` без сохранения Telegram username/телефона) и фильтры. Отписка (`DELETE /api/v1/subscriptions/{id}`) физически удаляет запись (`204`). Неактивные подписки подлежат очистке по истечении **180 дней** без активности.
+- Подписка (`subscriptions`) хранит только непрозрачный идентификатор пользователя `user_ref` (в боте — HMAC от chat_id с серверной солью) и фильтры. `user_ref` передаётся заголовком `Authorization: Bearer <user_ref>` и не принимается в query string, в ответах списка не возвращается. Отписка (`DELETE /api/v1/subscriptions/{id}`) физически удаляет запись (`204`) и без `user_ref` невозможна. Подтверждения ассистента привязаны к `user_ref`, живут 5 минут, хранятся хешем и ограничены отдельным rate-limit. Неактивные подписки подлежат очистке по истечении **180 дней** без активности.
 - Обращения обратной связи (`feedback`) хранят имя и контакт только для ответа модератора/организатора, **никогда не пишутся в логи и `audit_log`**, а срок хранения задаётся переменной `FEEDBACK_RETENTION_DAYS=90` (по умолчанию **90 дней**). Трассы агента (`agent_traces`) перед записью автоматически маскируют email и телефоны (`[email]`, `[phone]`).
 
 ## Известные ограничения

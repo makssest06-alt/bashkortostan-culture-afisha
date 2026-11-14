@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import type { Database } from '../../db/adapter.js';
@@ -17,14 +17,20 @@ import {
   toListItem,
   type EventsSearchFilters,
 } from '../search.js';
-import { createSubscription } from '../subscriptions.js';
+import { createSubscription, USER_REF_PATTERN } from '../subscriptions.js';
 import { daysBetween, formatRfc3339Local, isValidYmd, localNow } from '../time.js';
 import type { ApiEvent, CategoryId, CityId, DatePreset } from '../types.js';
 
 export const MAX_TOOL_CALLS_PER_ANSWER = 5;
 export const DESCRIPTION_MAX_CHARS = 300;
-export const CONFIRMATION_TTL_SECONDS = 600;
+/** P0-4: 5 минут достаточно, чтобы нажать «Подтвердить» в диалоге. */
+export const CONFIRMATION_TTL_SECONDS = 300;
 export const TOOL_TIMEOUT_MS = 3000;
+/**
+ * P0-4: 24 случайных байта (192 бита) вместо 6 (48 бит) — перебор токенов невозможен.
+ * В БД хранится только SHA-256 хеш токена, сам токен не пишется.
+ */
+export const CONFIRMATION_TOKEN_BYTES = 24;
 
 export interface ToolError {
   code:
@@ -75,8 +81,12 @@ export interface ToolRuntimeContext {
   now?: Date;
 }
 
-/** Ограниченное представление события для контекста языковой модели (model_view из contracts/agent_tools.json). */
-export function toModelViewEvent(ev: ApiEvent): Record<string, unknown> {
+function newConfirmationToken(): { token: string; tokenHash: string } {
+  const token = `cnf_${randomBytes(CONFIRMATION_TOKEN_BYTES).toString('base64url')}`;
+  return { token, tokenHash: createHash('sha256').update(token).digest('hex') };
+}
+
+/** Ограниченное представление события для контекста языковой модели (model_view из contracts/agent_tools.json). */export function toModelViewEvent(ev: ApiEvent): Record<string, unknown> {
   const rawDesc = (ev.description ?? '')
     .replace(/[\u0000-\u001f\u007f]/g, ' ')
     .replace(/[<>]/g, '')
@@ -676,12 +686,19 @@ export class ToolRuntime {
       const summary = `Подписка: ${cityLabel}, ${catLabel}, ${periodLabel}`;
 
       if (!this.ctx.confirmationToken) {
-        const token = `cnf_${randomBytes(6).toString('hex')}`;
+        // P0-4: подписка подтверждается только привязанным к user_ref токеном.
+        if (!this.ctx.userRef) {
+          return invalidArgs(
+            'Для подписки через ассистента нужен user_ref в запросе (user_ref)',
+            this.ctx.requestId,
+          );
+        }
+        const { token, tokenHash } = newConfirmationToken();
         const expiresAt = formatRfc3339Local(now.getTime() + CONFIRMATION_TTL_SECONDS * 1000);
         await this.db.query(
           `INSERT INTO agent_confirmations (token, action, user_ref, payload, summary, expires_at)
            VALUES ($1, 'subscribe', $2, $3::jsonb, $4, $5)`,
-          [token, this.ctx.userRef ?? null, JSON.stringify(args), summary, expiresAt],
+          [tokenHash, this.ctx.userRef, JSON.stringify(args), summary, expiresAt],
         );
         return {
           ok: true,
@@ -734,12 +751,12 @@ export class ToolRuntime {
         : `Обращение (${args.kind})`;
 
       if (!this.ctx.confirmationToken) {
-        const token = `cnf_${randomBytes(6).toString('hex')}`;
+        const { token, tokenHash } = newConfirmationToken();
         const expiresAt = formatRfc3339Local(now.getTime() + CONFIRMATION_TTL_SECONDS * 1000);
         await this.db.query(
           `INSERT INTO agent_confirmations (token, action, user_ref, payload, summary, expires_at)
            VALUES ($1, 'save_feedback', $2, $3::jsonb, $4, $5)`,
-          [token, this.ctx.userRef ?? null, JSON.stringify(args), summary, expiresAt],
+          [tokenHash, this.ctx.userRef ?? null, JSON.stringify(args), summary, expiresAt],
         );
         return {
           ok: true,
@@ -798,20 +815,27 @@ export async function confirmPendingAction(
   body: unknown,
   ctx: Omit<ToolRuntimeContext, 'confirmationToken'>,
 ): Promise<ToolResult<unknown>> {
-  const token = (body as { confirmation_id?: unknown })?.confirmation_id;
+  const bodyObj = (body ?? {}) as Record<string, unknown>;
+  const token = bodyObj.confirmation_id;
   if (typeof token !== 'string' || !token.startsWith('cnf_')) {
     return invalidArgs('Передайте корректный confirmation_id', ctx.requestId);
   }
-  const bodyObj = (body as { confirm?: unknown; decision?: unknown }) ?? {};
+  const requesterUserRef = typeof bodyObj.user_ref === 'string' ? bodyObj.user_ref.trim() : '';
+  if (requesterUserRef && !USER_REF_PATTERN.test(requesterUserRef)) {
+    return invalidArgs('Некорректный user_ref', ctx.requestId);
+  }
   const rejected = bodyObj.confirm === false || bodyObj.decision === 'reject';
+  // P0-4: ищем по хешу токена — в БД сам токен не хранится.
+  const tokenHash = createHash('sha256').update(token).digest('hex');
   const res = await db.query<{
     token: string;
     action: 'subscribe' | 'save_feedback';
     user_ref: string | null;
     payload: Record<string, unknown> | string;
+    summary: string;
     expires_at: Date | string;
     used_at: Date | string | null;
-  }>('SELECT * FROM agent_confirmations WHERE token = $1', [token]);
+  }>('SELECT * FROM agent_confirmations WHERE token = $1', [tokenHash]);
 
   if (res.rows.length === 0) {
     return {
@@ -855,11 +879,56 @@ export async function confirmPendingAction(
     };
   }
 
+  // P0-4: токен, созданный для конкретного user_ref, нельзя подтвердить чужим user_ref.
+  if (row.user_ref) {
+    if (!requesterUserRef) {
+      return invalidArgs(
+        'Для подтверждения действия нужен user_ref владельца',
+        ctx.requestId,
+      );
+    }
+    if (row.user_ref !== requesterUserRef) {
+      return {
+        ok: false,
+        error: {
+          code: 'not_found',
+          message: 'Запрос на подтверждение не найден',
+          retryable: false,
+          http_status: 404,
+          request_id: ctx.requestId,
+        },
+      };
+    }
+  }
+
+  const auditActor = requesterUserRef
+    ? `assistant:user:${createHash('sha256').update(requesterUserRef).digest('hex').slice(0, 12)}`
+    : 'assistant:anonymous';
+
+  const writeAudit = async (decision: 'approve' | 'reject') => {
+    await db.query(
+      `INSERT INTO audit_log (id, at, actor, action, entity_type, entity_id, entity_title, changes)
+       VALUES ($1, $2, $3, 'confirm', 'agent_confirmation', $4, $5, $6::jsonb)`,
+      [
+        randomUUID(),
+        formatRfc3339Local(now),
+        auditActor,
+        tokenHash,
+        row.summary.slice(0, 200),
+        JSON.stringify([
+          { field: 'action', from: null, to: row.action },
+          { field: 'decision', from: null, to: decision },
+        ]),
+      ],
+    );
+  };
+
   if (rejected) {
     await db.query('UPDATE agent_confirmations SET used_at = $2 WHERE token = $1', [
-      token,
+      tokenHash,
       formatRfc3339Local(now),
     ]);
+    await writeAudit('reject');
     return {
       ok: true,
       data: {
@@ -871,7 +940,7 @@ export async function confirmPendingAction(
 
   const payloadObj =
     typeof row.payload === 'string' ? (JSON.parse(row.payload) as Record<string, unknown>) : row.payload;
-  const confirmFields = (body as { name?: unknown; contact?: unknown; organization?: unknown }) ?? {};
+  const confirmFields = bodyObj;
   const runtime = new ToolRuntime(db, {
     ...ctx,
     userRef: row.user_ref ?? ctx.userRef,
@@ -886,9 +955,10 @@ export async function confirmPendingAction(
   const execRes = await runtime.execute(row.action, payloadObj);
   if (execRes.ok) {
     await db.query('UPDATE agent_confirmations SET used_at = $2 WHERE token = $1', [
-      token,
+      tokenHash,
       formatRfc3339Local(now),
     ]);
+    await writeAudit('approve');
   }
   return execRes;
 }

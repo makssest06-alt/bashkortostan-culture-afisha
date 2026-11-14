@@ -141,7 +141,9 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
     expect(s1.confirmation.confirmation_id).toMatch(/^cnf_/);
 
     // До подтверждения подписки нет в БД
-    const before = await ctx.req('/api/v1/subscriptions?user_ref=u_assistant_sub_00001');
+    const before = await ctx.req('/api/v1/subscriptions', {
+      headers: { Authorization: 'Bearer u_assistant_sub_00001' },
+    });
     expect((await before.json()).items).toHaveLength(0);
 
     // Подтверждаем
@@ -150,6 +152,7 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         confirmation_id: s1.confirmation.confirmation_id,
+        user_ref: 'u_assistant_sub_00001',
         confirm: true,
       }),
     });

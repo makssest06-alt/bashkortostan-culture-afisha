@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
+import { createHash } from 'node:crypto';
 
 import type { AppConfig } from './config.js';
 import type { Database } from './db/adapter.js';
@@ -44,7 +46,7 @@ import {
   runImport,
 } from './domain/imports.js';
 import { SLUG_PATTERN } from './domain/identity.js';
-import { clientIpFromHeaders, SlidingRateLimiter } from './domain/rate-limit.js';
+import { clientIpFromHeaders, normalizeClientIp, SlidingRateLimiter } from './domain/rate-limit.js';
 import {
   buildCatalogRelaxations,
   buildAppliedFilters,
@@ -59,6 +61,7 @@ import {
   createSubscription,
   deleteSubscription,
   listSubscriptions,
+  USER_REF_PATTERN,
 } from './domain/subscriptions.js';
 import {
   daysBetween,
@@ -124,9 +127,35 @@ function intParam(raw: string | undefined, fallback: number, min = 1, max = 100)
   return Math.min(Math.max(min, n), max);
 }
 
-function getClientIp(headers: Headers, trustProxy: boolean): string {
-  if (!trustProxy) return '127.0.0.1';
-  return clientIpFromHeaders(headers, '127.0.0.1');
+/**
+ * Реальный адрес соединения. В `@hono/node-server` он лежит в `c.env.incoming`;
+ * при тестовом `app.request()` сокета нет — остаётся безопасный localhost.
+ */
+function socketIp(c: Context<Env>): string {
+  const env = c.env as
+    | { incoming?: { socket?: { remoteAddress?: string } } }
+    | undefined;
+  const address = env?.incoming?.socket?.remoteAddress;
+  return normalizeClientIp(address ?? '') || '127.0.0.1';
+}
+
+function getClientIp(c: Context<Env>, config: AppConfig): string {
+  const direct = socketIp(c);
+  if (!config.trustProxy) return direct;
+  return clientIpFromHeaders(c.req.raw.headers, config.trustedProxyHops, direct);
+}
+
+/** Хеш вместо сырого значения: user_ref не попадает в ключи лимитера и метрики. */
+function rateKeyHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 16);
+}
+
+/** user_ref подписок передаётся только заголовком Authorization: Bearer, не в query string. */
+function userRefFromAuthorization(headers: Headers): { ok: true; userRef: string } | { ok: false } {
+  const match = /^Bearer\s+(.+)$/i.exec(headers.get('authorization')?.trim() ?? '');
+  const userRef = match?.[1]?.trim() ?? '';
+  if (!userRef || !USER_REF_PATTERN.test(userRef)) return { ok: false };
+  return { ok: true, userRef };
 }
 
 function toWireEvent(ev: ApiEvent): ApiEvent {
@@ -142,6 +171,37 @@ export function createApp(options: CreateAppOptions) {
   const nowFn = options.nowFn ?? (() => new Date());
   const feedbackRateLimiter = new SlidingRateLimiter();
   const metricsRateLimiter = new SlidingRateLimiter();
+  const assistantQueryRateLimiter = new SlidingRateLimiter();
+  const assistantConfirmRateLimiter = new SlidingRateLimiter();
+  const subscriptionCreateRateLimiter = new SlidingRateLimiter();
+  const subscriptionDeleteRateLimiter = new SlidingRateLimiter();
+
+  // P0-3: лимиты и бюджет ассистента. Отдельное окно на confirm, чтобы нельзя было перебирать токены.
+  const assistantQueryRules = [
+    { suffix: '10m', max: config.assistantRatePer10Min, windowMs: 10 * 60_000 },
+    { suffix: '24h', max: config.assistantDailyLimit, windowMs: 24 * 3_600_000 },
+  ] as const;
+  const assistantConfirmRules = [
+    { suffix: '10m', max: config.assistantConfirmPer10Min, windowMs: 10 * 60_000 },
+  ] as const;
+  const subscriptionCreateRules = [
+    { suffix: '10m', max: 10, windowMs: 10 * 60_000 },
+  ] as const;
+  const subscriptionDeleteRules = [
+    { suffix: '10m', max: 30, windowMs: 10 * 60_000 },
+  ] as const;
+
+  function rateLimited(scope: string, c: Context<Env>, retryAfterSeconds: number): Response {
+    metrics.incRateLimited(scope);
+    return errorResponse(
+      c,
+      429,
+      'rate_limited',
+      'Слишком много запросов. Попробуйте позже.',
+      [],
+      { 'Retry-After': String(Math.max(1, retryAfterSeconds)) },
+    );
+  }
 
   const app = new Hono<Env>();
 
@@ -256,7 +316,7 @@ export function createApp(options: CreateAppOptions) {
   });
 
   const handleMetrics = (c: any) => {
-    const ip = getClientIp(c.req.raw.headers, config.trustProxy);
+    const ip = getClientIp(c, config);
     const check = metricsRateLimiter.checkAndConsume(
       `metrics:${ip}`,
       config.metricsRatePerMinute,
@@ -594,6 +654,27 @@ export function createApp(options: CreateAppOptions) {
       return errorResponse(c, 400, 'invalid_json', 'Тело запроса должно быть корректным JSON');
     }
 
+    const nowMs = nowFn().getTime();
+    const ip = getClientIp(c, config);
+    const bodyUserRef =
+      typeof (body as { user_ref?: unknown })?.user_ref === 'string'
+        ? (body as { user_ref: string }).user_ref
+        : '';
+    const ipCheck = subscriptionCreateRateLimiter.consumeMulti(
+      `subs:create:ip:${ip}`,
+      subscriptionCreateRules,
+      nowMs,
+    );
+    if (!ipCheck.ok) return rateLimited('subscription_create', c, ipCheck.retryAfter);
+    if (bodyUserRef) {
+      const userCheck = subscriptionCreateRateLimiter.consumeMulti(
+        `subs:create:user:${rateKeyHash(bodyUserRef)}`,
+        subscriptionCreateRules,
+        nowMs,
+      );
+      if (!userCheck.ok) return rateLimited('subscription_create', c, userCheck.retryAfter);
+    }
+
     const res = await createSubscription(db, body, nowFn());
     if (!res.ok) {
       return errorResponse(c, res.status, res.code, res.message, res.details ?? []);
@@ -605,7 +686,26 @@ export function createApp(options: CreateAppOptions) {
   });
 
   app.get('/api/v1/subscriptions', async (c) => {
-    const res = await listSubscriptions(db, c.req.query('user_ref'));
+    // P0-5: user_ref не принимаетcя в query string (логи прокси, история браузера).
+    if (c.req.query('user_ref')) {
+      return errorResponse(
+        c,
+        400,
+        'validation_error',
+        'user_ref в query string не принимается: передайте заголовок Authorization: Bearer <user_ref>',
+        [{ field: 'user_ref', message: 'Параметр удалён из query string' }],
+      );
+    }
+    const auth = userRefFromAuthorization(c.req.raw.headers);
+    if (!auth.ok) {
+      return errorResponse(
+        c,
+        401,
+        'unauthorized',
+        'Требуется заголовок Authorization: Bearer <user_ref>',
+      );
+    }
+    const res = await listSubscriptions(db, auth.userRef);
     if (!res.ok) {
       return errorResponse(c, res.status, res.code, res.message, res.details);
     }
@@ -613,7 +713,32 @@ export function createApp(options: CreateAppOptions) {
   });
 
   app.delete('/api/v1/subscriptions/:id', async (c) => {
-    const res = await deleteSubscription(db, c.req.param('id'), c.req.query('user_ref'));
+    const auth = userRefFromAuthorization(c.req.raw.headers);
+    if (!auth.ok) {
+      return errorResponse(
+        c,
+        401,
+        'unauthorized',
+        'Требуется заголовок Authorization: Bearer <user_ref>',
+      );
+    }
+
+    const nowMs = nowFn().getTime();
+    const ip = getClientIp(c, config);
+    const ipCheck = subscriptionDeleteRateLimiter.consumeMulti(
+      `subs:delete:ip:${ip}`,
+      subscriptionDeleteRules,
+      nowMs,
+    );
+    if (!ipCheck.ok) return rateLimited('subscription_delete', c, ipCheck.retryAfter);
+    const userCheck = subscriptionDeleteRateLimiter.consumeMulti(
+      `subs:delete:user:${rateKeyHash(auth.userRef)}`,
+      subscriptionDeleteRules,
+      nowMs,
+    );
+    if (!userCheck.ok) return rateLimited('subscription_delete', c, userCheck.retryAfter);
+
+    const res = await deleteSubscription(db, c.req.param('id'), auth.userRef);
     if (!res.ok) {
       return errorResponse(c, res.status, res.code, res.message);
     }
@@ -635,7 +760,7 @@ export function createApp(options: CreateAppOptions) {
       return errorResponse(c, 400, 'invalid_json', 'Тело запроса должно быть корректным JSON');
     }
 
-    const ip = getClientIp(c.req.raw.headers, config.trustProxy);
+    const ip = getClientIp(c, config);
     const res = await submitFeedback(db, body, {
       clientIp: ip,
       rateLimiter: feedbackRateLimiter,
@@ -682,12 +807,30 @@ export function createApp(options: CreateAppOptions) {
       return errorResponse(c, 400, 'validation_error', 'Проверьте параметры запроса ассистента', parsed.details);
     }
 
+    // P0-3: лимит на query по IP и по user_ref (хеш, без ПДн в ключах).
+    const now = nowFn();
+    const ip = getClientIp(c, config);
+    const ipCheck = assistantQueryRateLimiter.consumeMulti(
+      `assistant:query:ip:${ip}`,
+      assistantQueryRules,
+      now.getTime(),
+    );
+    if (!ipCheck.ok) return rateLimited('assistant_query', c, ipCheck.retryAfter);
+    if (parsed.value.user_ref) {
+      const userCheck = assistantQueryRateLimiter.consumeMulti(
+        `assistant:query:user:${rateKeyHash(parsed.value.user_ref)}`,
+        assistantQueryRules,
+        now.getTime(),
+      );
+      if (!userCheck.ok) return rateLimited('assistant_query', c, userCheck.retryAfter);
+    }
+
     const payload = await runAssistantPipeline(db, config, parsed.value, {
       requestId: c.get('requestId'),
-      clientIp: getClientIp(c.req.raw.headers, config.trustProxy),
+      clientIp: ip,
       rateLimiter: feedbackRateLimiter,
       metrics,
-      now: nowFn(),
+      now,
     });
     return jsonResponse(c, payload);
   });
@@ -703,13 +846,36 @@ export function createApp(options: CreateAppOptions) {
       return errorResponse(c, 400, 'invalid_json', 'Ожидается JSON с полем confirmation_id');
     }
 
+    // P0-3/P0-4: отдельный лимит на confirm, чтобы нельзя было перебирать токены.
+    const now = nowFn();
+    const ip = getClientIp(c, config);
+    const ipCheck = assistantConfirmRateLimiter.consumeMulti(
+      `assistant:confirm:ip:${ip}`,
+      assistantConfirmRules,
+      now.getTime(),
+    );
+    if (!ipCheck.ok) return rateLimited('assistant_confirm', c, ipCheck.retryAfter);
+    const bodyUserRef =
+      typeof (body as { user_ref?: unknown })?.user_ref === 'string'
+        ? (body as { user_ref: string }).user_ref
+        : '';
+    if (bodyUserRef) {
+      const userCheck = assistantConfirmRateLimiter.consumeMulti(
+        `assistant:confirm:user:${rateKeyHash(bodyUserRef)}`,
+        assistantConfirmRules,
+        now.getTime(),
+      );
+      if (!userCheck.ok) return rateLimited('assistant_confirm', c, userCheck.retryAfter);
+    }
+
     const res = await confirmPendingAction(db, body, {
       requestId: c.get('requestId'),
-      clientIp: getClientIp(c.req.raw.headers, config.trustProxy),
+      clientIp: ip,
+      userRef: bodyUserRef || undefined,
       rateLimiter: feedbackRateLimiter,
       retentionDays: config.feedbackRetentionDays,
       metrics,
-      now: nowFn(),
+      now,
     });
 
     if (!res.ok) {
