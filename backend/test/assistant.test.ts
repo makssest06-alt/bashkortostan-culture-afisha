@@ -126,6 +126,102 @@ describe('AI Assistant, Agent Tools, Confirmations, Guardrails & Traces', () => 
     expect(buyData.unsupported_actions).toContain('purchase');
   });
 
+  it.each([
+    {
+      message: 'Детские концерты для взрослых завтра в Уфе',
+      code: 'audience',
+      question: /детск.*взросл/i,
+      answer: 'Для взрослых',
+      hard: { cities: ['ufa'], categories_any: ['concert'] },
+      soft: { audience: 'adults' },
+    },
+    {
+      message: 'В Салавате, но не в Салавате, завтра, бесплатно',
+      code: 'city',
+      question: /город/i,
+      answer: 'Уфа',
+      hard: { cities: ['ufa'], free_only: true },
+      soft: {},
+    },
+    {
+      message: 'Бесплатные выставки в Уфе как-нибудь на неделе',
+      code: 'date',
+      question: /когда|день|дат/i,
+      answer: 'Завтра',
+      hard: { cities: ['ufa'], free_only: true, categories_any: ['exhibition'] },
+      soft: {},
+    },
+    {
+      message: 'Концерт для подростка завтра в Уфе',
+      code: 'child_age',
+      question: /возраст|сколько лет/i,
+      answer: '14',
+      hard: { cities: ['ufa'], categories_any: ['concert'], participants: { children_ages: [14] } },
+      soft: { audience: 'teenagers' },
+    },
+    {
+      message: 'Бесплатный платный мастер-класс завтра в Уфе',
+      code: 'budget',
+      question: /бесплатн.*платн/i,
+      answer: 'Только бесплатно',
+      hard: { cities: ['ufa'], free_only: true },
+      soft: {},
+    },
+  ])('asks about $code and preserves the other conditions after an answer', async (scenario) => {
+    const ask = (input: Record<string, unknown>) => ctx.req('/api/v1/assistant/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const first = await ask({ message: scenario.message });
+    expect(first.status).toBe(200);
+    const prompt = await first.json();
+    validators.assertValid('AssistantQueryResponse', prompt);
+    expect(prompt.action).toBe('clarify');
+    expect(prompt.clarify.code).toBe(scenario.code);
+    expect(prompt.clarify.pending).toEqual([scenario.code]);
+    expect(prompt.clarify.question).toMatch(scenario.question);
+    expect(prompt.clarify.question.match(/\?/g)).toHaveLength(1);
+    expect(prompt.results ?? []).toHaveLength(0);
+    if (scenario.code === 'city') expect(prompt.constraints.hard.cities).toBeUndefined();
+    if (scenario.code === 'date') expect(prompt.constraints.hard.date).toBeUndefined();
+
+    const second = await ask({ message: scenario.answer, previous: prompt.constraints, answering: scenario.code });
+    expect(second.status).toBe(200);
+    const answer = await second.json();
+    expect(answer.action).toBe('search');
+    expect(answer.constraints.hard).toMatchObject({
+      ...scenario.hard,
+      date: { from: '2026-11-14', to: '2026-11-14' },
+    });
+    expect(answer.constraints.soft).toMatchObject(scenario.soft);
+    if (scenario.code === 'audience') expect(answer.constraints.hard.required_age_rating).toBeUndefined();
+    if (scenario.code === 'child_age') {
+      expect(answer.results.every((r: { event: { age_limit: number | null } }) =>
+        r.event.age_limit !== null && r.event.age_limit <= 14)).toBe(true);
+    }
+  });
+
+  it.each([
+    ['Выставки не в Уфе, а в Салавате завтра', ['salavat']],
+    ['Концерты в Уфе или Салавате завтра', ['ufa', 'salavat']],
+    ['В Уфе на днях, лучше в субботу', ['ufa']],
+    ['В ближайшие дни выставки в Уфе', ['ufa']],
+    ['Афиша для подростка 14 лет в Уфе завтра', ['ufa']],
+    ['Детский спектакль, нас двое взрослых и ребёнок 7 лет, завтра в Уфе', ['ufa']],
+    ['Семейный концерт для взрослых и детей в Уфе завтра, ребёнку 8 лет', ['ufa']],
+  ])('can search without asking again: %s', async (message, cities) => {
+    const res = await ctx.req('/api/v1/assistant/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.action).toBe('search');
+    expect([...body.constraints.hard.cities].sort()).toEqual([...cities].sort());
+  });
+
   it('requires confirmation token for subscribe via /assistant/query -> /assistant/confirm', async () => {
     const step1 = await ctx.req('/api/v1/assistant/query', {
       method: 'POST',
