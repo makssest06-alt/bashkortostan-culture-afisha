@@ -148,9 +148,9 @@ function parseAbsolute(scanner: Scanner, today: string, notes: NluAssumption[]):
 function parseRelative(scanner: Scanner, today: string, notes: NluAssumption[]): DateRange | null {
   if (take(scanner, word('послезавтра'))) return { from: addDays(today, 2), to: addDays(today, 2) };
   if (take(scanner, word('позавчера'))) return { from: addDays(today, -2), to: addDays(today, -2) };
-  if (take(scanner, word('завтра'))) return { from: addDays(today, 1), to: addDays(today, 1) };
-  if (take(scanner, word('вчера'))) return { from: addDays(today, -1), to: addDays(today, -1) };
-  if (take(scanner, word('сегодня|сегодняшн[а-я]+|сейчас|прямо\\s+сейчас'))) return { from: today, to: today };
+  if (take(scanner, word('завтра|tomorrow|zavtra'))) return { from: addDays(today, 1), to: addDays(today, 1) };
+  if (take(scanner, word('вчера|yesterday|vchera'))) return { from: addDays(today, -1), to: addDays(today, -1) };
+  if (take(scanner, word('сегодня|today|segodnya|сегодняшн[а-я]+|сейчас|прямо\\s+сейчас'))) return { from: today, to: today };
 
   const inDays = take(scanner, word(`через\\s+(\\d{1,2}|${NUMBER_WORD_PATTERN})\\s+(?:дн[а-я]+|день)`));
   if (inDays) {
